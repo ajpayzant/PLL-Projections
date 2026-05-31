@@ -1,0 +1,7 @@
+# Needed only for live official PLL roster scraping/cache generation
+playwright>=1.40.0
+beautifulsoup4>=4.12.0
+requests>=2.31.0
+
+# After installing playwright, run once in the deployment/action environment:
+# python -m playwright install chromium

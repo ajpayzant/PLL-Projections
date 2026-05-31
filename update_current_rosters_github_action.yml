@@ -1,0 +1,37 @@
+name: Update PLL Current Rosters
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Daily during the PLL season; adjust as needed.
+    - cron: "0 11 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  update-current-rosters:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas playwright
+          python -m playwright install chromium
+
+      - name: Scrape and cache current PLL rosters
+        run: python pll_current_roster_cache.py
+
+      - name: Commit updated roster cache
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update PLL current roster cache"
+          file_pattern: data/reference_tables/current_rosters.csv data/reference_tables/current_rosters_diagnostics.csv
