@@ -108,6 +108,15 @@ with st.sidebar:
         key="game_idx",
     )
     game = season_games[game_idx]
+    # Auto-rerun when game selection changes
+    prev_game = st.session_state.get("selected_game") or {}
+    game_changed = (
+        game.get("home_team_id") != prev_game.get("home_team_id") or
+        game.get("away_team_id") != prev_game.get("away_team_id") or
+        str(game.get("game_date",""))[:10] != str(prev_game.get("game_date",""))[:10]
+    )
+    if game_changed:
+        st.session_state.last_result = None
     st.session_state.selected_game = game
 
     home_id = str(game.get("home_team_id",""))
@@ -232,25 +241,36 @@ st.markdown(
 st.markdown("---")
 
 # ── Win probability row ───────────────────────────────────────────────────
+# spread_home = expected home margin. Team displayed spread = points they
+# give/receive on the line. Favored team (higher win prob) lays points (-).
+# Underdog (lower win prob) receives points (+).
+# When home is favored: spread_home > 0, home lays (-), away gets (+).
+# When away is favored: spread_home < 0, away lays (-), home gets (+).
+away_displayed_spd = gm.spread_home          # away lays home's margin (negative when away favored)
+home_displayed_spd = -gm.spread_home         # home receives/gives opposite
+
 c1, c2, c3, c4, c5 = st.columns([2, 1, 1, 1, 2])
 with c1:
-    st.markdown(card(f"{away_nm} Win Prob", fmt_prob(gm.away_win_prob), f"ML: {gm.away_ml}"),
-                unsafe_allow_html=True)
+    st.markdown(card(
+        f"{away_nm} Win Prob",
+        fmt_prob(gm.away_win_prob),
+        f"ML: {gm.away_ml}  ·  Spread: {away_displayed_spd:+.1f} ({gm.spread_away_odds})",
+    ), unsafe_allow_html=True)
 with c2:
-    # spread_home is home margin — away displayed spread is opposite sign
-    _away_spd = -gm.spread_home
-    st.markdown(card("Spread",
-                     f"{away_nm} {_away_spd:+.1f} / {home_nm} {gm.spread_home:+.1f}",
-                     f"{gm.spread_away_odds} / {gm.spread_home_odds}"), unsafe_allow_html=True)
-with c3:
-    st.markdown(card("Total Line", str(gm.total_line),
+    st.markdown(card("Total Line", f"{gm.total_line:.1f}",
                      f"O{gm.over_odds} / U{gm.under_odds}"), unsafe_allow_html=True)
-with c4:
+with c3:
     st.markdown(card("Exp. Total", f"{gs.expected_total:.1f}", "sim median"),
                 unsafe_allow_html=True)
-with c5:
-    st.markdown(card(f"{home_nm} Win Prob", fmt_prob(gm.home_win_prob), f"ML: {gm.home_ml}"),
+with c4:
+    st.markdown(card("Exp. Margin", f"{gm.spread_home:+.1f}", f"{home_nm} perspective"),
                 unsafe_allow_html=True)
+with c5:
+    st.markdown(card(
+        f"{home_nm} Win Prob",
+        fmt_prob(gm.home_win_prob),
+        f"ML: {gm.home_ml}  ·  Spread: {home_displayed_spd:+.1f} ({gm.spread_home_odds})",
+    ), unsafe_allow_html=True)
 
 fig_wp = go.Figure(go.Bar(
     x=[gm.away_win_prob * 100, gm.home_win_prob * 100],

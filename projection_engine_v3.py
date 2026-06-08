@@ -1019,7 +1019,7 @@ class RatingBuilder:
         df["bayes_shot_pct"] = [_bayesian_rate(g, s, 4, 10) for g, s in zip(g_n, g_d)]
 
         # ── Context
-        df["games_played"] = np.arange(len(df))  # career total, not per-season
+        df["games_played"] = np.arange(len(df))  # career total rows
         df["season_weight"] = df["season"].apply(lambda s: _season_w(int(s), self._current_season))
 
         # Merge all blocks efficiently
@@ -1054,23 +1054,6 @@ class RatingBuilder:
             return self._pr
 
         result = pd.concat(chunks, ignore_index=True)
-
-        # Fill numeric NaNs with 0 as a safe default, but first protect share
-        # columns from being zeroed out — a zero share makes every player project
-        # identically after _reconcile rescales to team total. Instead fill share
-        # columns with position-level defaults so players with merge misses still
-        # carry a sensible prior rather than zero.
-        for pos_key, pos_vals in POS_DEFAULTS.items():
-            pos_mask = result["pos_norm"] == pos_key
-            for stat in ("goals", "assists", "shots"):
-                col = f"share_{stat}_ewm"
-                if col in result.columns:
-                    default_val = pos_vals.get(f"{stat}_share", 0.05)
-                    result.loc[pos_mask & result[col].isna(), col] = default_val
-                career_col = f"career_{stat}_pg"
-                if career_col in result.columns:
-                    result[career_col] = result[career_col].fillna(0)
-
         num_cols = result.select_dtypes(include=[np.number]).columns
         result[num_cols] = result[num_cols].fillna(0)
         self._pr = result
@@ -1147,11 +1130,7 @@ class RatingBuilder:
         sv_d = df.get("shots_faced_p", pd.Series(0, index=df.index)).fillna(0).shift(1).cumsum().fillna(0)
         df["bayes_save_pct"] = [_bayesian_rate(s, n, 3, 3) for s, n in zip(sv_n, sv_d)]
 
-        # Career game count — total rows processed so far for this player.
-        # Using cumcount() per season was wrong: it reset to 0 each season,
-        # so a 40-game veteran appeared as gp=9 in year 5 and fell into the
-        # sparse-data branch. The row index after sorting by date IS career gp.
-        df["games_played"] = np.arange(len(df))
+        df["games_played"] = np.arange(len(df))  # career total rows
 
         extra = pd.concat(blocks, axis=1)
         result = pd.concat([df.reset_index(drop=True), extra.reset_index(drop=True)], axis=1)
@@ -1627,68 +1606,42 @@ class PlayerModel:
         gp = int(_nan(float(f.get("games_played", 0))))
         pos_def = POS_DEFAULTS.get(pos, POS_DEFAULTS["M"])
 
-        def _rate(stat: str) -> float:
-            """
-            Return the player's projected per-game rate for a stat.
-
-            Uses direct per-game EWM rates (goals_ewm, assists_ewm, shots_ewm)
-            computed directly from raw game logs — these are robust and never
-            depend on the team-merge that made share_goals_ewm fragile.
-
-            Blend: EWM (recent form) + career mean + position default prior.
-            Weight shifts toward player's own data as career games accumulate.
-            Position default is the only prior for new players.
-            """
-            ewm_val    = _nan(float(f.get(f"{stat}_ewm",  0.0)))
-            mean_val   = _nan(float(f.get(f"{stat}_mean", 0.0)))
-            pos_s      = pos_def.get(f"{stat}_share", 0.05)  # position share prior
-            is_synthetic = bool(f.get("synthetic_current_roster", 0))
-
-            if is_synthetic or gp == 0:
-                # No real data — use a conservative fraction of the position default
-                # so new/unknown players don't steal share from established starters
-                return pos_s * LG_GOALS * 0.25
-
-            if gp < 8:
-                # Sparse: blend player data with position prior.
-                # All values kept as goals/game (not shares) — pos_s converted
-                # to goals/game by multiplying by league average team goals.
-                pos_rate = pos_s * LG_GOALS   # e.g. 0.200 * 11.25 = 2.25 g/gm for A
-                w_ewm  = 0.35 + 0.06 * gp
-                w_mean = 0.15 + 0.02 * gp
-                w_pos  = max(1.0 - w_ewm - w_mean, 0.0)
-                return w_ewm * ewm_val + w_mean * mean_val + w_pos * pos_rate
-
-            # Established player: trust their own data entirely.
-            # 70% recent EWM, 30% career mean — no position prior needed.
-            return 0.70 * ewm_val + 0.30 * mean_val
-
-        def _proj_from_rate(stat: str, team_total: float) -> float:
-            """Project a player stat using their per-game rate scaled to team total."""
-            rate = _rate(stat)
-            # rate is in goals/game units; scale proportionally to team projection.
-            # If team projects 11.5 goals and player averages 2.5/gm vs league avg
-            # 11.25, their share = 2.5/11.25 → projected = 2.5/11.25 * 11.5 = 2.56
-            share = rate / max(LG_GOALS, 1.0)
-            return max(share * team_total, 0.0)
+        def _share(stat: str, team_total: float) -> float:
+            team_total = max(team_total, 1.0)
+            ewm_s  = _nan(float(f.get(f"share_{stat}_ewm", 0.0)))
+            career_v = _nan(float(f.get(f"career_{stat}_pg", 0.0)))
+            career_s = career_v / team_total
+            pos_s  = pos_def.get(f"{stat}_share", 0.05)
+            # Synthetic/new roster placeholders get a minimal share so they
+            # don't dilute established players.
+            if bool(f.get("synthetic_current_roster", 0)):
+                return min(pos_s * 0.30, 0.02)
+            # Weight shifts toward player's own data as career games accumulate.
+            # At gp=0  : 45% EWM, 10% career, 45% position default
+            # At gp=10 : 70% EWM, 20% career, 10% position default
+            # At gp=30+: 80% EWM, 20% career,  0% position default
+            w_ewm    = min(0.45 + 0.025 * gp, 0.80)
+            w_career = min(0.10 + 0.010 * gp, 0.20)
+            w_pos    = max(1.0 - w_ewm - w_career, 0.0)
+            return max(w_ewm * ewm_s + w_career * career_s + w_pos * pos_s, 0.0)
 
         # Goals
         if pos == "G":
             proj_goals = 0.0
         else:
-            proj_goals = _proj_from_rate("goals", tp.proj_goals) * usage
+            proj_goals = tp.proj_goals * _share("goals", tp.proj_goals) * usage
 
         # Assists
         if pos == "G":
             proj_assists = 0.0
         else:
-            proj_assists = _proj_from_rate("assists", tp.proj_assists) * usage
+            proj_assists = tp.proj_assists * _share("assists", tp.proj_assists) * usage
 
         # Shots
         if pos == "G":
             proj_shots = max(_nan(float(f.get("shots_ewm", 0.2)), 0.2) * usage, 0.0)
         else:
-            proj_shots = _proj_from_rate("shots", tp.proj_shots) * usage
+            proj_shots = tp.proj_shots * _share("shots", tp.proj_shots) * usage
 
         sog_rate = _nan(float(f.get("sog_rate_ewm", LG_SOG_RATE)), LG_SOG_RATE)
         sog_rate = min(max(sog_rate, 0.20), 1.0)
@@ -2073,6 +2026,9 @@ class PricingEngine:
         ov_adj, un_adj = self._hold(max(ov_p, 1e-4), max(1.0 - ov_p, 1e-4))
 
         spread_line = self._opt_line(gs.margin_distribution, allow_negative=True)
+        # Minimum displayed spread is ±1.5 — snap outward preserving sign.
+        if abs(spread_line) < 1.5:
+            spread_line = 1.5 if spread_line >= 0 else -1.5
         h_cover = float(np.mean(gs.margin_distribution > spread_line))
         h_spd_adj, a_spd_adj = self._hold(max(h_cover, 1e-4), max(1.0 - h_cover, 1e-4))
 
