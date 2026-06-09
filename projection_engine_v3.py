@@ -1637,16 +1637,16 @@ class PlayerModel:
 
         def _share(stat: str, team_total: float) -> float:
             team_total = max(team_total, 1.0)
-            ewm_s  = _nan(float(f.get(f"share_{stat}_ewm", 0.0)))
-            career_v = _nan(float(f.get(f"career_{stat}_pg", 0.0)))
+            ewm_s    = _nan(float(f.get("share_" + stat + "_ewm", 0.0)))
+            career_v = _nan(float(f.get("career_" + stat + "_pg", 0.0)))
             career_s = career_v / team_total
-            pos_s  = pos_def.get(f"{stat}_share", 0.05)
-            # Synthetic/new roster placeholders: small prior only, do not dilute stars
-            if bool(f.get("synthetic_current_roster", 0)):
+            pos_s    = pos_def.get(stat + "_share", 0.05)
+            # Synthetic placeholders: low prior only so they don't dilute real players.
+            # Use explicit == 1 check -- bool(NaN) is True in Python, which would
+            # incorrectly route all real players (whose column value is NaN) here.
+            if f.get("synthetic_current_roster") == 1:
                 return min(pos_s * 0.30, 0.02)
-            # Weight shifts toward player's own data as career games accumulate.
-            # Stronger regression to mean for sparse samples (gp < 10) to prevent
-            # 2-game hot streaks from inflating projections above proven veterans.
+            # Weight blend shifts toward player's own data as career games accumulate
             w_ewm    = min(0.30 + 0.04 * gp, 0.65)
             w_career = min(0.20 + 0.02 * gp, 0.35)
             w_pos    = max(1.0 - w_ewm - w_career, 0.05)
