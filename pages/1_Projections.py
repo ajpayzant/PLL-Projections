@@ -427,6 +427,200 @@ for nm, players in [(away_nm, result.away_players), (home_nm, result.home_player
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
+# -- Export -------------------------------------------------------------------
+st.markdown("---")
+st.markdown("### Download Projection Package")
+
+import io, datetime as _dt
+
+def _build_export(result, game, hold_pct, engine):
+    """Build a multi-tab Excel export of the current projection."""
+    from projection_engine_v3 import PricingEngine
+    pricing = PricingEngine(hold_pct=hold_pct)
+
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as xl:
+
+        # ── Tab 1: Metadata ────────────────────────────────────────────────
+        pm = engine.player_model
+        filter_details = getattr(pm, "last_roster_filter_details", {}) or {}
+        h_src = filter_details.get(result.home_proj.team_id, {}).get("reason", "unknown")
+        a_src = filter_details.get(result.away_proj.team_id, {}).get("reason", "unknown")
+        meta_rows = [
+            ("Game",         f"{team_name(result.away_proj.team_id)} @ {team_name(result.home_proj.team_id)}"),
+            ("Game Number",  game.get("game_number", "")),
+            ("Game Date",    str(game.get("game_date", ""))[:10]),
+            ("Home Team",    team_name(result.home_proj.team_id)),
+            ("Away Team",    team_name(result.away_proj.team_id)),
+            ("Generated At", _dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")),
+            ("Hold %",       f"{hold_pct*100:.1f}%"),
+            ("Sims",         result.game_sim.n_sims),
+            ("Home Roster Source", h_src),
+            ("Away Roster Source", a_src),
+            ("Model",        result.home_proj.model_used),
+        ]
+        pd.DataFrame(meta_rows, columns=["Field", "Value"]).to_excel(
+            xl, sheet_name="Metadata", index=False)
+
+        # ── Tab 2: Game Lines ──────────────────────────────────────────────
+        gs = result.game_sim
+        gm = result.game_market
+        import numpy as np
+        home_tt_line = round(float(np.median(gs.home_scores)) * 2) / 2
+        away_tt_line = round(float(np.median(gs.away_scores)) * 2) / 2
+        # snap to x.5
+        def snap(v):
+            return round(round(v * 2) / 2 + (0 if round(v*2)%2==1 else 0.5 if v-int(v)<0.5 else -0.5), 1)
+        home_tt = snap(home_tt_line) if (home_tt_line % 1) == 0 else home_tt_line
+        away_tt = snap(away_tt_line) if (away_tt_line % 1) == 0 else away_tt_line
+
+        lines_rows = [
+            (f"{team_name(result.away_proj.team_id)} ML", "--", gm.away_ml,
+             f"{gm.away_win_prob*100:.1f}%"),
+            (f"{team_name(result.home_proj.team_id)} ML", "--", gm.home_ml,
+             f"{gm.home_win_prob*100:.1f}%"),
+            (f"{team_name(result.away_proj.team_id)} Spread", f"{gm.spread_home:+.1f}",
+             gm.spread_away_odds, "--"),
+            (f"{team_name(result.home_proj.team_id)} Spread", f"{-gm.spread_home:+.1f}",
+             gm.spread_home_odds, "--"),
+            ("Total Over",  f"{gm.total_line:.1f}", gm.over_odds,
+             f"{float(np.mean(gs.total_distribution>gm.total_line))*100:.1f}%"),
+            ("Total Under", f"{gm.total_line:.1f}", gm.under_odds,
+             f"{float(np.mean(gs.total_distribution<=gm.total_line))*100:.1f}%"),
+            (f"{team_name(result.home_proj.team_id)} Team Total O", f"{home_tt:.1f}", "--",
+             f"{float(np.mean(gs.home_scores>home_tt))*100:.1f}%"),
+            (f"{team_name(result.home_proj.team_id)} Team Total U", f"{home_tt:.1f}", "--",
+             f"{float(np.mean(gs.home_scores<=home_tt))*100:.1f}%"),
+            (f"{team_name(result.away_proj.team_id)} Team Total O", f"{away_tt:.1f}", "--",
+             f"{float(np.mean(gs.away_scores>away_tt))*100:.1f}%"),
+            (f"{team_name(result.away_proj.team_id)} Team Total U", f"{away_tt:.1f}", "--",
+             f"{float(np.mean(gs.away_scores<=away_tt))*100:.1f}%"),
+        ]
+        pd.DataFrame(lines_rows,
+                     columns=["Market", "Line", "Odds", "Fair Prob"]
+                     ).to_excel(xl, sheet_name="Game Lines", index=False)
+
+        # ── Tab 3: Player Props ────────────────────────────────────────────
+        all_players = {p.player_id: p
+                       for p in result.home_players + result.away_players}
+        markets = result.player_markets
+        sims_all = result.home_player_sims + result.away_player_sims
+        prop_rows = []
+        STAT_LABELS = {"goals":"Goals","assists":"Assists","points":"Points",
+                       "shots_on_goal":"SOG","saves":"Saves","faceoff_wins":"FO Wins"}
+
+        for ps in sims_all:
+            proj = all_players.get(ps.player_id)
+            if proj is None or not proj.active:
+                continue
+            pm_data = markets.get(ps.player_id, {})
+            pv = pm_data.get("proj_values", {})
+            ms = pm_data.get("markets", {})
+
+            stats = (["saves"] if proj.position == "G"
+                     else ["faceoff_wins"] if proj.position == "FO"
+                     else ["goals", "assists", "points", "shots_on_goal"])
+            for stat in stats:
+                if stat not in ps.stat_distributions:
+                    continue
+                mkt = ms.get(stat, {})
+                proj_val = round(float(pv.get(stat, 0)), 3)
+                if proj_val < 0.05 and proj.position not in ("G","FO"):
+                    continue
+                prop_rows.append({
+                    "Player":       proj.full_name or proj.player_id,
+                    "Team":         team_name(proj.team_id),
+                    "Pos":          proj.position,
+                    "Stat":         STAT_LABELS.get(stat, stat),
+                    "Projection":   proj_val,
+                    "Main Line":    mkt.get("line", ""),
+                    "Over Odds":    mkt.get("over_odds", ""),
+                    "Under Odds":   mkt.get("under_odds", ""),
+                    "Fair P(Over)": round(float(mkt.get("fair_over_prob", 0)), 3),
+                    "P10":  round(float(np.percentile(ps.stat_distributions[stat], 10)), 2),
+                    "P50":  round(float(np.percentile(ps.stat_distributions[stat], 50)), 2),
+                    "P90":  round(float(np.percentile(ps.stat_distributions[stat], 90)), 2),
+                    "Actual Result": "",   # fill in later for tracking
+                    "Hit/Miss":      "",
+                })
+
+        (pd.DataFrame(prop_rows)
+           .sort_values(["Team","Pos","Player","Stat"])
+           .to_excel(xl, sheet_name="Player Props", index=False))
+
+        # ── Tab 4: Depth Chart (active roster used) ────────────────────────
+        depth_rows = []
+        for tid, players in [
+            (result.home_proj.team_id, result.home_players),
+            (result.away_proj.team_id, result.away_players),
+        ]:
+            for p in sorted(players, key=lambda x: (x.position, -x.proj_points)):
+                depth_rows.append({
+                    "Team":       team_name(tid),
+                    "Player":     p.full_name or p.player_id,
+                    "Pos":        p.position,
+                    "Active":     "Yes" if p.active else "No",
+                    "Starter":    "Yes" if p.is_starter else "",
+                    "Usage Mult": round(p.usage_multiplier, 2),
+                    "Proj Goals": round(p.proj_goals, 3) if p.active else 0,
+                    "Proj Asst":  round(p.proj_assists, 3) if p.active else 0,
+                    "Proj Pts":   round(p.proj_points, 3) if p.active else 0,
+                    "Proj Saves": round(p.proj_saves, 1) if p.position == "G" else "",
+                    "Proj FOW":   round(p.proj_faceoff_wins, 1) if p.position == "FO" else "",
+                })
+        pd.DataFrame(depth_rows).to_excel(xl, sheet_name="Depth Chart", index=False)
+
+        # ── Tab 5: Team Projections ────────────────────────────────────────
+        team_rows = []
+        for proj in [result.home_proj, result.away_proj]:
+            team_rows.append({
+                "Team":     team_name(proj.team_id),
+                "Goals":    round(proj.proj_goals, 2),
+                "Score":    round(proj.proj_scores, 2),
+                "Shots":    round(proj.proj_shots, 1),
+                "SOG":      round(proj.proj_sog, 1),
+                "FO%":      round(proj.proj_faceoff_pct, 3),
+                "FO Wins":  round(proj.proj_faceoff_wins, 1),
+                "Assists":  round(proj.proj_assists, 1),
+                "Saves":    round(proj.proj_saves, 1),
+                "Save%":    round(proj.proj_save_pct, 3),
+                "2PT Goals":round(proj.proj_2pt_goals, 2),
+                "TOs":      round(proj.proj_turnovers, 1),
+                "GBs":      round(proj.proj_ground_balls, 1),
+            })
+        pd.DataFrame(team_rows).to_excel(xl, sheet_name="Team Projections", index=False)
+
+    buf.seek(0)
+    return buf.getvalue()
+
+
+game_date_str = str(game.get("game_date", ""))[:10].replace("-", "")
+fname = (f"PLL_{team_name(away_id)}_{team_name(home_id)}_"
+         f"Game{game.get('game_number','?')}_{game_date_str}.xlsx")
+
+if st.button("📥 Download Projection Package (Excel)", type="secondary",
+             use_container_width=False):
+    with st.spinner("Building Excel export..."):
+        try:
+            xlsx_bytes = _build_export(result, game, hold_pct, engine)
+            st.download_button(
+                label="⬇ Click to download",
+                data=xlsx_bytes,
+                file_name=fname,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="dl_xlsx",
+            )
+            st.success(f"Ready: {fname}")
+        except Exception as e:
+            st.error(f"Export failed: {e}")
+
+st.markdown(
+    '<span class="note-text">Export includes: Game Lines · Player Props · '
+    'Depth Chart · Team Projections · Metadata. '
+    'Fill in "Actual Result" column after games to track model accuracy.</span>',
+    unsafe_allow_html=True,
+)
+
 # -- Roster source info -------------------------------------------------------
 with st.expander("Roster source details", expanded=False):
     pm = engine.player_model
