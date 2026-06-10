@@ -87,7 +87,7 @@ def init_session() -> None:
         # team_rating_overrides: {team_id: {rating_key: float}}
         "team_rating_overrides":    {},
         "line_overrides":           {},
-        "hold_pct":                 0.045,
+        "hold_pct":                 0.075,
         "last_projection_updated_at": None,
     }
     for k, v in defaults.items():

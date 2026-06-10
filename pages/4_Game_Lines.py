@@ -77,21 +77,22 @@ with st.sidebar:
     show_alt_team_totals = st.checkbox("Show alternate team-total tables", value=False)
 
     st.markdown("---")
-    st.markdown("### Hold %")
-    hcol1, hcol2 = st.columns([3, 1])
-    with hcol1:
-        hold_sl = st.slider("Hold %", 2.0, 8.0, float(hold_pct * 100), 0.5,
-                             key="gl_hold", label_visibility="collapsed")
-    with hcol2:
-        hold_num = st.number_input("", 2.0, 8.0, hold_sl, 0.5,
-                                    key="gl_hold_num", label_visibility="collapsed")
+    st.markdown("### Market Margin %")
+    hold_num = st.number_input(
+        "Market margin %",
+        min_value=2.0, max_value=15.0,
+        value=float(st.session_state.get("hold_pct", 0.075) * 100),
+        step=0.5, key="gl_hold_num",
+        help="Vig/margin applied to all priced markets. Updates across all pages.",
+    )
 
     st.markdown("---")
     engine = get_engine()
     render_update_projection_btn(engine, key="p4")
 
-# hold_slider defined OUTSIDE sidebar so it's accessible to helpers below
-hold_slider = (hold_num if abs(hold_num - hold_sl) > 0.1 else hold_sl) / 100.0
+# hold synced globally via session state
+hold_slider = hold_num / 100.0
+st.session_state.hold_pct = hold_slider
 pricing = PricingEngine(hold_pct=hold_slider)
 
 # -- Helpers ---------------------------------------------------------------
@@ -403,7 +404,7 @@ st.plotly_chart(fig2, use_container_width=True)
 
 st.markdown(
     f'<span class="note-text">'
-    f"Engine v3 · {gs.n_sims:,} sims · Hold: {hold_slider*100:.1f}%"
+    f"Engine v3 · {gs.n_sims:,} sims · Margin: {hold_slider*100:.1f}%"
     f"</span>",
     unsafe_allow_html=True,
 )

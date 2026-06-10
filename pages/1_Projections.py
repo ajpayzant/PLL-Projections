@@ -151,7 +151,7 @@ with st.sidebar:
     af_current = rb.get_team_rating(away_id) if rb else {}
 
     def _rating_sliders(team_id: str, team_nm: str, current_ratings: dict):
-        """Render adjustable sliders + number inputs for one team's key ratings."""
+        """Render number inputs for one team's key ratings."""
         st.markdown(f"**{team_nm}**")
         overrides = get_team_rating_overrides(team_id)
 
@@ -162,35 +162,22 @@ with st.sidebar:
 
             current_override = overrides.get(key, model_val)
 
-            col_sl, col_num = st.columns([3, 1])
-            with col_sl:
-                sl_val = st.slider(
-                    label=meta["label"],
-                    min_value=meta["min"],
-                    max_value=meta["max"],
-                    value=float(current_override),
-                    step=meta["step"],
-                    help=meta["help"],
-                    key=f"tr_sl_{team_id}_{key}",
-                )
-            with col_num:
-                num_val = st.number_input(
-                    "",
-                    min_value=meta["min"],
-                    max_value=meta["max"],
-                    value=sl_val,
-                    step=meta["step"],
-                    key=f"tr_num_{team_id}_{key}",
-                    label_visibility="collapsed",
-                )
-            new_val = num_val if abs(num_val - sl_val) > meta["step"] * 0.1 else sl_val
+            new_val = st.number_input(
+                meta["label"],
+                min_value=meta["min"],
+                max_value=meta["max"],
+                value=float(current_override),
+                step=meta["step"],
+                help=meta["help"],
+                key=f"tr_num_{team_id}_{key}",
+            )
 
             # Show model value as reference
             changed = abs(new_val - model_val) > meta["step"] * 0.5
             model_str = meta["fmt"].format(model_val)
             if changed:
                 st.markdown(
-                    f'<span class="rating-changed note-text">Model: {model_str} → '
+                    f'<span class="rating-changed note-text">Model: {model_str} &rarr; '
                     f'You: {meta["fmt"].format(new_val)}</span>',
                     unsafe_allow_html=True,
                 )
@@ -200,7 +187,7 @@ with st.sidebar:
                     f'<span class="note-text">Model value: {model_str}</span>',
                     unsafe_allow_html=True,
                 )
-                # Remove override if it matches model (user reset slider)
+                # Remove override if it matches model (user reset to model value)
                 if key in get_team_rating_overrides(team_id):
                     del st.session_state.team_rating_overrides[team_id][key]
 
@@ -210,21 +197,16 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # Hold % with slider + number input
-    hcol1, hcol2 = st.columns([3, 1])
-    with hcol1:
-        hold_sl = st.slider("Market hold %", 2.0, 8.0, 4.5, 0.5, key="hold_slider")
-    with hcol2:
-        hold_num = st.number_input(
-            "",
-            min_value=2.0,
-            max_value=8.0,
-            value=hold_sl,
-            step=0.5,
-            key="hold_num",
-            label_visibility="collapsed",
-        )
-    hold_pct = (hold_num if abs(hold_num - hold_sl) > 0.1 else hold_sl) / 100.0
+    # Hold % — single number input, synced globally via session state
+    hold_pct_pct = st.number_input(
+        "Market margin %",
+        min_value=2.0, max_value=15.0,
+        value=float(st.session_state.get("hold_pct", 0.075) * 100),
+        step=0.5,
+        key="hold_num_p1",
+        help="Vig/margin applied to all priced markets. 7.5% = standard sportsbook. Updates across all pages.",
+    )
+    hold_pct = hold_pct_pct / 100.0
     st.session_state.hold_pct = hold_pct
 
     if st.button("Reset all adjustments", key="reset_adj"):

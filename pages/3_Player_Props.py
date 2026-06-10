@@ -66,19 +66,19 @@ with st.sidebar:
         "Positions", ["A","M","D","FO","SSDM","LSM","G"],
         default=["A","M","FO","G"], key="prop_pos",
     )
-    min_pts   = st.slider("Min projected points", 0.0, 3.0, 0.3, 0.1, key="prop_min_pts")
+    min_pts   = st.number_input("Min projected points", 0.0, 3.0, 0.3, 0.1, key="prop_min_pts")
     show_miles = st.checkbox("Show milestone props (1+, 2+, 3+)", value=True)
     show_alt   = st.checkbox("Show alternate line pricing", value=False)
 
     st.markdown("---")
-    st.markdown("### Hold %")
-    hcol1, hcol2 = st.columns([3, 1])
-    with hcol1:
-        hold_sl = st.slider("Hold %", 2.0, 8.0, float(hold_pct * 100), 0.5, key="pp_hold_slider",
-                            label_visibility="collapsed")
-    with hcol2:
-        hold_num = st.number_input("", 2.0, 8.0, hold_sl, 0.5, key="pp_hold_num",
-                                    label_visibility="collapsed")
+    st.markdown("### Market Margin %")
+    hold_num = st.number_input(
+        "Market margin %",
+        min_value=2.0, max_value=15.0,
+        value=float(st.session_state.get("hold_pct", 0.075) * 100),
+        step=0.5, key="pp_hold_num",
+        help="Vig/margin applied to all priced props. Updates across all pages.",
+    )
     st.markdown("---")
     st.markdown("### Market Line Comparison")
     st.markdown('<span class="note-text">Enter a market line to see model edge vs market.</span>',
@@ -107,8 +107,8 @@ with st.sidebar:
     engine = get_engine()
     render_update_projection_btn(engine, key="p2")
 
-# hold_pct and pricing defined OUTSIDE sidebar so accessible to prop pricing below
-new_hold_pct = (hold_num if abs(hold_num - hold_sl) > 0.1 else hold_sl) / 100.0
+# hold_pct synced globally via session state
+new_hold_pct = hold_num / 100.0
 st.session_state.hold_pct = new_hold_pct
 pricing = PricingEngine(hold_pct=new_hold_pct)
 
@@ -346,8 +346,7 @@ for ps in sims_filtered:
 st.markdown("---")
 st.markdown(
     f'<span class="note-text">'
-    f'Hold: {new_hold_pct*100:.1f}% · 20,000 sims · '
-    f'Adjust hold in sidebar · '
+    f'Margin: {new_hold_pct*100:.1f}% · 20,000 sims · '
     f'Enable "Alternate line pricing" in sidebar for full line grids'
     f'</span>',
     unsafe_allow_html=True,
