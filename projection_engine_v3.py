@@ -1628,6 +1628,11 @@ class PlayerModel:
 
             feats = row.to_dict()
             feats["usage_multiplier"] = usage
+            # Capture the DB baseline for shot_pct_ewm BEFORE the po loop can
+            # overwrite it with the user's override value.
+            feats["_baseline_shot_pct"] = _nan(
+                float(feats.get("shot_pct_ewm", LG_SHOT_PCT)), LG_SHOT_PCT
+            )
             # _override_keys is pre-built by build_overrides() — grab it directly
             # rather than reconstructing from po iteration to avoid double-counting.
             override_keys = list(po.get("_override_keys", []))
@@ -1635,10 +1640,6 @@ class PlayerModel:
                 if k not in ("active", "usage_multiplier", "is_starter", "_override_keys"):
                     feats[k] = v
             feats["_override_keys"] = override_keys
-            # Provide team shot% so _project_player can compute a relative
-            # multiplier when the user overrides an individual player's shot_pct_ewm.
-            team_shot_pct = _safe_div(team_proj.proj_goals, max(team_proj.proj_shots, 1.0), LG_SHOT_PCT)
-            feats["_team_shot_pct"] = team_shot_pct
 
             proj = self._project_player(feats, team_proj)
             proj.active = active
@@ -1711,10 +1712,14 @@ class PlayerModel:
             # ratio of the player's overridden shot% vs the team's shot% so the
             # override meaningfully shifts the player's goal projection.
             if "shot_pct_ewm" in _user_overrides:
-                player_sp = _nan(float(f.get("shot_pct_ewm", LG_SHOT_PCT)), LG_SHOT_PCT)
-                team_sp   = _nan(float(f.get("_team_shot_pct", LG_SHOT_PCT)), LG_SHOT_PCT)
-                team_sp   = max(team_sp, 0.05)
-                sp_mult   = min(max(player_sp / team_sp, 0.25), 4.0)
+                player_sp   = _nan(float(f.get("shot_pct_ewm", LG_SHOT_PCT)), LG_SHOT_PCT)
+                baseline_sp = _nan(float(f.get("_baseline_shot_pct", LG_SHOT_PCT)), LG_SHOT_PCT)
+                baseline_sp = max(baseline_sp, 0.05)
+                # Scale goals by the ratio of overridden value to the player's own
+                # DB baseline — so lowering shot% always reduces goals and raising
+                # it always increases them, regardless of where the player sits
+                # relative to the team or league average.
+                sp_mult = min(max(player_sp / baseline_sp, 0.25), 4.0)
                 proj_goals = proj_goals * sp_mult
 
         # Assists

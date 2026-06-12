@@ -181,11 +181,19 @@ def build_starter_goalies() -> Dict:
 def session_to_json() -> str:
     """Serialize all user overrides and selected game to a JSON string."""
     import json
+    game = st.session_state.get("selected_game") or {}
+    # Persist the season so the season selectbox re-seeds to the correct year on
+    # restore (otherwise it defaults to index=0 / most-recent season and the game
+    # lookup finds no match, causing the wrong game to be projected).
+    saved_season = st.session_state.get("season_filter") or (
+        int(str(game.get("game_date", ""))[:4]) if game.get("game_date") else None
+    )
     payload = {
-        "selected_game":         st.session_state.get("selected_game"),
+        "selected_game":         game,
         "depth_charts":          st.session_state.get("depth_charts", {}),
         "team_rating_overrides": st.session_state.get("team_rating_overrides", {}),
         "hold_pct":              st.session_state.get("hold_pct", 0.045),
+        "season_filter":         saved_season,
         "version":               1,
     }
     return json.dumps(payload, indent=2, default=str)
@@ -207,12 +215,22 @@ def session_from_json(json_str: str) -> bool:
         if "hold_pct" in payload:
             st.session_state["hold_pct"] = float(payload["hold_pct"])
 
-        # Clear all team-rating widget keys so Streamlit re-seeds them from the
-        # restored team_rating_overrides values rather than the stale widget cache.
+        # Clear all widget keys that need to re-seed from restored state:
+        # - tr_num_*: team-rating number inputs (must re-init from team_rating_overrides)
+        # - pr_num_*: player-rating number inputs in the depth chart panel
+        # - hold_num_* / pp_hold_num: hold% inputs
+        # - game_idx_p1: game selectbox -- cleared so it re-seeds to the restored game
         stale_keys = [k for k in st.session_state if k.startswith("tr_num_")
+                      or k.startswith("pr_num_")
                       or k.startswith("hold_num_") or k.startswith("pp_hold_num")]
         for k in stale_keys:
             del st.session_state[k]
+        if "game_idx_p1" in st.session_state:
+            del st.session_state["game_idx_p1"]
+        # Re-seed the season selectbox to the saved season so the game list is
+        # filtered correctly before we look up the restored game.
+        if payload.get("season_filter") is not None:
+            st.session_state["season_filter"] = int(payload["season_filter"])
 
         # Signal the Projections page to auto-run after the rerun.
         st.session_state["_run_after_load"] = True

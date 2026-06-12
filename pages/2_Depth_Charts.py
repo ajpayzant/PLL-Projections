@@ -130,7 +130,7 @@ ALL_POSITIONS = ["A", "M", "FO", "SSDM", "LSM", "D", "G"]
 
 
 def _model_val_for(pid: str, key: str, p) -> float:
-    """Get the model's current value for a rating key."""
+    """Get the model's raw DB value for a rating key (pre-override baseline)."""
     pm = engine.player_model
     if pm is not None and not pm.pr.empty:
         rows = pm.pr[pm.pr["player_id"] == pid]
@@ -138,17 +138,27 @@ def _model_val_for(pid: str, key: str, p) -> float:
             v = float(rows[key].iloc[-1])
             if v != 0.0:
                 return v
-    # Fallback from projection
+    # Fallback to stable league-average constants — do NOT derive from the
+    # projection result, since post-override projections give a shifted ratio
+    # that makes model_val drift between reruns and corrupts the change-detection
+    # threshold in _on_change.
+    from projection_engine_v3 import LG_SHOT_PCT, LG_2PT_RATE, LG_SAVE_PCT, LG_FO_PCT
+    fallback_map = {
+        "shot_pct_ewm":      LG_SHOT_PCT,
+        "bayes_save_pct":    LG_SAVE_PCT,
+        "bayes_fo_pct":      LG_FO_PCT,
+        "two_pt_rate_ewm":   LG_2PT_RATE,
+    }
+    if key in fallback_map:
+        return fallback_map[key]
+    # For share keys, derive from projection only as a last resort — these are
+    # not in the constants but are stable enough (they come from the DB rating row).
     team_proj = result.home_proj if p.team_id == home_id else result.away_proj
-    proj_map = {
+    share_map = {
         "share_goals_ewm":   p.proj_goals   / max(team_proj.proj_goals,   1.0),
         "share_assists_ewm": p.proj_assists / max(team_proj.proj_assists, 1.0),
-        "two_pt_rate_ewm":   p.proj_2pt_goals / max(p.proj_goals, 0.01),
-        "bayes_save_pct":    p.proj_save_pct,
-        "bayes_fo_pct":      p.proj_faceoff_pct,
-        "shot_pct_ewm":      p.proj_goals / max(p.proj_shots, 0.01),
     }
-    return proj_map.get(key, 0.0)
+    return share_map.get(key, 0.0)
 
 
 def _effective_pos(p, dc: dict) -> str:
