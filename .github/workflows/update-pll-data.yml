@@ -43,10 +43,14 @@ jobs:
       - name: Scrape gameday rosters (if bearer token available)
         run: python pll_gameday_roster_cache.py --all-weeks || echo "Gameday roster scrape skipped (check PLL_BEARER_TOKEN secret)"
 
+      - name: Pull latest before committing (avoid non-fast-forward conflicts)
+        run: git pull --rebase origin main
+
       - name: Commit updated data files
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Auto-update PLL data [skip ci]"
+          push_options: "--force-with-lease"
           file_pattern: |
             data/curated_data/**/*.parquet
             data/curated_data/**/*.csv
