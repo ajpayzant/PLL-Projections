@@ -167,6 +167,29 @@ def _effective_pos(p, dc: dict) -> str:
     return dc.get(p.player_id, {}).get("position_override", p.position)
 
 
+def _native_pos(eng, pid: str, fallback: str) -> str:
+    """
+    Return the player's original position from the engine's historical ratings,
+    ignoring any position override that may have already been applied to the
+    PlayerProjection object by a previous projection run.
+
+    This is necessary because after Update Projection, p.position already
+    reflects the override, so comparing new_pos != p.position falsely concludes
+    the override was cleared and deletes it.
+    """
+    try:
+        pm = eng.player_model
+        if pm is not None and not pm.pr.empty:
+            rows = pm.pr[pm.pr["player_id"] == pid]
+            if not rows.empty:
+                from projection_engine_v3 import _norm_pos
+                raw = rows["position_norm"].dropna().iloc[-1] if "position_norm" in rows.columns else fallback
+                return _norm_pos(str(raw))
+    except Exception:
+        pass
+    return fallback
+
+
 def _player_history(pid: str, pos: str) -> None:
     """
     Render a compact history panel for one player inside the Edit section.
@@ -332,9 +355,15 @@ def _render_team(team_id: str, team_nm: str, players):
                 key=f"pos_{team_id}_{pid}",
                 label_visibility="collapsed",
             )
-            if new_pos != p.position:
+            # Compare against the native position from the engine's player ratings,
+            # NOT p.position which may already reflect a prior override applied by
+            # the projection engine — causing the override to be deleted on every
+            # subsequent Update Projection because p.position == new_pos after the
+            # first run.
+            native_pos = _native_pos(engine, pid, p.position)
+            if new_pos != native_pos:
                 set_player_override(team_id, pid, "position_override", new_pos)
-            elif "position_override" in existing and new_pos == p.position:
+            elif "position_override" in existing and new_pos == native_pos:
                 # User reset back to native position — clear the override
                 del st.session_state.depth_charts[team_id][pid]["position_override"]
 
