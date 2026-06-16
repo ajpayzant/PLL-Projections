@@ -69,7 +69,7 @@ with st.sidebar:
     st.markdown("### View Mode")
     view_mode = st.radio(
         "Layout",
-        ["Expander (per player)", "Table (all players)"],
+        ["Table (all players)", "Expander (per player)"],
         key="prop_view_mode",
         help="Table view shows all players and their main lines in one sortable grid.",
     )
