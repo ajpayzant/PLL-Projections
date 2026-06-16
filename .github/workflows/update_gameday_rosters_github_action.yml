@@ -1,0 +1,49 @@
+name: Update PLL Gameday Rosters
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Thu/Fri/Sat at 9am, Noon, and 5pm ET (UTC-4 in summer).
+    # Runs regardless of whether rosters are posted yet — scraper returns
+    # empty gracefully if the week isn't available, and overwrites with
+    # the full roster once it is posted.
+    - cron: "0 13 * * 4"   # Thursday  9am ET
+    - cron: "0 16 * * 4"   # Thursday 12pm ET
+    - cron: "0 21 * * 4"   # Thursday  5pm ET
+    - cron: "0 13 * * 5"   # Friday    9am ET
+    - cron: "0 16 * * 5"   # Friday   12pm ET
+    - cron: "0 21 * * 5"   # Friday    5pm ET
+    - cron: "0 13 * * 6"   # Saturday  9am ET
+    - cron: "0 16 * * 6"   # Saturday 12pm ET
+    - cron: "0 21 * * 6"   # Saturday  5pm ET
+
+permissions:
+  contents: write
+
+jobs:
+  update-gameday-rosters:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas requests
+
+      - name: Scrape current week gameday rosters
+        env:
+          PLL_BEARER_TOKEN: ${{ secrets.PLL_BEARER_TOKEN }}
+        run: python pll_gameday_roster_cache.py
+
+      - name: Commit updated gameday roster cache
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Auto-update PLL gameday rosters [skip ci]"
+          file_pattern: data/reference_tables/gameday_rosters/*.csv
