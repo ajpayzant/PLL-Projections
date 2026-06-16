@@ -575,11 +575,46 @@ def _gameday_roster_dir() -> Path:
     return Path(__file__).resolve().parent / "data" / "reference_tables" / "gameday_rosters"
 
 
+def _build_schedule_week_map(year: int = 2026) -> Dict[int, Dict]:
+    """
+    Build {pll_week: {first_date, last_date}} from the schedule parquet.
+    Groups games into weekends (gap > 4 days = new weekend) then ranks them.
+    Used by _pll_week_from_date to map a game date to its correct PLL week.
+    Cached at module level after first call to avoid repeated parquet reads.
+    """
+    parquet = Path(__file__).resolve().parent / "data" / "curated_data" / "all_requested_seasons" / "game_schedule_all.parquet"
+    if not parquet.exists():
+        return {}
+    try:
+        df = pd.read_parquet(str(parquet))
+        df = df[df["season"] == year].copy()
+        if df.empty:
+            return {}
+        df["_date"] = pd.to_datetime(df["game_date_guess"], utc=True, errors="coerce").dt.date
+        df = df.dropna(subset=["_date"]).sort_values("_date").reset_index(drop=True)
+        dates = df["_date"].tolist()
+        wid, ids = 0, [0]
+        for i in range(1, len(dates)):
+            if (dates[i] - dates[i - 1]).days > 4:
+                wid += 1
+            ids.append(wid)
+        df["_wid"] = ids
+        result: Dict[int, Dict] = {}
+        for wid, grp in df.groupby("_wid"):
+            gdates = sorted(grp["_date"].unique().tolist())
+            result[int(wid) + 1] = {"first_date": gdates[0], "last_date": gdates[-1]}
+        return result
+    except Exception:
+        return {}
+
+_SCHEDULE_WEEK_MAP_CACHE: Dict[int, Dict[int, Dict]] = {}
+
+
 def _pll_week_from_date(game_date: Optional[str], year: int = 2026) -> Optional[int]:
     """
-    Derive the PLL week number for a game date.
-    Matches the same heuristic used in pll_gameday_roster_cache.py.
-    Returns None if the date is unparseable or before the season.
+    Map a game date to its PLL week number using the committed schedule.
+    A game date matches a week if it falls within that week's date range.
+    Falls back to a calendar heuristic if the schedule parquet is unavailable.
     """
     if not game_date:
         return None
@@ -588,13 +623,27 @@ def _pll_week_from_date(game_date: Optional[str], year: int = 2026) -> Optional[
         if pd.isna(gd):
             return None
         gd_date = gd.date()
-        # Approximate season start (first Saturday in late April/early May)
+
+        global _SCHEDULE_WEEK_MAP_CACHE
+        if year not in _SCHEDULE_WEEK_MAP_CACHE:
+            _SCHEDULE_WEEK_MAP_CACHE[year] = _build_schedule_week_map(year)
+        week_map = _SCHEDULE_WEEK_MAP_CACHE.get(year, {})
+
+        if week_map:
+            for week_num in sorted(week_map.keys()):
+                info = week_map[week_num]
+                # Allow ±1 day tolerance for timezone edge cases
+                from datetime import timedelta
+                if info["first_date"] - timedelta(days=1) <= gd_date <= info["last_date"] + timedelta(days=1):
+                    return week_num
+            return None  # date outside the known schedule
+
+        # Fallback: calendar heuristic
         season_start = date(year, 4, 26)
         if gd_date < season_start:
             return None
         days_in = (gd_date - season_start).days
-        week = max(1, min(14, 1 + days_in // 7))
-        return week
+        return max(1, min(14, 1 + days_in // 7))
     except Exception:
         return None
 
