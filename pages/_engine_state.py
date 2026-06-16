@@ -5,6 +5,7 @@ via the leading underscore (Streamlit ≥ 1.28 respects _prefix convention).
 """
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -38,6 +39,11 @@ DB_PATH = os.getenv(
     "PLL_DB_PATH",
     str(_ROOT / "data" / "analytics_database" / "pll_warehouse.duckdb"),
 )
+
+# -- Autosave path ---------------------------------------------------------
+# Written on every meaningful state change; restored silently on startup.
+# Lives outside git-tracked folders so it never gets committed.
+_AUTOSAVE_PATH = _ROOT / "data" / "session_autosave.json"
 
 
 # -- Bootstrap DB from parquets if missing or incomplete ------------------
@@ -94,6 +100,77 @@ def get_engine() -> ProjectionEngine:
     return engine
 
 
+# -- Autosave / autorestore ------------------------------------------------
+
+def _autosave() -> None:
+    """Write current session state to disk. Called after every meaningful change."""
+    try:
+        game = st.session_state.get("selected_game") or {}
+        saved_season = st.session_state.get("season_filter") or (
+            int(str(game.get("game_date", ""))[:4]) if game.get("game_date") else None
+        )
+        payload = {
+            "selected_game":         game,
+            "depth_charts":          st.session_state.get("depth_charts", {}),
+            "team_rating_overrides": st.session_state.get("team_rating_overrides", {}),
+            "hold_pct":              st.session_state.get("hold_pct", 0.075),
+            "season_filter":         saved_season,
+            "version":               1,
+        }
+        _AUTOSAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _AUTOSAVE_PATH.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+    except Exception:
+        pass  # autosave is best-effort; never crash the app
+
+
+def _autorestore() -> bool:
+    """
+    Restore session state from the autosave file if it exists.
+    Returns True if state was restored, False otherwise.
+    Only runs once per session (guarded by _autorestore_done flag).
+    """
+    if st.session_state.get("_autorestore_done"):
+        return False
+    st.session_state["_autorestore_done"] = True
+
+    if not _AUTOSAVE_PATH.exists():
+        return False
+    try:
+        payload = json.loads(_AUTOSAVE_PATH.read_text(encoding="utf-8"))
+        if payload.get("version") != 1:
+            return False
+
+        restored = False
+        if payload.get("selected_game"):
+            st.session_state["selected_game"] = payload["selected_game"]
+            restored = True
+        if payload.get("depth_charts"):
+            st.session_state["depth_charts"] = payload["depth_charts"]
+            restored = True
+        if payload.get("team_rating_overrides"):
+            st.session_state["team_rating_overrides"] = payload["team_rating_overrides"]
+            restored = True
+        if "hold_pct" in payload:
+            st.session_state["hold_pct"] = float(payload["hold_pct"])
+        if payload.get("season_filter") is not None:
+            st.session_state["season_filter"] = int(payload["season_filter"])
+
+        # Clear widget seed keys so they re-init from restored values
+        stale = [k for k in st.session_state
+                 if k.startswith(("tr_num_", "pr_num_", "hold_num_", "pp_hold_num"))]
+        for k in stale:
+            del st.session_state[k]
+        for k in ("game_idx_p1",):
+            st.session_state.pop(k, None)
+
+        if restored:
+            st.session_state["_run_after_load"] = True
+            st.session_state["last_result"] = None
+        return restored
+    except Exception:
+        return False
+
+
 # -- Session state ---------------------------------------------------------
 def init_session() -> None:
     defaults: Dict = {
@@ -111,6 +188,9 @@ def init_session() -> None:
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
+    # Silently restore last session on first load of a new browser session.
+    # _autorestore is guarded internally so it only fires once.
+    _autorestore()
 
 
 # -- Depth chart helpers ---------------------------------------------------
@@ -125,6 +205,7 @@ def set_player_override(team_id: str, player_id: str, key: str, value) -> None:
     if player_id not in dc:
         dc[player_id] = {}
     dc[player_id][key] = value
+    _autosave()
 
 
 def set_player_rating(team_id: str, player_id: str, rating_key: str, value: float) -> None:
@@ -135,6 +216,7 @@ def set_player_rating(team_id: str, player_id: str, rating_key: str, value: floa
     if "rating_overrides" not in dc[player_id]:
         dc[player_id]["rating_overrides"] = {}
     dc[player_id]["rating_overrides"][rating_key] = value
+    _autosave()
 
 
 def build_overrides() -> Dict:
@@ -283,6 +365,7 @@ def run_projection_for_game(engine, game: Dict) -> Optional[ProjectionResult]:
     )
     st.session_state.last_result = result
     st.session_state.selected_game = game
+    _autosave()
     return result
 
 
@@ -399,6 +482,7 @@ def run_selected_projection(
     st.session_state.selected_game = game
     st.session_state.last_result = result
     st.session_state.last_projection_updated_at = date.today().isoformat()
+    _autosave()
     return result
 
 
@@ -477,6 +561,7 @@ def set_team_rating_override(team_id: str, key: str, value: float) -> None:
     if team_id not in st.session_state.team_rating_overrides:
         st.session_state.team_rating_overrides[team_id] = {}
     st.session_state.team_rating_overrides[team_id][key] = value
+    _autosave()
 
 
 def build_team_adjustments() -> Dict:

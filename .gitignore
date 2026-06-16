@@ -22,6 +22,9 @@ data/standardized_data/
 # Projection output files
 projection_*.json
 
+# Auto-saved session state (local persistence, never commit)
+data/session_autosave.json
+
 # OS / editor
 .DS_Store
 Thumbs.db

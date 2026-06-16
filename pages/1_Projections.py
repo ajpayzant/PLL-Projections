@@ -26,6 +26,7 @@ from _engine_state import (
     sorted_upcoming, default_game_index,
     render_update_projection_btn,
     session_to_json, session_from_json,
+    _AUTOSAVE_PATH,
 )
 
 st.set_page_config(page_title="Projections · PLL", page_icon="🥍", layout="wide")
@@ -221,8 +222,23 @@ with st.sidebar:
     # -- Save / Load session state -----------------------------------------
     st.markdown("---")
     st.markdown("### Save / Load")
-    st.markdown('<span class="note-text">Save all overrides, depth chart, and selected game to a file. Load it back anytime to restore instantly.</span>',
-                unsafe_allow_html=True)
+    st.markdown(
+        '<span class="note-text">Your depth chart, overrides, and game selection '
+        'are saved automatically and restored when you reopen the app. '
+        'Use the buttons below to export a named file or start fresh.</span>',
+        unsafe_allow_html=True,
+    )
+    if st.button("🗑 Clear saved session", key="clear_autosave",
+                 help="Wipe the auto-saved state and start fresh on next load."):
+        try:
+            if _AUTOSAVE_PATH.exists():
+                _AUTOSAVE_PATH.unlink()
+        except Exception:
+            pass
+        for k in ("depth_charts", "team_rating_overrides", "selected_game",
+                  "last_result", "season_filter"):
+            st.session_state.pop(k, None)
+        st.rerun()
 
     # Save button -- generates JSON download
     save_data = session_to_json()
