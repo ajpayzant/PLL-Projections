@@ -40,10 +40,28 @@ DB_PATH = os.getenv(
 )
 
 
-# -- Bootstrap DB from parquets if missing --------------------------------
+# -- Bootstrap DB from parquets if missing or incomplete ------------------
+def _db_is_valid() -> bool:
+    """Return True only if the DB file exists AND has the clean schema populated."""
+    p = Path(DB_PATH)
+    if not p.exists() or p.stat().st_size < 4096:
+        return False
+    try:
+        import duckdb
+        con = duckdb.connect(str(p), read_only=True)
+        n = con.execute("SELECT COUNT(*) FROM clean.team_game_stats").fetchone()[0]
+        con.close()
+        return n > 0
+    except Exception:
+        return False
+
+
 def _ensure_db() -> None:
-    if Path(DB_PATH).exists():
+    if _db_is_valid():
         return
+    # DB is missing, empty, or the clean schema was never created — rebuild.
+    # This handles: fresh Streamlit Cloud deploy, empty file left by a prior
+    # failed bootstrap, or DB created by an incompatible DuckDB version.
     bootstrap = _ROOT / "scripts" / "bootstrap_db.py"
     if not bootstrap.exists():
         st.error(
@@ -53,7 +71,7 @@ def _ensure_db() -> None:
         st.stop()
     with st.spinner("Building database from data files -- first load only, ~10 seconds…"):
         result = subprocess.run(
-            [sys.executable, str(bootstrap)],
+            [sys.executable, str(bootstrap), "--force"],
             capture_output=True, text=True,
         )
     if result.returncode != 0:
