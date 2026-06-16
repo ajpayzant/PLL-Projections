@@ -66,6 +66,15 @@ MILE_DEFS    = {
 
 # -- Sidebar ---------------------------------------------------------------
 with st.sidebar:
+    st.markdown("### View Mode")
+    view_mode = st.radio(
+        "Layout",
+        ["Expander (per player)", "Table (all players)"],
+        key="prop_view_mode",
+        help="Table view shows all players and their main lines in one sortable grid.",
+    )
+
+    st.markdown("---")
     st.markdown("### Filters")
     show_team = st.radio("Team", ["Both", away_nm, home_nm], key="prop_team")
     show_pos  = st.multiselect(
@@ -75,15 +84,6 @@ with st.sidebar:
     min_pts   = st.number_input("Min projected points", 0.0, 3.0, 0.3, 0.1, key="prop_min_pts")
     show_miles = st.checkbox("Show milestone props (1+, 2+, 3+)", value=True)
     show_alt   = st.checkbox("Show alternate line pricing", value=False)
-
-    st.markdown("---")
-    st.markdown("### View Mode")
-    view_mode = st.radio(
-        "Layout",
-        ["Expander (per player)", "Table (all players)"],
-        key="prop_view_mode",
-        help="Table view shows all players and their main lines in one sortable grid.",
-    )
 
     st.markdown("---")
     st.markdown("### Market Margin %")
