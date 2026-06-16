@@ -1,4 +1,4 @@
-"""Page 3 -- Depth Charts"""
+"""Page 2 -- Depth Charts"""
 from __future__ import annotations
 
 import sys
@@ -10,6 +10,7 @@ for _p in [str(_ROOT), str(_PAGES_DIR)]:
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -164,6 +165,98 @@ def _model_val_for(pid: str, key: str, p) -> float:
 def _effective_pos(p, dc: dict) -> str:
     """Return the position to display/group by, respecting any position override."""
     return dc.get(p.player_id, {}).get("position_override", p.position)
+
+
+def _player_history(pid: str, pos: str) -> None:
+    """
+    Render a compact history panel for one player inside the Edit section.
+    Pulls from engine.player_model.pr (already loaded, no extra DB call).
+    Shows: season averages table + last-5 game log.
+    """
+    pm = engine.player_model
+    if pm is None or pm.pr.empty:
+        st.caption("No historical data available.")
+        return
+
+    pr = pm.pr
+    rows = pr[pr["player_id"] == pid].copy()
+    if rows.empty:
+        st.caption("No historical rows found for this player.")
+        return
+
+    # Sort chronologically
+    sort_cols = [c for c in ("season", "game_date_utc", "game_number") if c in rows.columns]
+    if sort_cols:
+        rows = rows.sort_values(sort_cols)
+
+    # ── Season averages ──────────────────────────────────────────────────
+    stat_cols = [c for c in ("goals","assists","shots","shots_on_goal",
+                             "ground_balls","turnovers","caused_turnovers",
+                             "saves","faceoff_wins_x","faceoffs_won")
+                 if c in rows.columns]
+    # normalise FO wins column name
+    fo_col = "faceoffs_won" if "faceoffs_won" in rows.columns else (
+             "faceoff_wins_x" if "faceoff_wins_x" in rows.columns else None)
+
+    display_cols = {"goals":"G","assists":"A","shots":"Sh",
+                    "shots_on_goal":"SOG","ground_balls":"GB",
+                    "turnovers":"TO","caused_turnovers":"CTO",
+                    "saves":"SV","faceoffs_won":"FOW","faceoff_wins_x":"FOW"}
+
+    if "season" in rows.columns:
+        grp_cols = [c for c in stat_cols if c in rows.columns]
+        if grp_cols:
+            seas_avg = (
+                rows.groupby("season")[grp_cols]
+                .mean()
+                .round(2)
+                .reset_index()
+                .rename(columns=display_cols)
+                .rename(columns={"season": "Season"})
+            )
+            seas_avg["Season"] = seas_avg["Season"].astype(int)
+            # Drop columns that are all-zero (e.g. saves for a field player)
+            seas_avg = seas_avg.loc[:, (seas_avg != 0).any(axis=0)]
+            st.markdown(
+                '<span style="font-size:.72rem;color:#64748b;font-weight:700;'
+                'text-transform:uppercase;letter-spacing:.05em;">Season Averages (per game)</span>',
+                unsafe_allow_html=True,
+            )
+            st.dataframe(seas_avg, use_container_width=True, hide_index=True)
+
+    # ── Last 5 game log ──────────────────────────────────────────────────
+    last5 = rows.tail(5).copy()
+    log_cols = [c for c in ("season","game_number","goals","assists",
+                             "shots","shots_on_goal","ground_balls",
+                             "turnovers","saves","faceoffs_won","faceoff_wins_x")
+                if c in last5.columns]
+    if log_cols:
+        log_df = last5[log_cols].copy()
+        log_df = log_df.rename(columns={**display_cols,
+                                         "season":"Ssn","game_number":"Gm"})
+        log_df = log_df.loc[:, (log_df != 0).any(axis=0)]
+        # Round numeric columns
+        num_cols = log_df.select_dtypes(include=[np.number]).columns
+        log_df[num_cols] = log_df[num_cols].round(1)
+        st.markdown(
+            '<span style="font-size:.72rem;color:#64748b;font-weight:700;'
+            'text-transform:uppercase;letter-spacing:.05em;">Last 5 Games</span>',
+            unsafe_allow_html=True,
+        )
+        st.dataframe(log_df, use_container_width=True, hide_index=True)
+
+    # ── Career summary line ──────────────────────────────────────────────
+    gp = len(rows)
+    if "goals" in rows.columns:
+        career_g  = rows["goals"].mean()
+        career_a  = rows["assists"].mean() if "assists" in rows.columns else 0.0
+        career_sh = rows["shots"].mean()   if "shots"   in rows.columns else 0.0
+        st.markdown(
+            f'<span style="font-size:.75rem;color:#64748b;">'
+            f'Career ({gp} games): {career_g:.2f} G · {career_a:.2f} A · {career_sh:.1f} Sh per game'
+            f'</span>',
+            unsafe_allow_html=True,
+        )
 
 
 def _render_team(team_id: str, team_nm: str, players):
@@ -400,6 +493,24 @@ def _render_team(team_id: str, team_nm: str, players):
 
                 if not ratings_shown:
                     st.caption(f"No adjustable ratings for {POS_LABELS.get(pos, pos)}.")
+
+                # -- Player history panel ------------------------------------
+                hist_key = f"show_history_{team_id}_{pid}"
+                if hist_key not in st.session_state:
+                    st.session_state[hist_key] = False
+                hist_label = "▲ Hide history" if st.session_state[hist_key] else "📊 Show history"
+                if st.button(hist_label, key=f"hbtn_{team_id}_{pid}", use_container_width=True):
+                    st.session_state[hist_key] = not st.session_state[hist_key]
+
+                if st.session_state.get(hist_key, False):
+                    st.markdown(
+                        '<div style="background:rgba(15,23,42,.35);border-left:3px solid #334155;'
+                        'border-radius:0 6px 6px 0;padding:8px 12px;margin:4px 0 6px;">'
+                        '<span style="font-size:.72rem;color:#94a3b8;font-weight:700;">'
+                        'PLAYER HISTORY</span></div>',
+                        unsafe_allow_html=True,
+                    )
+                    _player_history(pid, pos)
 
                 col_rst, col_close = st.columns(2)
                 with col_rst:
