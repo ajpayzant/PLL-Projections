@@ -358,8 +358,8 @@ if show_alt_team_totals:
 st.markdown("### Score Probability Grid")
 hs  = gs.home_scores.astype(int)
 as_ = gs.away_scores.astype(int)
-h_vals = sorted(set(hs.clip(0, 30)))[:16]
-a_vals = sorted(set(as_.clip(0, 30)))[:16]
+h_vals = sorted(set(hs.clip(0, 30)))[:20]
+a_vals = sorted(set(as_.clip(0, 30)))[:20]
 n = len(hs)
 grid = [[float(np.mean((hs == hv) & (as_ == av))) * 100
          for hv in h_vals] for av in a_vals]

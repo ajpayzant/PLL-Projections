@@ -150,12 +150,14 @@ POS_DEFAULTS: Dict[str, Dict[str, float]] = {
 # cutting legitimate tail events. Observed maxima from audit:
 #   G: goals=1, shots=2 | FO: goals=3 | D: goals=2, shots=4
 #   SSDM: goals=3, shots=5 | LSM: goals=2, shots=4
+# Assists caps added to prevent D/SSDM/LSM from drawing too much team
+# assist volume after _reconcile proportional rescaling.
 POS_CAPS: Dict[str, Dict[str, float]] = {
     "G":    {"goals": 0.10, "assists": 0.20, "shots": 2.5},
-    "FO":   {"goals": 3.5},
-    "D":    {"goals": 2.5, "shots": 5.0},
-    "SSDM": {"goals": 3.5, "shots": 6.0},
-    "LSM":  {"goals": 2.5, "shots": 5.0},
+    "FO":   {"goals": 3.5,  "assists": 1.5},
+    "D":    {"goals": 2.0,  "assists": 1.0, "shots": 4.0},
+    "SSDM": {"goals": 2.5,  "assists": 1.2, "shots": 5.0},
+    "LSM":  {"goals": 2.0,  "assists": 1.0, "shots": 4.0},
 }
 
 
@@ -1675,19 +1677,19 @@ class PlayerModel:
             # Use explicit == 1 check -- bool(NaN) is True in Python, which would
             # incorrectly route all real players (whose column value is NaN) here.
             if f.get("synthetic_current_roster") == 1:
-                return min(pos_s * 0.30, 0.02)
+                # Tighter prior for new/unknown players: 0.10 × pos_s so they don't
+                # steal meaningful volume from established players before user sets a role.
+                return min(pos_s * 0.10, 0.008)
             # User explicitly set this share — honour it directly, bypassing the
             # credibility blend so the override is fully reflected in projections.
             if share_key in _user_overrides:
                 return max(ewm_s, 0.0)
             # Credibility-weighted blend (Bühlmann-Straub style).
-            # k=15: a player needs 15 career games to get equal weight to the prior.
-            # This is grounded in the data -- PLL goal-share variance between players
-            # is roughly equal to within-player variance over ~15 games.
-            # Effect: sparse-sample hot streaks are dampened more than the linear
-            # formula did (gp=2 gets 12% own-data vs 12% before), but established
-            # veterans (gp=40) get 73% own-data vs 65% before.
-            _K = 15.0
+            # _K controls how many games of history are needed to equal the prior weight.
+            # Lowered from 15 to 10 for A/M so that star players with 20-40 career games
+            # get more weight on their own data (gp=20: own=0.67 vs 0.57 at k=15).
+            # Kept at 15 for defensive positions where prior is more reliable.
+            _K = 10.0 if pos in {"A", "M"} else 15.0
             own = gp / (gp + _K)           # 0 at gp=0, 0.5 at gp=15, 0.73 at gp=40
             w_ewm    = 0.65 * own          # EWM carries 65% of the "own data" weight
             w_career = 0.35 * own          # career mean carries 35%
@@ -1845,6 +1847,10 @@ class PlayerModel:
         _rescale("shots", tp.proj_shots)
         _rescale("ground_balls", tp.proj_ground_balls)
         _rescale("turnovers", tp.proj_turnovers)
+        # Rescale SOG after shots so proj_sog stays consistent with rescaled proj_shots.
+        # Without this, proj_sog can exceed proj_shots for players whose shots were
+        # scaled down, causing the sog NegBin draw in simulate_players to be biased high.
+        _rescale("sog", tp.proj_sog)
 
         fo_players = [p for p in active if p.position == "FO"]
         fo_sum = sum(p.proj_faceoff_wins for p in fo_players)
@@ -1899,9 +1905,12 @@ class GameSimulator:
         home_goals = _trunc_normal_sample(rng, mu_h, TEAM_GOAL_SIGMA_BASE, n, lo=0.0)
         away_goals = _trunc_normal_sample(rng, mu_a, TEAM_GOAL_SIGMA_BASE, n, lo=0.0)
 
-        # Floor to non-negative integers for discrete scoring
-        home_goals_int = np.floor(home_goals).astype(int).clip(min=0)
-        away_goals_int = np.floor(away_goals).astype(int).clip(min=0)
+        # Round to nearest integer for discrete scoring.
+        # np.floor was used previously but introduces a systematic ~0.5-goal
+        # downward bias per team (E[floor(X)] ≈ mu - 0.5 for continuous X).
+        # np.round is unbiased: E[round(X)] ≈ mu.
+        home_goals_int = np.round(home_goals).astype(int).clip(min=0)
+        away_goals_int = np.round(away_goals).astype(int).clip(min=0)
 
         # 2pt goals: Binomial within each draw
         r_h = min(max(float(home_proj.proj_2pt_goals) / max(mu_h, 1.0), 0.01), 0.45)

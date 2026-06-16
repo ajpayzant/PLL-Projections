@@ -1,4 +1,4 @@
-"""Page 2 -- Player Props"""
+"""Page 3 -- Player Props"""
 from __future__ import annotations
 
 import sys
@@ -53,10 +53,11 @@ STAT_LABELS = {
     "one_pt_goals": "1PT Goals", "saves": "Saves", "faceoff_wins": "FO Wins",
     "ground_balls": "Ground Balls",
 }
-FIELD_STATS  = ["goals", "assists", "points", "shots_on_goal", "two_pt_goals"]
+FIELD_STATS  = ["goals", "assists", "points", "shots_on_goal", "two_pt_goals", "ground_balls"]
 GOALIE_STATS = ["saves"]
 FO_STATS     = ["faceoff_wins"]
-MILE_DEFS    = {"goals": [1, 2, 3], "assists": [1, 2], "saves": [10, 12, 14]}
+MILE_DEFS    = {"goals": [1, 2, 3], "assists": [1, 2], "saves": [10, 12, 14],
+                "shots_on_goal": [2, 3, 4]}
 
 # -- Sidebar ---------------------------------------------------------------
 with st.sidebar:

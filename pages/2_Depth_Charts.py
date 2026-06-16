@@ -1,4 +1,4 @@
-"""Page 3 -- Depth Charts"""
+"""Page 2 -- Depth Charts"""
 from __future__ import annotations
 
 import sys

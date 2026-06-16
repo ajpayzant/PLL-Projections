@@ -192,7 +192,7 @@ def session_to_json() -> str:
         "selected_game":         game,
         "depth_charts":          st.session_state.get("depth_charts", {}),
         "team_rating_overrides": st.session_state.get("team_rating_overrides", {}),
-        "hold_pct":              st.session_state.get("hold_pct", 0.045),
+        "hold_pct":              st.session_state.get("hold_pct", 0.075),
         "season_filter":         saved_season,
         "version":               1,
     }

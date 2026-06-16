@@ -334,11 +334,11 @@ fig_wp = go.Figure(go.Bar(
     textposition="auto",
 ))
 fig_wp.update_layout(
-    height=110, margin=dict(l=0,r=0,t=2,b=0),
+    height=160, margin=dict(l=0,r=0,t=4,b=0),
     xaxis=dict(range=[0,100], showticklabels=False, showgrid=False),
     yaxis=dict(showgrid=False),
     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(color="#f1f5f9"), showlegend=False,
+    font=dict(color="#f1f5f9", size=14), showlegend=False,
 )
 st.plotly_chart(fig_wp, use_container_width=True)
 st.markdown("---")
@@ -488,13 +488,9 @@ def _build_export(result, game, hold_pct, engine):
         gs = result.game_sim
         gm = result.game_market
         import numpy as np
-        home_tt_line = round(float(np.median(gs.home_scores)) * 2) / 2
-        away_tt_line = round(float(np.median(gs.away_scores)) * 2) / 2
-        # snap to x.5
-        def snap(v):
-            return round(round(v * 2) / 2 + (0 if round(v*2)%2==1 else 0.5 if v-int(v)<0.5 else -0.5), 1)
-        home_tt = snap(home_tt_line) if (home_tt_line % 1) == 0 else home_tt_line
-        away_tt = snap(away_tt_line) if (away_tt_line % 1) == 0 else away_tt_line
+        from projection_engine_v3 import PricingEngine as _PE
+        home_tt = _PE._force_half_only(float(np.median(gs.home_scores)))
+        away_tt = _PE._force_half_only(float(np.median(gs.away_scores)))
 
         lines_rows = [
             (f"{team_name(result.away_proj.team_id)} ML", "--", gm.away_ml,
