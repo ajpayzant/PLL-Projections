@@ -566,6 +566,184 @@ class CurrentRosterFilter:
         detail["reason"] = f"Only matched {len(matched)} current roster players; minimum needed is {min_needed}."
         return None, detail
 
+
+# ---------------------------------------------------------------------------
+# GamedayRosterFilter
+# ---------------------------------------------------------------------------
+
+def _gameday_roster_dir() -> Path:
+    return Path(__file__).resolve().parent / "data" / "reference_tables" / "gameday_rosters"
+
+
+def _pll_week_from_date(game_date: Optional[str], year: int = 2026) -> Optional[int]:
+    """
+    Derive the PLL week number for a game date.
+    Matches the same heuristic used in pll_gameday_roster_cache.py.
+    Returns None if the date is unparseable or before the season.
+    """
+    if not game_date:
+        return None
+    try:
+        gd = pd.to_datetime(game_date, utc=True, errors="coerce")
+        if pd.isna(gd):
+            return None
+        gd_date = gd.date()
+        # Approximate season start (first Saturday in late April/early May)
+        season_start = date(year, 4, 26)
+        if gd_date < season_start:
+            return None
+        days_in = (gd_date - season_start).days
+        week = max(1, min(14, 1 + days_in // 7))
+        return week
+    except Exception:
+        return None
+
+
+class GamedayRosterFilter:
+    """
+    Applies an official PLL gameday roster for a specific game.
+
+    Priority rules:
+    - Loaded from data/reference_tables/gameday_rosters/gameday_{year}_week{week:02d}.csv
+    - Matched strictly by home_team_id AND away_team_id to prevent a gameday
+      roster from one matchup bleeding into a different matchup on the same week.
+    - Only applied for current/future games (not historical backtests).
+    - If no gameday CSV exists for the game's week, or if the game is not found
+      in the CSV, returns available=False and the caller falls through to
+      CurrentRosterFilter then historical fallback.
+    - gameday_latest.csv is intentionally NOT used as a fallback to prevent
+      last week's gameday roster from polluting future-game projections.
+    """
+
+    def __init__(
+        self,
+        home_team_id: str,
+        away_team_id: str,
+        game_date: Optional[str] = None,
+        year: int = 2026,
+    ):
+        self.home_team_id = str(home_team_id).upper()
+        self.away_team_id = str(away_team_id).upper()
+        self.game_date = game_date
+        self.year = year
+        self.available = False
+        self.week: Optional[int] = None
+        self.source_path: str = ""
+        self._filter_by_team: Dict[str, CurrentRosterFilter] = {}
+        self.status: Dict[str, object] = {"available": False, "reason": "not_loaded"}
+        self._load()
+
+    def _load(self) -> None:
+        week = _pll_week_from_date(self.game_date, self.year)
+        self.week = week
+        if week is None:
+            self.status = {"available": False, "reason": "could_not_determine_week_from_game_date"}
+            return
+
+        gameday_dir = _gameday_roster_dir()
+        path = gameday_dir / f"gameday_{self.year}_week{week:02d}.csv"
+
+        if not path.exists():
+            self.status = {
+                "available": False,
+                "reason": f"no_gameday_csv_for_week_{week}",
+                "path_checked": str(path),
+            }
+            return
+
+        try:
+            df = pd.read_csv(path)
+        except Exception as exc:
+            self.status = {"available": False, "reason": f"read_error: {exc}"}
+            return
+
+        # Filter to only the rows for THIS specific matchup.
+        # This is the critical guard: prevents week-N gameday roster from
+        # applying to a different week-N game (multiple games share a week).
+        if "home_team_id" in df.columns and "away_team_id" in df.columns:
+            mask = (
+                (df["home_team_id"].astype(str).str.upper() == self.home_team_id) &
+                (df["away_team_id"].astype(str).str.upper() == self.away_team_id)
+            )
+            game_df = df[mask].copy()
+        else:
+            # CSV has no game-ID columns — filter by team membership only
+            team_mask = df["team_id"].astype(str).str.upper().isin(
+                {self.home_team_id, self.away_team_id}
+            )
+            game_df = df[team_mask].copy()
+
+        if game_df.empty:
+            self.status = {
+                "available": False,
+                "reason": f"gameday_week_{week}_exists_but_this_matchup_not_found",
+                "path": str(path),
+                "week": week,
+                "matchup": f"{self.away_team_id}@{self.home_team_id}",
+            }
+            return
+
+        # Rename columns so CurrentRosterFilter can consume this DataFrame.
+        # gameday CSVs use player_name; CurrentRosterFilter expects Player.
+        rename_map = {
+            "player_name": "Player",
+            "first_name":  "First_Name",
+            "last_name":   "Last_Name",
+            "team_id":     "Team_ID",
+            "team_name":   "Team",
+            "team_code":   "Team_Code",
+            "position":    "Position",
+        }
+        game_df = game_df.rename(columns={k: v for k, v in rename_map.items() if k in game_df.columns})
+
+        # Only keep active players (rosterStatus = Active)
+        if "is_active" in game_df.columns:
+            game_df = game_df[game_df["is_active"].astype(str).str.lower().isin(
+                ("true", "1", "yes", "active")
+            )].copy()
+
+        # Build one CurrentRosterFilter per team using the gameday data
+        for tid in [self.home_team_id, self.away_team_id]:
+            team_rows = game_df[
+                game_df.get("Team_ID", game_df.get("team_id", pd.Series(dtype=str)))
+                .astype(str).str.upper() == tid
+            ].copy() if "Team_ID" in game_df.columns else game_df.copy()
+
+            if not team_rows.empty:
+                flt = CurrentRosterFilter(team_rows)
+                if flt.available:
+                    self._filter_by_team[tid] = flt
+
+        if not self._filter_by_team:
+            self.status = {
+                "available": False,
+                "reason": "gameday_roster_loaded_but_no_valid_team_filters_built",
+                "week": week,
+                "rows": len(game_df),
+            }
+            return
+
+        self.source_path = str(path)
+        self.available = True
+        self.status = {
+            "available": True,
+            "reason": "gameday_roster_csv",
+            "week": week,
+            "path": str(path),
+            "matchup": f"{self.away_team_id}@{self.home_team_id}",
+            "total_rows": len(game_df),
+            "teams_loaded": list(self._filter_by_team.keys()),
+        }
+        logger.info(
+            "GamedayRosterFilter loaded: %s @ %s week=%d rows=%d",
+            self.away_team_id, self.home_team_id, week, len(game_df),
+        )
+
+    def get_filter_for_team(self, team_id: str) -> Optional[CurrentRosterFilter]:
+        """Return a CurrentRosterFilter-compatible object for one team, or None."""
+        return self._filter_by_team.get(str(team_id).upper())
+
+
 # ---------------------------------------------------------------------------
 # Math helpers
 # ---------------------------------------------------------------------------
@@ -1538,7 +1716,16 @@ class PlayerModel:
         overrides: Optional[Dict] = None,
         starter_goalie: Optional[str] = None,
         use_current_roster_filter: bool = True,
+        override_roster_filter: Optional[CurrentRosterFilter] = None,
     ) -> List[PlayerProjection]:
+        """
+        Parameters
+        ----------
+        override_roster_filter : if provided, use this filter instead of
+            self.current_roster_filter. Used by ProjectionEngine.project() to
+            inject a GamedayRosterFilter for the specific matchup while keeping
+            self.current_roster_filter as the fallback for other games.
+        """
         if self.pr.empty:
             return []
         roster = self.pr[self.pr["team_id"] == team_id]
@@ -1550,20 +1737,24 @@ class PlayerModel:
             roster = roster.sort_values(sort_cols)
         roster_latest = roster.groupby("player_id").last().reset_index()
 
-        # First preference: official current roster cache. This prevents old team
-        # players from appearing in 2026 depth charts just because they have
-        # historical rows for this team.
+        # Determine which filter to use:
+        # 1. override_roster_filter (gameday-specific, passed per projection call)
+        # 2. self.current_roster_filter (official season roster, always available)
+        # 3. historical fallback
+        active_filter = override_roster_filter if override_roster_filter is not None else (
+            self.current_roster_filter if use_current_roster_filter else None
+        )
+
         official_applied = False
-        if use_current_roster_filter and self.current_roster_filter is not None:
-            filtered, detail = self.current_roster_filter.filter_player_rows(team_id, roster_latest)
+        if use_current_roster_filter and active_filter is not None:
+            filtered, detail = active_filter.filter_player_rows(team_id, roster_latest)
             self.last_roster_filter_details[str(team_id)] = detail
             if filtered is not None:
                 roster_latest = filtered
                 official_applied = True
 
                 # Add official-roster players who have no historical PLL stat row.
-                # These show in depth charts with conservative default projections.
-                placeholders = self.current_roster_filter.build_placeholder_rows(team_id, roster_latest)
+                placeholders = active_filter.build_placeholder_rows(team_id, roster_latest)
                 if placeholders is not None and not placeholders.empty:
                     roster_latest = pd.concat([roster_latest, placeholders], ignore_index=True, sort=False)
                     detail["synthetic_current_roster_added"] = int(len(placeholders))
@@ -2539,6 +2730,27 @@ class ProjectionEngine:
         starters = starter_goalies or {}
         use_current_rosters = self._should_use_current_rosters(game_date)
 
+        # Build a gameday roster filter for this specific matchup.
+        # GamedayRosterFilter matches strictly by home_team_id + away_team_id,
+        # so it will only apply if a gameday CSV exists for THIS game's week
+        # and contains rows for THIS specific matchup. Future-game projections
+        # that have no gameday CSV yet will get available=False and fall through
+        # to current_rosters.csv normally.
+        gameday_filter: Optional[GamedayRosterFilter] = None
+        if use_current_rosters and game_date:
+            gameday_filter = GamedayRosterFilter(
+                home_team_id=home_team_id,
+                away_team_id=away_team_id,
+                game_date=game_date,
+                year=int(str(game_date)[:4]) if game_date and len(str(game_date)) >= 4 else 2026,
+            )
+            if gameday_filter.available:
+                logger.info("Using gameday roster: %s", gameday_filter.status)
+            else:
+                logger.debug("Gameday roster not available (%s); using current_rosters.csv",
+                             gameday_filter.status.get("reason"))
+                gameday_filter = None
+
         def _team_ov(tid: str) -> Dict:
             pr = self.rating_builder._pr
             if pr is None or pr.empty:
@@ -2546,15 +2758,37 @@ class ProjectionEngine:
             team_pids = set(pr[pr["team_id"] == tid]["player_id"].astype(str).tolist())
             return {pid: v for pid, v in overrides.items() if pid in team_pids}
 
+        def _effective_roster_filter(tid: str) -> Optional[CurrentRosterFilter]:
+            """Return gameday filter for this team if available, else current_rosters filter."""
+            if gameday_filter is not None:
+                gd_flt = gameday_filter.get_filter_for_team(tid)
+                if gd_flt is not None:
+                    return gd_flt
+            return self.current_roster_filter if use_current_rosters else None
+
+        # Store gameday filter details on player_model so Depth Charts can display source
+        if self.player_model is not None:
+            for tid in [home_team_id, away_team_id]:
+                eff = _effective_roster_filter(tid)
+                if gameday_filter is not None and gameday_filter.get_filter_for_team(tid) is not None:
+                    self.player_model.last_roster_filter_details[tid] = {
+                        **gameday_filter.status,
+                        "team_id": tid,
+                        "reason": "gameday_roster_csv",
+                        "applied": True,
+                    }
+
         h_players = self.player_model.project_roster(
             home_team_id, h_proj, _team_ov(home_team_id),
             starter_goalie=starters.get(home_team_id),
             use_current_roster_filter=use_current_rosters,
+            override_roster_filter=_effective_roster_filter(home_team_id),
         )
         a_players = self.player_model.project_roster(
             away_team_id, a_proj, _team_ov(away_team_id),
             starter_goalie=starters.get(away_team_id),
             use_current_roster_filter=use_current_rosters,
+            override_roster_filter=_effective_roster_filter(away_team_id),
         )
 
         # Assign goalie saves using correct opponent SOG and designated starter

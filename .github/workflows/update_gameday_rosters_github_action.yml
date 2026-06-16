@@ -1,0 +1,40 @@
+name: Update PLL Gameday Rosters
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run Friday at 18:00 UTC (2pm ET) — PLL typically posts gameday rosters
+    # on Fridays before weekend games. Also runs Saturday morning as a backup.
+    - cron: "0 18 * * 5"   # Friday 18:00 UTC
+    - cron: "0 12 * * 6"   # Saturday 12:00 UTC
+
+permissions:
+  contents: write
+
+jobs:
+  update-gameday-rosters:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas requests
+
+      - name: Scrape current week gameday rosters
+        env:
+          PLL_BEARER_TOKEN: ${{ secrets.PLL_BEARER_TOKEN }}
+        run: python pll_gameday_roster_cache.py
+
+      - name: Commit updated gameday roster cache
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Auto-update PLL gameday rosters [skip ci]"
+          file_pattern: data/reference_tables/gameday_rosters/*.csv
