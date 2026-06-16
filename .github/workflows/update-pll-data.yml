@@ -44,7 +44,10 @@ jobs:
         run: python pll_gameday_roster_cache.py --all-weeks || echo "Gameday roster scrape skipped (check PLL_BEARER_TOKEN secret)"
 
       - name: Pull latest before committing (avoid non-fast-forward conflicts)
-        run: git pull --rebase origin main
+        run: |
+          git stash --include-untracked || true
+          git pull --rebase origin main
+          git stash pop || true
 
       - name: Commit updated data files
         uses: stefanzweifel/git-auto-commit-action@v5
