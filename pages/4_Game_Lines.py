@@ -265,7 +265,7 @@ summary = pd.DataFrame([
     {"Market": f"{home_nm} Team Total Under",      "Line": f"{home_tt_line:.1f}",  "Odds": home_tt_under_odds,
      "Fair Prob": fmt_prob(1-p_home_tt_over),       "Hold": f"{hold_slider*100:.1f}%"},
 ])
-st.dataframe(summary, use_container_width=True, hide_index=True)
+st.dataframe(summary, width="stretch", hide_index=True)
 
 st.markdown("---")
 
@@ -299,7 +299,7 @@ if show_alt_spreads:
             f"{home_nm} odds": h_o,
             "Model spread": f"{gm.spread_home:+.1f}",
         })
-    st.dataframe(pd.DataFrame(alt_spd_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(alt_spd_rows), width="stretch", hide_index=True)
     st.markdown("---")
 
 # -- Alternate totals table ------------------------------------------------
@@ -326,7 +326,7 @@ if show_alt_totals:
             "Under Odds": u_o,
             "Model Total": f"{gs.expected_total:.1f}",
         })
-    st.dataframe(pd.DataFrame(alt_tot_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(alt_tot_rows), width="stretch", hide_index=True)
     st.markdown("---")
 
 # -- Alternate team-total tables -------------------------------------------
@@ -351,7 +351,7 @@ if show_alt_team_totals:
                 "Under Odds": u_o,
                 "Main Line": f"{model_line:.1f}",
             })
-    st.dataframe(pd.DataFrame(team_total_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(team_total_rows), width="stretch", hide_index=True)
     st.markdown("---")
 
 # -- Score probability grid ------------------------------------------------
@@ -382,7 +382,7 @@ fig.update_layout(
     plot_bgcolor="rgba(0,0,0,0)",
     font=dict(color="#f1f5f9"),
 )
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 
 st.markdown("---")
 
@@ -400,7 +400,7 @@ fig2.update_layout(
     font=dict(color="#f1f5f9"),
     xaxis_title="Combined Score", yaxis_title="Simulations",
 )
-st.plotly_chart(fig2, use_container_width=True)
+st.plotly_chart(fig2, width="stretch")
 
 st.markdown(
     f'<span class="note-text">'

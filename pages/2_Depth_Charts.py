@@ -105,16 +105,16 @@ with st.sidebar:
 
     b1, b2 = st.columns(2)
     with b1:
-        if st.button("Activate all", key="bulk_act", use_container_width=True):
+        if st.button("Activate all", key="bulk_act", width="stretch"):
             for p in (result.away_players if bulk_team == away_nm else result.home_players):
                 set_player_override(bulk_tid, p.player_id, "active", True)
             st.rerun()
-        if st.button("Reset usage", key="bulk_use", use_container_width=True):
+        if st.button("Reset usage", key="bulk_use", width="stretch"):
             for p in (result.away_players if bulk_team == away_nm else result.home_players):
                 set_player_override(bulk_tid, p.player_id, "usage_multiplier", 1.0)
             st.rerun()
     with b2:
-        if st.button("Clear overrides", key="bulk_clr", use_container_width=True):
+        if st.button("Clear overrides", key="bulk_clr", width="stretch"):
             st.session_state.depth_charts[bulk_tid] = {}
             st.rerun()
 
@@ -222,7 +222,7 @@ def _player_history(pid: str, pos: str) -> None:
                 'text-transform:uppercase;letter-spacing:.05em;">Season Averages (per game)</span>',
                 unsafe_allow_html=True,
             )
-            st.dataframe(seas_avg, use_container_width=True, hide_index=True)
+            st.dataframe(seas_avg, width="stretch", hide_index=True)
 
     # ── Last 5 game log ──────────────────────────────────────────────────
     last5 = rows.tail(5).copy()
@@ -243,7 +243,7 @@ def _player_history(pid: str, pos: str) -> None:
             'text-transform:uppercase;letter-spacing:.05em;">Last 5 Games</span>',
             unsafe_allow_html=True,
         )
-        st.dataframe(log_df, use_container_width=True, hide_index=True)
+        st.dataframe(log_df, width="stretch", hide_index=True)
 
     # ── Career summary line ──────────────────────────────────────────────
     gp = len(rows)
@@ -420,7 +420,7 @@ def _render_team(team_id: str, team_nm: str, players):
             if is_active:
                 btn_label = "⚡ Edit" if has_ov else "Edit"
                 if st.button(btn_label, key=f"rbtn_{team_id}_{pid}",
-                             use_container_width=True):
+                             width="stretch"):
                     st.session_state[rating_key] = not st.session_state[rating_key]
 
         # -- Rating override panel (shown inline when toggled) ---------------
@@ -499,7 +499,7 @@ def _render_team(team_id: str, team_nm: str, players):
                 if hist_key not in st.session_state:
                     st.session_state[hist_key] = False
                 hist_label = "▲ Hide history" if st.session_state[hist_key] else "📊 Show history"
-                if st.button(hist_label, key=f"hbtn_{team_id}_{pid}", use_container_width=True):
+                if st.button(hist_label, key=f"hbtn_{team_id}_{pid}", width="stretch"):
                     st.session_state[hist_key] = not st.session_state[hist_key]
 
                 if st.session_state.get(hist_key, False):

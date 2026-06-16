@@ -40,6 +40,30 @@ DB_PATH = os.getenv(
     str(_ROOT / "data" / "analytics_database" / "pll_warehouse.duckdb"),
 )
 
+# -- Data freshness helper -------------------------------------------------
+def get_data_freshness() -> dict:
+    """
+    Return info about when the warehouse data was last updated.
+    Reads the modification time of the schedule parquet — the most recently
+    written file after a warehouse build — as a proxy for last update time.
+    """
+    import datetime as _dt
+    parquet = _ROOT / "data" / "curated_data" / "all_requested_seasons" / "game_schedule_all.parquet"
+    try:
+        mtime = parquet.stat().st_mtime
+        last_updated = _dt.datetime.fromtimestamp(mtime, tz=_dt.timezone.utc)
+        age_hours = (_dt.datetime.now(_dt.timezone.utc) - last_updated).total_seconds() / 3600
+        stale = age_hours > 72  # warn if data is more than 3 days old
+        return {
+            "last_updated": last_updated.strftime("%Y-%m-%d %H:%M UTC"),
+            "age_hours": round(age_hours, 1),
+            "stale": stale,
+            "available": True,
+        }
+    except Exception:
+        return {"available": False, "stale": False}
+
+
 # -- Autosave path ---------------------------------------------------------
 # Written on every meaningful state change; restored silently on startup.
 # Lives outside git-tracked folders so it never gets committed.
@@ -96,7 +120,9 @@ _ensure_db()
 def get_engine() -> ProjectionEngine:
     engine = ProjectionEngine(db_path=DB_PATH)
     engine.load()
-    engine.fit(run_backtest=False)
+    # run_backtest=True fits the calibrator on historical games (2023+).
+    # Takes ~25-35 seconds but only runs once per session (cached by Streamlit).
+    engine.fit(run_backtest=True)
     return engine
 
 

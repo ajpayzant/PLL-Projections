@@ -26,7 +26,7 @@ from _engine_state import (
     sorted_upcoming, default_game_index,
     render_update_projection_btn,
     session_to_json, session_from_json,
-    _AUTOSAVE_PATH,
+    _AUTOSAVE_PATH, get_data_freshness,
 )
 
 st.set_page_config(page_title="Projections · PLL", page_icon="🥍", layout="wide")
@@ -61,6 +61,23 @@ current_year = today.year
 
 # -- Sidebar ---------------------------------------------------------------
 with st.sidebar:
+
+    # -- Data freshness indicator ------------------------------------------
+    _fresh = get_data_freshness()
+    if _fresh.get("available"):
+        if _fresh["stale"]:
+            st.warning(
+                f"⚠️ Data last updated **{_fresh['last_updated']}** "
+                f"({_fresh['age_hours']:.0f}h ago). "
+                "Run the **Update PLL Data Warehouse** Action to refresh.",
+                icon=None,
+            )
+        else:
+            st.markdown(
+                f'<span class="note-text">Data updated: {_fresh["last_updated"]} '
+                f'({_fresh["age_hours"]:.0f}h ago)</span>',
+                unsafe_allow_html=True,
+            )
 
     # -- Game selector -----------------------------------------------------
     st.markdown("### Select Game")
@@ -214,7 +231,7 @@ with st.sidebar:
         st.session_state.team_rating_overrides = {}
         st.rerun()
 
-    run_btn = st.button("▶  Run Projection", type="primary", use_container_width=True)
+    run_btn = st.button("▶  Run Projection", type="primary", width="stretch")
 
     # Update Projection button (also reruns when clicked)
     render_update_projection_btn(engine, key="p1")
@@ -252,7 +269,7 @@ with st.sidebar:
         file_name=_save_name,
         mime="application/json",
         key="save_session_btn",
-        use_container_width=True,
+        width="stretch",
         help="Downloads a JSON file with your current game selection, depth chart, and rating overrides.",
     )
 
@@ -356,7 +373,7 @@ fig_wp.update_layout(
     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
     font=dict(color="#f1f5f9", size=14), showlegend=False,
 )
-st.plotly_chart(fig_wp, use_container_width=True)
+st.plotly_chart(fig_wp, width="stretch")
 st.markdown("---")
 
 # -- Team stats table ------------------------------------------------------
@@ -389,7 +406,7 @@ proj_df = pd.DataFrame([
      "Saves": round(hp.proj_saves,1), "Save%": f"{hp.proj_save_pct:.3f}",
      "TOs": round(hp.proj_turnovers,1), "GBs": round(hp.proj_ground_balls,1)},
 ]).set_index("Team")
-st.dataframe(proj_df, use_container_width=True)
+st.dataframe(proj_df, width="stretch")
 st.markdown("---")
 
 # -- Sim distributions -----------------------------------------------------
@@ -405,7 +422,7 @@ with t1:
                       paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                       font=dict(color="#f1f5f9"),
                       xaxis_title="Combined Score (incl. 2pt bonus)", yaxis_title="Sims")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
     p_ov = float(np.mean(tot > gm.total_line))
     a, b, c = st.columns(3)
     a.metric("P(Over)",  f"{p_ov:.1%}")
@@ -422,7 +439,7 @@ with t2:
                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                        font=dict(color="#f1f5f9"),
                        xaxis_title=f"Margin (+ = {home_nm} wins)", yaxis_title="Sims")
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width="stretch")
 
 with t3:
     fig3 = go.Figure()
@@ -434,7 +451,7 @@ with t3:
                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                        font=dict(color="#f1f5f9"),
                        xaxis_title="Goals", yaxis_title="Sims")
-    st.plotly_chart(fig3, use_container_width=True)
+    st.plotly_chart(fig3, width="stretch")
     a, b, c, d = st.columns(4)
     a.metric(f"{away_nm} median", f"{np.median(gs.away_goals):.1f}")
     b.metric(f"{away_nm} P10/P90", f"{np.percentile(gs.away_goals,10):.0f}/{np.percentile(gs.away_goals,90):.0f}")
@@ -462,7 +479,7 @@ for nm, players in [(away_nm, result.away_players), (home_nm, result.home_player
          "Proj SV": round(p.proj_saves,1) if p.position == "G" else "--"}
         for p in sorted(active, key=lambda x: x.proj_points, reverse=True)[:14]
     ]
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 
 # -- Export -------------------------------------------------------------------
@@ -633,7 +650,7 @@ fname = (f"PLL_{team_name(away_id)}_{team_name(home_id)}_"
          f"Game{game.get('game_number','?')}_{game_date_str}.xlsx")
 
 if st.button("📥 Download Projection Package (Excel)", type="secondary",
-             use_container_width=False):
+             width="content"):
     with st.spinner("Building Excel export..."):
         try:
             xlsx_bytes = _build_export(result, game, hold_pct, engine)

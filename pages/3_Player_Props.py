@@ -120,6 +120,36 @@ with st.sidebar:
 
     st.markdown("---")
     engine = get_engine()
+
+    # -- This week's other games (quick switch) ----------------------------
+    import datetime as _dt
+    _today = _dt.date.today()
+    _all_games = engine.upcoming_games()
+    _week_games = []
+    for _g in _all_games:
+        try:
+            _gd = _dt.date.fromisoformat(str(_g.get("game_date", ""))[:10])
+            if -1 <= (_gd - _today).days <= 7:
+                _week_games.append(_g)
+        except Exception:
+            pass
+    # Only show if there are other games this week besides the current one
+    _other = [_g for _g in _week_games
+              if _g.get("home_team_id") != home_id or _g.get("away_team_id") != away_id]
+    if _other:
+        st.markdown("### This week's games")
+        for _g in _other:
+            _ht = team_name(_g.get("home_team_id", ""))
+            _at = team_name(_g.get("away_team_id", ""))
+            _lbl = f"Game {_g.get('game_number','?')} · {_at} @ {_ht}"
+            if st.button(_lbl, key=f"sw_{_g.get('home_team_id')}_{_g.get('away_team_id')}",
+                         use_container_width=True):
+                from _engine_state import run_projection_for_game, _autosave
+                with st.spinner("Projecting…"):
+                    run_projection_for_game(engine, _g)
+                    _autosave()
+                st.rerun()
+
     render_update_projection_btn(engine, key="p2")
 
 # hold_pct synced globally via session state
@@ -291,7 +321,7 @@ if view_mode == "Table (all players)":
                     styled = df.style.map(
                         _style_odds, subset=["Over", "Under"]
                     ).format(precision=2)
-                    st.dataframe(styled, use_container_width=True, hide_index=True)
+                    st.dataframe(styled, width="stretch", hide_index=True)
 
     # ── Goalies ──────────────────────────────────────────────────────────
     goalies = [d for d in special if d["pos"] == "G"]
@@ -308,7 +338,7 @@ if view_mode == "Table (all players)":
             if df_sv.empty:
                 st.caption("No goalie data.")
             else:
-                st.dataframe(df_sv, use_container_width=True, hide_index=True)
+                st.dataframe(df_sv, width="stretch", hide_index=True)
 
         with spec_cols[1]:
             st.markdown('<div class="prop-subhead">Faceoff Wins</div>', unsafe_allow_html=True)
@@ -316,7 +346,7 @@ if view_mode == "Table (all players)":
             if df_fo.empty:
                 st.caption("No FO data.")
             else:
-                st.dataframe(df_fo, use_container_width=True, hide_index=True)
+                st.dataframe(df_fo, width="stretch", hide_index=True)
 
     # ── Milestones summary ───────────────────────────────────────────────
     if show_miles and field:
@@ -358,7 +388,7 @@ if view_mode == "Table (all players)":
                     mile_rows.append(row)
                 if mile_rows:
                     df_m = pd.DataFrame(mile_rows).sort_values("Proj", ascending=False).reset_index(drop=True)
-                    st.dataframe(df_m, use_container_width=True, hide_index=True)
+                    st.dataframe(df_m, width="stretch", hide_index=True)
                 else:
                     st.caption(f"No {lbl} milestone data.")
 
@@ -449,7 +479,7 @@ for ps in sims_filtered:
                     font=dict(color="#f1f5f9"), showlegend=False,
                     xaxis_title=STAT_LABELS.get(pri, pri), yaxis_title="",
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
         # -- Model line table ----------------------------------------------
         stat_list = GOALIE_STATS if pos == "G" else (FO_STATS if pos == "FO" else FIELD_STATS)
@@ -503,7 +533,7 @@ for ps in sims_filtered:
                                 f'<b style="color:{edge_color};">Edge: {edge_str}</b></span></div>',
                                 unsafe_allow_html=True,
                             )
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
         # -- Alternate line pricing -----------------------------------------
         if show_alt:
@@ -532,7 +562,7 @@ for ps in sims_filtered:
                         "Model Proj": f"{proj_v:.3f}",
                     })
                 if alt_rows:
-                    st.dataframe(pd.DataFrame(alt_rows), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(alt_rows), width="stretch", hide_index=True)
 
         # -- Milestone props ------------------------------------------------
         if show_miles:
@@ -560,7 +590,7 @@ for ps in sims_filtered:
                     if not any_mile:
                         st.markdown("**Milestones**")
                         any_mile = True
-                    st.dataframe(pd.DataFrame(m_rows), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(m_rows), width="stretch", hide_index=True)
 
             # SOG milestones separately
             if pos not in ("G", "FO") and "shots_on_goal" in ps.stat_distributions:
@@ -576,7 +606,7 @@ for ps in sims_filtered:
                         "No odds":   ml_m.under_odds,
                     })
                 if sog_rows:
-                    st.dataframe(pd.DataFrame(sog_rows), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(sog_rows), width="stretch", hide_index=True)
 
 st.markdown("---")
 st.markdown(

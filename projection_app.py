@@ -47,8 +47,84 @@ st.title("🥍 PLL Projections")
 st.markdown("##### Monte Carlo projection system for Premier Lacrosse League games")
 st.markdown("---")
 
+# -- This week's games -------------------------------------------------------
+try:
+    import sys
+    from pathlib import Path
+    _root = Path(__file__).resolve().parent
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
+    from pages._engine_state import get_engine, team_name, get_data_freshness
+    import datetime as _dt
+
+    _fresh = get_data_freshness()
+    if _fresh.get("stale"):
+        st.warning(f"⚠️ Data last updated {_fresh['last_updated']} ({_fresh['age_hours']:.0f}h ago). Run **Update PLL Data Warehouse** Action to refresh.")
+
+    _engine = get_engine()
+    _games  = _engine.upcoming_games()
+    _today  = _dt.date.today()
+
+    # Find this week's games (within next 7 days) and next upcoming
+    _this_week = []
+    _future    = []
+    for _g in _games:
+        try:
+            _gd = _dt.date.fromisoformat(str(_g.get("game_date", ""))[:10])
+            _days = (_gd - _today).days
+            if -1 <= _days <= 7:
+                _this_week.append((_g, _gd, _days))
+            elif _days > 7:
+                _future.append((_g, _gd, _days))
+        except Exception:
+            pass
+
+    if _this_week or _future:
+        st.markdown('<div class="section-header">Upcoming Games</div>', unsafe_allow_html=True)
+
+    if _this_week:
+        st.markdown("**This week**")
+        _cols = st.columns(min(len(_this_week), 4))
+        for _i, (_g, _gd, _days) in enumerate(_this_week[:4]):
+            _ht = team_name(_g.get("home_team_id", ""))
+            _at = team_name(_g.get("away_team_id", ""))
+            _lbl = "Today" if _days == 0 else (f"In {_days}d" if _days > 0 else f"{abs(_days)}d ago")
+            with _cols[_i]:
+                st.markdown(
+                    f'<div class="pll-card" style="text-align:center;">'
+                    f'<div class="pll-card-label">Game {_g.get("game_number","?")} · {_lbl}</div>'
+                    f'<div class="pll-card-value" style="font-size:1.1rem;">{_at} @ {_ht}</div>'
+                    f'<div class="pll-card-sub">{str(_gd)}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+    if _future:
+        st.markdown("**Coming up**")
+        _fcols = st.columns(min(len(_future), 4))
+        for _i, (_g, _gd, _days) in enumerate(_future[:4]):
+            _ht = team_name(_g.get("home_team_id", ""))
+            _at = team_name(_g.get("away_team_id", ""))
+            with _fcols[_i]:
+                st.markdown(
+                    f'<div class="pll-card" style="text-align:center;opacity:.75;">'
+                    f'<div class="pll-card-label">Game {_g.get("game_number","?")} · In {_days}d</div>'
+                    f'<div class="pll-card-value" style="font-size:1.1rem;">{_at} @ {_ht}</div>'
+                    f'<div class="pll-card-sub">{str(_gd)}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+    if _this_week or _future:
+        st.markdown("*Go to **Projections** in the sidebar to run a projection for any game.*")
+        st.markdown("---")
+
+except Exception:
+    pass  # never crash the home page
+
 # -- Page navigation cards ---------------------------------------------------
 c1, c2, c3, c4 = st.columns(4)
+
 with c1:
     st.markdown(
         '<div class="pll-card">'
@@ -96,6 +172,20 @@ with c4:
 
 st.markdown("---")
 
+_c5, _c5b = st.columns([1, 3])
+with _c5:
+    st.markdown(
+        '<div class="pll-card">'
+        '<div class="pll-card-label">Page 5</div>'
+        '<div class="pll-card-value">Model Performance</div>'
+        '<div class="pll-card-sub">Backtested MAE, Brier score, correct winner %, '
+        'win probability calibration chart. Updated each session.</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+st.markdown("---")
+
 # -- Workflow ----------------------------------------------------------------
 st.markdown('<div class="section-header">Recommended Workflow</div>', unsafe_allow_html=True)
 st.markdown("""
@@ -104,6 +194,7 @@ st.markdown("""
 3. **Projections** &rarr; click **Update Projection** to apply roster changes
 4. **Player Props** &rarr; review every player's prop lines and compare vs market
 5. **Game Lines** &rarr; final moneyline, spread, total output
+6. **Model Performance** &rarr; review backtested accuracy and calibration
 """)
 
 st.markdown("---")

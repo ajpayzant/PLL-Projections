@@ -2196,15 +2196,29 @@ class GameSimulator:
         player_projs: List[PlayerProjection],
         team_goal_draws: np.ndarray,
         team_proj_goals: float,
+        opp_save_pct: float = LG_SAVE_PCT,
     ) -> List[PlayerSimulation]:
         """
         Simulate player stats. Player goals conditioned on team goal draws.
         Uses zero-inflated NegBin for goals and assists.
+
+        opp_save_pct: opponent goalie's projected save%. Used to scale each
+        player's proj_goals before drawing so that a strong goalie matchup
+        tightens the goal distribution and a weak goalie widens it.
+        The scaling is relative to the league average save% so a league-average
+        goalie has no effect (scale = 1.0).
         """
         rng = np.random.default_rng(self.seed + 1)
         n = self.n_sims
         active = [p for p in player_projs if p.active]
         results = []
+
+        # Goalie quality adjustment: scale player goal projections relative to
+        # league-average save%. A goalie at 0.60 sv% (vs 0.537 avg) reduces
+        # effective goal probability by ~(1 - 0.60) / (1 - 0.537) = 0.86.
+        # Cap adjustment to ±20% so extreme outliers don't dominate.
+        opp_sv = min(max(float(opp_save_pct), 0.30), 0.75)
+        goalie_adj = min(max((1.0 - opp_sv) / max(1.0 - LG_SAVE_PCT, 0.01), 0.80), 1.20)
 
         def _zinb(mu: float, phi_key: str, zero_prob: float) -> np.ndarray:
             """Zero-inflated NegBin draw."""
@@ -2228,7 +2242,11 @@ class GameSimulator:
         goalies = [p for p in active if p.position == "G"]
 
         for pp in field:
-            raw_goals[pp.player_id] = _zinb(pp.proj_goals, "goals", pp.zero_prob_goals)
+            # Scale proj_goals by goalie_adj before drawing so the distribution
+            # reflects the specific goalie matchup. Assists and shots are not
+            # scaled — only goal-scoring is directly suppressed by the goalie.
+            adj_goals = pp.proj_goals * goalie_adj
+            raw_goals[pp.player_id] = _zinb(adj_goals, "goals", pp.zero_prob_goals)
             raw_assists[pp.player_id] = _zinb(pp.proj_assists, "assists", pp.zero_prob_assists)
             raw_shots[pp.player_id] = _nb(pp.proj_shots, "shots")
 
@@ -2845,8 +2863,16 @@ class ProjectionEngine:
         _assign_player_goalie_saves(a_players, h_proj.proj_sog, starters.get(away_team_id))
 
         game_sim = self.simulator.simulate_game(h_proj, a_proj)
-        h_psims = self.simulator.simulate_players(h_players, game_sim.home_goals, h_proj.proj_goals)
-        a_psims = self.simulator.simulate_players(a_players, game_sim.away_goals, a_proj.proj_goals)
+        # Pass each team's opposing goalie save% so player goal distributions
+        # account for the specific goalie matchup they're facing.
+        h_psims = self.simulator.simulate_players(
+            h_players, game_sim.home_goals, h_proj.proj_goals,
+            opp_save_pct=a_proj.proj_save_pct,
+        )
+        a_psims = self.simulator.simulate_players(
+            a_players, game_sim.away_goals, a_proj.proj_goals,
+            opp_save_pct=h_proj.proj_save_pct,
+        )
 
         game_market = self.pricing.price_game(
             game_sim, self.calibrator if self.calibrator._fitted else None
