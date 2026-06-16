@@ -2,6 +2,15 @@ name: Update PLL Gameday Rosters
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Scrape mode"
+        required: true
+        default: "current"
+        type: choice
+        options:
+          - current      # auto-detect current week only (default for scheduled runs)
+          - all          # backfill all weeks with available data (weeks 1 through current)
   schedule:
     # Thu/Fri/Sat at 9am, Noon, and 5pm ET (UTC-4 in summer).
     # Runs regardless of whether rosters are posted yet — scraper returns
@@ -37,10 +46,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install pandas requests
 
-      - name: Scrape current week gameday rosters
+      - name: Scrape gameday rosters
         env:
           PLL_BEARER_TOKEN: ${{ secrets.PLL_BEARER_TOKEN }}
-        run: python pll_gameday_roster_cache.py
+        run: |
+          MODE="${{ github.event.inputs.mode || 'current' }}"
+          if [ "$MODE" = "all" ]; then
+            echo "Scraping all available weeks..."
+            python pll_gameday_roster_cache.py --all-weeks
+          else
+            echo "Scraping current week..."
+            python pll_gameday_roster_cache.py
+          fi
 
       - name: Commit updated gameday roster cache
         uses: stefanzweifel/git-auto-commit-action@v5

@@ -673,18 +673,36 @@ def scrape_current_week(year: int = CURRENT_YEAR, token: Optional[str] = None) -
 
 
 def scrape_all_weeks(year: int = CURRENT_YEAR, token: Optional[str] = None) -> pd.DataFrame:
-    token  = token or _get_token()
+    """
+    Scrape all weeks from 1 up to and including the current PLL week.
+    Stops after two consecutive empty weeks (API returns nothing for that week),
+    which means we've gone past what's available.
+    Saves a per-week CSV for each week that returned data, and updates
+    gameday_latest.csv to the most recent week scraped.
+    """
+    token = token or _get_token()
+    max_week = current_pll_week(year)
+    print(f"Scraping all weeks 1 through {max_week} (current)...")
     frames = []
-    for week in range(FIRST_WEEK, LAST_WEEK + 1):
+    consecutive_empty = 0
+    for week in range(FIRST_WEEK, max_week + 1):
         df = scrape_week(year, week, token)
         if not df.empty:
             frames.append(df)
-        elif week > current_pll_week(year):
-            break   # stop when we reach a future week
+            consecutive_empty = 0
+        else:
+            consecutive_empty += 1
+            if consecutive_empty >= 2:
+                print(f"  Two consecutive empty weeks — stopping at week {week}.")
+                break
     if not frames:
+        print("  No data collected for any week.")
         return pd.DataFrame(columns=GAMEDAY_COLUMNS)
     all_df = pd.concat(frames, ignore_index=True)
-    save_latest(all_df[all_df["week"] == all_df["week"].max()])
+    latest_week = int(all_df["week"].max())
+    save_latest(all_df[all_df["week"] == latest_week])
+    print(f"\nAll-weeks scrape complete: {len(frames)} weeks, {len(all_df)} total rows.")
+    print(f"Latest CSV updated to week {latest_week}.")
     return all_df
 
 
