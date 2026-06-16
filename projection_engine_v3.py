@@ -1067,6 +1067,7 @@ class DataLoader:
                     SELECT * FROM clean.game_schedule_all
                     WHERE LOWER(COALESCE(event_status_label,'')) NOT IN ('final','completed')
                       AND COALESCE(CAST(event_status AS VARCHAR),'') NOT IN ('3')
+                      AND season = (SELECT MAX(season) FROM clean.game_schedule_all)
                 """).df()
             logger.info("Loaded %d schedule rows", len(df))
             return df
