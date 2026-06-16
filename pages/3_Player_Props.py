@@ -179,86 +179,193 @@ st.markdown("---")
 
 
 # ===========================================================================
-# TABLE VIEW
+# TABLE VIEW  — stat-grouped prop sheet
 # ===========================================================================
 if view_mode == "Table (all players)":
-    st.markdown("### All Players — Main Lines")
+
+    # Extra CSS for the prop sheet
+    st.markdown("""
+    <style>
+    .prop-section-header {
+        font-size:.78rem; font-weight:700; letter-spacing:.08em;
+        text-transform:uppercase; color:#94a3b8;
+        border-bottom:1px solid rgba(148,163,184,.20);
+        padding-bottom:4px; margin:18px 0 6px;
+    }
+    .prop-subhead {
+        font-size:.70rem; font-weight:600; color:#64748b;
+        text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown("### Prop Sheet — All Players")
     st.markdown(
-        '<span class="note-text">One row per player. Main line = model\'s most balanced x.5 line. '
-        'Click a column header to sort. Switch to Expander view for full detail, alt lines, and milestones.</span>',
+        '<span class="note-text">Sorted by projection. '
+        'Proj = model mean · Line = balanced x.5 line · '
+        'P10/P90 = 10th/90th percentile range · '
+        'Click any column header to re-sort.</span>',
         unsafe_allow_html=True,
     )
+    st.markdown("")
 
-    tbl_rows = []
+    # ── Build per-player data once, reuse across stat tables ────────────
+    player_data = []
     for ps in sims_filtered:
         pid  = ps.player_id
-        pm   = markets.get(pid, {})
         proj = all_projs.get(pid)
         if proj is None:
             continue
+        pm  = markets.get(pid, {})
         pv  = pm.get("proj_values", {})
         ms  = pm.get("markets", {})
-        pos = proj.position
-        nm  = proj.full_name or pid
+        player_data.append({
+            "pid": pid, "ps": ps, "proj": proj,
+            "pv": pv, "ms": ms,
+            "nm": proj.full_name or pid,
+            "pos": proj.position,
+            "tid": proj.team_id,
+        })
 
-        def _mkt_cols(stat: str) -> tuple:
+    def _stat_table(stat: str, label: str, pd_list: list, sort_col: str = "Proj") -> pd.DataFrame:
+        """Build one clean stat table: Player | Team | Pos | Proj | P10 | P90 | Line | Over | Under | P(Over)"""
+        rows = []
+        for d in pd_list:
+            ps  = d["ps"]
+            pv  = d["pv"]
+            ms  = d["ms"]
+            if stat not in ps.stat_distributions:
+                continue
+            dist = ps.stat_distributions[stat]
+            proj_val = float(pv.get(stat, 0))
+            if proj_val < 0.02:
+                continue
             m = ms.get(stat, {})
-            if not m:
-                return ("--", "--", "--", "--")
-            return (
-                f"{m.get('line', '--'):.1f}" if isinstance(m.get('line'), (int,float)) else "--",
-                m.get("over_odds", "--"),
-                m.get("under_odds", "--"),
-                f"{m.get('fair_over_prob', 0):.3f}",
-            )
+            line = m.get("line")
+            rows.append({
+                "Player":   d["nm"],
+                "Team":     team_name(d["tid"]),
+                "Pos":      d["pos"],
+                "Proj":     round(proj_val, 2),
+                "P10":      round(float(np.percentile(dist, 10)), 1),
+                "Median":   round(float(np.percentile(dist, 50)), 1),
+                "P90":      round(float(np.percentile(dist, 90)), 1),
+                "Line":     f"{line:.1f}" if isinstance(line, (int, float)) else "--",
+                "Over":     m.get("over_odds", "--"),
+                "Under":    m.get("under_odds", "--"),
+                "P(Over)":  f"{m.get('fair_over_prob', 0):.1%}" if m else "--",
+            })
+        if not rows:
+            return pd.DataFrame()
+        df = pd.DataFrame(rows).sort_values(sort_col, ascending=False).reset_index(drop=True)
+        return df
 
-        row = {
-            "Player":    nm,
-            "Team":      team_name(proj.team_id),
-            "Pos":       pos,
-        }
+    # ── Field player stat sections ───────────────────────────────────────
+    field = [d for d in player_data if d["pos"] not in ("G", "FO")]
+    special = [d for d in player_data if d["pos"] in ("G", "FO")]
 
-        if pos == "G":
-            row["Proj Saves"] = round(float(pv.get("saves", 0)), 2)
-            ln, ov, un, fp = _mkt_cols("saves")
-            row["Line"] = ln; row["Over"] = ov; row["Under"] = un; row["P(Over)"] = fp
-        elif pos == "FO":
-            row["Proj FOW"] = round(float(pv.get("faceoff_wins", 0)), 2)
-            ln, ov, un, fp = _mkt_cols("faceoff_wins")
-            row["Line"] = ln; row["Over"] = ov; row["Under"] = un; row["P(Over)"] = fp
-        else:
-            row["Proj G"]   = round(float(pv.get("goals",   0)), 2)
-            row["Proj A"]   = round(float(pv.get("assists", 0)), 2)
-            row["Proj Pts"] = round(float(pv.get("points",  0)), 2)
-            row["Proj SOG"] = round(float(pv.get("shots_on_goal", 0)), 2)
+    FIELD_SECTIONS = [
+        ("points",        "Points"),
+        ("goals",         "Goals"),
+        ("assists",       "Assists"),
+        ("shots_on_goal", "Shots on Goal"),
+    ]
 
-            g_ln, g_ov, g_un, g_fp = _mkt_cols("goals")
-            a_ln, a_ov, a_un, a_fp = _mkt_cols("assists")
-            p_ln, p_ov, p_un, p_fp = _mkt_cols("points")
+    if field:
+        st.markdown('<div class="prop-section-header">Field Players</div>', unsafe_allow_html=True)
+        tabs = st.tabs([lbl for _, lbl in FIELD_SECTIONS])
+        for tab, (stat, lbl) in zip(tabs, FIELD_SECTIONS):
+            with tab:
+                df = _stat_table(stat, lbl, field)
+                if df.empty:
+                    st.caption(f"No {lbl} data available.")
+                else:
+                    # Colour-code Over odds: green if positive (+), slate if negative (-)
+                    def _style_odds(val):
+                        if isinstance(val, str) and val.startswith("+"):
+                            return "color:#34d399;font-weight:600"
+                        if isinstance(val, str) and val.startswith("-"):
+                            return "color:#f1f5f9"
+                        return ""
 
-            row["G Line"] = g_ln; row["G Over"] = g_ov; row["G Under"] = g_un
-            row["A Line"] = a_ln; row["A Over"] = a_ov; row["A Under"] = a_un
-            row["Pts Line"] = p_ln; row["Pts Over"] = p_ov; row["Pts Under"] = p_un
+                    styled = df.style.applymap(
+                        _style_odds, subset=["Over", "Under"]
+                    ).format(precision=2)
+                    st.dataframe(styled, use_container_width=True, hide_index=True)
 
-        tbl_rows.append(row)
+    # ── Goalies ──────────────────────────────────────────────────────────
+    goalies = [d for d in special if d["pos"] == "G"]
+    fo_players = [d for d in special if d["pos"] == "FO"]
 
-    if tbl_rows:
-        # Split into field vs goalie/FO for cleaner display
-        field_rows  = [r for r in tbl_rows if r["Pos"] not in ("G","FO")]
-        special_rows = [r for r in tbl_rows if r["Pos"] in ("G","FO")]
+    if goalies or fo_players:
+        st.markdown('<div class="prop-section-header">Goalies & Faceoff Specialists</div>',
+                    unsafe_allow_html=True)
+        spec_cols = st.columns(2)
 
-        if field_rows:
-            st.markdown("**Field Players**")
-            st.dataframe(pd.DataFrame(field_rows), use_container_width=True, hide_index=True)
+        with spec_cols[0]:
+            st.markdown('<div class="prop-subhead">Saves</div>', unsafe_allow_html=True)
+            df_sv = _stat_table("saves", "Saves", goalies)
+            if df_sv.empty:
+                st.caption("No goalie data.")
+            else:
+                st.dataframe(df_sv, use_container_width=True, hide_index=True)
 
-        if special_rows:
-            st.markdown("**Goalies & Faceoff**")
-            st.dataframe(pd.DataFrame(special_rows), use_container_width=True, hide_index=True)
+        with spec_cols[1]:
+            st.markdown('<div class="prop-subhead">Faceoff Wins</div>', unsafe_allow_html=True)
+            df_fo = _stat_table("faceoff_wins", "FO Wins", fo_players)
+            if df_fo.empty:
+                st.caption("No FO data.")
+            else:
+                st.dataframe(df_fo, use_container_width=True, hide_index=True)
+
+    # ── Milestones summary ───────────────────────────────────────────────
+    if show_miles and field:
+        st.markdown('<div class="prop-section-header">Milestones</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<span class="note-text">P(Hit) = model probability of reaching that threshold.</span>',
+            unsafe_allow_html=True,
+        )
+        MILE_SECTIONS = [
+            ("points",  "Points", [1, 2, 3, 4]),
+            ("goals",   "Goals",  [1, 2, 3]),
+            ("assists", "Assists",[1, 2]),
+        ]
+        mile_tabs = st.tabs([lbl for _, lbl, _ in MILE_SECTIONS])
+        for tab, (stat, lbl, levels) in zip(mile_tabs, MILE_SECTIONS):
+            with tab:
+                mile_rows = []
+                for d in field:
+                    ps  = d["ps"]
+                    pv  = d["pv"]
+                    if stat not in ps.stat_distributions:
+                        continue
+                    dist = ps.stat_distributions[stat]
+                    proj_val = float(pv.get(stat, 0))
+                    if proj_val < 0.02:
+                        continue
+                    row = {
+                        "Player": d["nm"],
+                        "Team":   team_name(d["tid"]),
+                        "Pos":    d["pos"],
+                        "Proj":   round(proj_val, 2),
+                    }
+                    for lvl in levels:
+                        ml_m = pricing.price_prop(ps, stat, line=lvl - 0.5)
+                        p_hit = float(np.mean(dist >= lvl))
+                        row[f"{lvl}+ odds"] = ml_m.over_odds
+                        row[f"{lvl}+ P"]    = f"{p_hit:.1%}"
+                    mile_rows.append(row)
+                if mile_rows:
+                    df_m = pd.DataFrame(mile_rows).sort_values("Proj", ascending=False).reset_index(drop=True)
+                    st.dataframe(df_m, use_container_width=True, hide_index=True)
+                else:
+                    st.caption(f"No {lbl} milestone data.")
 
     st.markdown("---")
     st.markdown(
         f'<span class="note-text">'
-        f'Margin: {new_hold_pct*100:.1f}% · 20,000 sims · Switch to Expander view for full detail'
+        f'Margin: {new_hold_pct*100:.1f}% · 20,000 sims · '
+        f'Switch to Expander view for distributions, alt lines, and market comparison'
         f'</span>',
         unsafe_allow_html=True,
     )
