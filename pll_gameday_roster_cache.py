@@ -530,21 +530,101 @@ def parse_response(data: Dict, year: int, week: int) -> pd.DataFrame:
     return df[GAMEDAY_COLUMNS].copy()
 
 
-# ── Current week detection ────────────────────────────────────────────────
+# ── Week map from schedule parquet ───────────────────────────────────────
+
+def _build_week_map(year: int = CURRENT_YEAR) -> Dict[int, Dict]:
+    """
+    Build a mapping of {pll_week: {dates, game_numbers, all_final, first_date}}
+    by grouping the committed schedule parquet into game weekends.
+
+    PLL games cluster into 4-game weekends. We assign a week number by
+    ranking the distinct game weekends chronologically (week 1 = first
+    weekend, week 2 = second weekend, etc.). This is authoritative because
+    it uses the actual schedule, not a calendar heuristic.
+
+    Returns empty dict if the parquet is not found (graceful fallback).
+    """
+    parquet = REPO_ROOT / "data" / "curated_data" / "all_requested_seasons" / "game_schedule_all.parquet"
+    if not parquet.exists():
+        return {}
+
+    try:
+        import pandas as pd
+        df = pd.read_parquet(str(parquet))
+        df = df[df["season"] == year].copy()
+        if df.empty:
+            return {}
+
+        df["_date"] = pd.to_datetime(df["game_date_guess"], utc=True, errors="coerce").dt.date
+        df = df.dropna(subset=["_date"])
+
+        # Group into weekends: games within 4 days of each other share a weekend.
+        # Sort by date, then assign a weekend ID whenever the gap exceeds 4 days.
+        df = df.sort_values("_date").reset_index(drop=True)
+        dates = df["_date"].tolist()
+        weekend_id = 0
+        weekend_ids = [0]
+        for i in range(1, len(dates)):
+            if (dates[i] - dates[i - 1]).days > 4:
+                weekend_id += 1
+            weekend_ids.append(weekend_id)
+        df["_weekend_id"] = weekend_ids
+
+        week_map: Dict[int, Dict] = {}
+        for wid, grp in df.groupby("_weekend_id"):
+            pll_week = int(wid) + 1  # 1-indexed
+            game_dates = sorted(grp["_date"].unique().tolist())
+            game_nums  = sorted(grp["game_number"].tolist())
+            statuses   = set(str(s).lower() for s in grp["event_status_label"].tolist())
+            all_final  = statuses.issubset({"final", "completed", "3"})
+            week_map[pll_week] = {
+                "first_date":    game_dates[0],
+                "last_date":     game_dates[-1],
+                "game_numbers":  game_nums,
+                "all_final":     all_final,
+                "statuses":      list(statuses),
+            }
+        return week_map
+    except Exception as exc:
+        print(f"  WARNING: Could not build week map from schedule: {exc}")
+        return {}
+
+
 def current_pll_week(year: int = CURRENT_YEAR) -> int:
     """
-    Estimate the current PLL week from today's date.
-    Season typically starts in late April/early May.
-    This is a heuristic — the app will try the detected week and fall back
-    to week-1 if the API returns nothing.
+    Determine the current PLL week from the actual committed schedule.
+
+    Logic:
+    - Build week map from the schedule parquet (grouped by game weekends).
+    - The "current" week is the first week whose games are not all final,
+      i.e. the next upcoming or in-progress game weekend.
+    - If all weeks are final (end of season), return the last week.
+    - Falls back to calendar heuristic if the parquet is unavailable.
     """
-    today       = dt.date.today()
-    season_start = dt.date(year, 4, 26)   # approximate 2026 season start
+    today    = dt.date.today()
+    week_map = _build_week_map(year)
+
+    if week_map:
+        # Find the first week that still has upcoming/scheduled games
+        for week_num in sorted(week_map.keys()):
+            info = week_map[week_num]
+            if not info["all_final"]:
+                print(f"  Schedule-derived current week: {week_num} "
+                      f"(games {info['game_numbers'][0]}-{info['game_numbers'][-1]}, "
+                      f"first date: {info['first_date']})")
+                return week_num
+        # All weeks are final — return the last one
+        last = max(week_map.keys())
+        print(f"  All weeks complete; returning last week: {last}")
+        return last
+
+    # Fallback: calendar heuristic (kept for resilience)
+    print("  WARNING: Using calendar heuristic (schedule parquet unavailable).")
+    season_start = dt.date(year, 4, 26)
     if today < season_start:
         return 1
     days_in = (today - season_start).days
-    week    = max(1, min(LAST_WEEK, 1 + days_in // 7))
-    return week
+    return max(1, min(LAST_WEEK, 1 + days_in // 7))
 
 
 # ── Write helpers ─────────────────────────────────────────────────────────
