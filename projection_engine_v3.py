@@ -1387,10 +1387,15 @@ class RatingBuilder:
             else:
                 df[f"zero_rate_{stat}"] = ZERO_RATE.get(f"{pos}_{stat}", 0.6)
 
-        # Bayesian rates
-        fo_w = df.get("faceoffs_won", pd.Series(0, index=df.index)).fillna(0).shift(1).cumsum().fillna(0)
+        # Bayesian rates + FO EWM (used by _project_player for FO specialists)
+        fo_wins_series = df.get("faceoffs_won", pd.Series(0, index=df.index)).fillna(0)
+        fo_w = fo_wins_series.shift(1).cumsum().fillna(0)
         fo_t = df["fo_denom_p"].shift(1).cumsum().fillna(0)
         df["bayes_fo_pct"] = [_bayesian_rate(w, t, 2, 2) for w, t in zip(fo_w, fo_t)]
+        # fo_wins_ewm: leakage-safe EWM of raw faceoff wins per game.
+        # Filled with LG_FOS_PER_GAME * 0.5 as prior for sparse players so
+        # _project_player always has a non-NaN value to work with.
+        df["fo_wins_ewm"] = _ewm_shift(fo_wins_series, HL_FO).fillna(LG_FOS_PER_GAME * 0.5)
 
         sv_n = df.get("saves", pd.Series(0, index=df.index)).fillna(0).shift(1).cumsum().fillna(0)
         sv_d = df.get("shots_faced_p", pd.Series(0, index=df.index)).fillna(0).shift(1).cumsum().fillna(0)
@@ -1867,6 +1872,9 @@ class PlayerModel:
             po = overrides.get(pid, {})
             active = bool(po.get("active", True))
             usage = _nan(float(po.get("usage_multiplier", row.get("usage_multiplier", 1.0))), 1.0)
+            # usage=0.0 is treated as inactive regardless of the active flag
+            if usage == 0.0:
+                active = False
             is_starter = bool(po.get("is_starter", starter_goalie == pid))
 
             feats = row.to_dict()
@@ -2006,8 +2014,34 @@ class PlayerModel:
 
         # FO
         if pos == "FO":
-            fo_pct = _nan(float(f.get("bayes_fo_pct", LG_FO_PCT)), LG_FO_PCT)
-            proj_fo = max(_nan(float(f.get("fo_wins_ewm", LG_FOS_PER_GAME * fo_pct)), 0.0) * usage, 0.0)
+            # bayes_fo_pct: use actual faceoff counts if available (handles single-game
+            # players where the shift-before-EWM produces NaN for bayes_fo_pct).
+            fo_w = _nan(float(f.get("faceoffs_won", 0)), 0.0)
+            fo_t = _nan(float(f.get("fo_denom_p", f.get("faceoffs", 0))), 0.0)
+            if fo_t >= 5:
+                # Enough data: Bayesian rate with weak prior
+                fo_pct = _bayesian_rate(fo_w, fo_t, 2, 2)
+            else:
+                # Sparse: fall back to stored bayes_fo_pct or league average
+                fo_pct = _nan(float(f.get("bayes_fo_pct", LG_FO_PCT)), LG_FO_PCT)
+            fo_pct = min(max(fo_pct, 0.25), 0.75)
+
+            # fo_wins_ewm: the column exists in the player ratings but is NaN for
+            # players with only 1 game (shift before EWM = all NaN). Fall back to
+            # fo_pct * LG_FOS_PER_GAME so the player gets a meaningful projection.
+            raw_fo_ewm = f.get("fo_wins_ewm")
+            try:
+                fo_ewm_val = float(raw_fo_ewm)
+            except (TypeError, ValueError):
+                fo_ewm_val = float("nan")
+
+            import math
+            if math.isnan(fo_ewm_val) or fo_ewm_val <= 0:
+                # Use actual per-game average if available, else fo_pct * league total
+                fo_pg = fo_w / max(fo_t, 1.0) * LG_FOS_PER_GAME if fo_t > 0 else fo_pct * LG_FOS_PER_GAME
+                proj_fo = max(fo_pg * usage, 0.0)
+            else:
+                proj_fo = max(fo_ewm_val * usage, 0.0)
             proj_fo_pct = fo_pct
         else:
             proj_fo = 0.0
