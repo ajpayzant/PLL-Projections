@@ -37,7 +37,7 @@ home_id = result.home_proj.team_id
 away_id = result.away_proj.team_id
 home_nm = team_name(home_id)
 away_nm = team_name(away_id)
-hold_pct = st.session_state.get("hold_pct", 0.045)
+hold_pct = st.session_state.get("hold_pct", 0.075)
 pricing  = PricingEngine(hold_pct=hold_pct)
 
 st.title("👤 Player Prop Markets")
@@ -56,8 +56,13 @@ STAT_LABELS = {
 FIELD_STATS  = ["goals", "assists", "points", "shots_on_goal", "two_pt_goals", "ground_balls"]
 GOALIE_STATS = ["saves"]
 FO_STATS     = ["faceoff_wins"]
-MILE_DEFS    = {"goals": [1, 2, 3], "assists": [1, 2], "saves": [10, 12, 14],
-                "shots_on_goal": [2, 3, 4]}
+MILE_DEFS    = {
+    "goals":         [1, 2, 3],
+    "assists":       [1, 2],
+    "points":        [1, 2, 3, 4],
+    "saves":         [10, 12, 14],
+    "shots_on_goal": [2, 3, 4],
+}
 
 # -- Sidebar ---------------------------------------------------------------
 with st.sidebar:
@@ -70,6 +75,15 @@ with st.sidebar:
     min_pts   = st.number_input("Min projected points", 0.0, 3.0, 0.3, 0.1, key="prop_min_pts")
     show_miles = st.checkbox("Show milestone props (1+, 2+, 3+)", value=True)
     show_alt   = st.checkbox("Show alternate line pricing", value=False)
+
+    st.markdown("---")
+    st.markdown("### View Mode")
+    view_mode = st.radio(
+        "Layout",
+        ["Expander (per player)", "Table (all players)"],
+        key="prop_view_mode",
+        help="Table view shows all players and their main lines in one sortable grid.",
+    )
 
     st.markdown("---")
     st.markdown("### Market Margin %")
@@ -163,7 +177,98 @@ if not sims_filtered:
 st.markdown(f"**{len(sims_filtered)} players shown** · hold: {new_hold_pct*100:.1f}%")
 st.markdown("---")
 
-# -- Player prop cards -----------------------------------------------------
+
+# ===========================================================================
+# TABLE VIEW
+# ===========================================================================
+if view_mode == "Table (all players)":
+    st.markdown("### All Players — Main Lines")
+    st.markdown(
+        '<span class="note-text">One row per player. Main line = model\'s most balanced x.5 line. '
+        'Click a column header to sort. Switch to Expander view for full detail, alt lines, and milestones.</span>',
+        unsafe_allow_html=True,
+    )
+
+    tbl_rows = []
+    for ps in sims_filtered:
+        pid  = ps.player_id
+        pm   = markets.get(pid, {})
+        proj = all_projs.get(pid)
+        if proj is None:
+            continue
+        pv  = pm.get("proj_values", {})
+        ms  = pm.get("markets", {})
+        pos = proj.position
+        nm  = proj.full_name or pid
+
+        def _mkt_cols(stat: str) -> tuple:
+            m = ms.get(stat, {})
+            if not m:
+                return ("--", "--", "--", "--")
+            return (
+                f"{m.get('line', '--'):.1f}" if isinstance(m.get('line'), (int,float)) else "--",
+                m.get("over_odds", "--"),
+                m.get("under_odds", "--"),
+                f"{m.get('fair_over_prob', 0):.3f}",
+            )
+
+        row = {
+            "Player":    nm,
+            "Team":      team_name(proj.team_id),
+            "Pos":       pos,
+        }
+
+        if pos == "G":
+            row["Proj Saves"] = round(float(pv.get("saves", 0)), 2)
+            ln, ov, un, fp = _mkt_cols("saves")
+            row["Line"] = ln; row["Over"] = ov; row["Under"] = un; row["P(Over)"] = fp
+        elif pos == "FO":
+            row["Proj FOW"] = round(float(pv.get("faceoff_wins", 0)), 2)
+            ln, ov, un, fp = _mkt_cols("faceoff_wins")
+            row["Line"] = ln; row["Over"] = ov; row["Under"] = un; row["P(Over)"] = fp
+        else:
+            row["Proj G"]   = round(float(pv.get("goals",   0)), 2)
+            row["Proj A"]   = round(float(pv.get("assists", 0)), 2)
+            row["Proj Pts"] = round(float(pv.get("points",  0)), 2)
+            row["Proj SOG"] = round(float(pv.get("shots_on_goal", 0)), 2)
+
+            g_ln, g_ov, g_un, g_fp = _mkt_cols("goals")
+            a_ln, a_ov, a_un, a_fp = _mkt_cols("assists")
+            p_ln, p_ov, p_un, p_fp = _mkt_cols("points")
+
+            row["G Line"] = g_ln; row["G Over"] = g_ov; row["G Under"] = g_un
+            row["A Line"] = a_ln; row["A Over"] = a_ov; row["A Under"] = a_un
+            row["Pts Line"] = p_ln; row["Pts Over"] = p_ov; row["Pts Under"] = p_un
+
+        tbl_rows.append(row)
+
+    if tbl_rows:
+        # Split into field vs goalie/FO for cleaner display
+        field_rows  = [r for r in tbl_rows if r["Pos"] not in ("G","FO")]
+        special_rows = [r for r in tbl_rows if r["Pos"] in ("G","FO")]
+
+        if field_rows:
+            st.markdown("**Field Players**")
+            st.dataframe(pd.DataFrame(field_rows), use_container_width=True, hide_index=True)
+
+        if special_rows:
+            st.markdown("**Goalies & Faceoff**")
+            st.dataframe(pd.DataFrame(special_rows), use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+    st.markdown(
+        f'<span class="note-text">'
+        f'Margin: {new_hold_pct*100:.1f}% · 20,000 sims · Switch to Expander view for full detail'
+        f'</span>',
+        unsafe_allow_html=True,
+    )
+    st.stop()
+
+
+# ===========================================================================
+# EXPANDER VIEW (original, per-player)
+# ===========================================================================
+
 for ps in sims_filtered:
     pid  = ps.player_id
     pm   = markets.get(pid, {})
@@ -269,12 +374,10 @@ for ps in sims_filtered:
             if (mkt_player and mkt_player.lower() in nm.lower()):
                 for row in rows:
                     if row["Stat"] == STAT_LABELS.get(mkt_stat, mkt_stat):
-                        # Compute model's fair prob at the market line
                         dist_key = mkt_stat
                         if dist_key in ps.stat_distributions:
                             dist_mkt = ps.stat_distributions[dist_key]
                             fair_p = float(np.mean(dist_mkt > mkt_line))
-                            # Convert market odds to implied prob
                             try:
                                 mo = int(mkt_over_odds)
                                 mkt_implied = (-mo / (-mo + 100)) if mo < 0 else (100 / (mo + 100))
@@ -303,8 +406,6 @@ for ps in sims_filtered:
                 proj_v = pv.get(stat, 0)
                 st.markdown(f"**Alternate Lines -- {STAT_LABELS.get(stat, stat)}**")
 
-                # Build a compact ladder around the main model line.
-                # Lines are x.5 only (0.5, 1.5, 2.5...) so integer outcomes cannot push.
                 main_ml = pricing.price_prop(ps, stat)
                 width = _alt_width(stat)
                 lo = main_ml.line - width
@@ -327,8 +428,15 @@ for ps in sims_filtered:
 
         # -- Milestone props ------------------------------------------------
         if show_miles:
-            for stat, levels in MILE_DEFS.items():
-                if stat not in ps.stat_distributions:
+            mile_stats = (
+                ["saves"] if pos == "G"
+                else ["goals", "assists", "points"] if pos not in ("FO",)
+                else []
+            )
+            any_mile = False
+            for stat in mile_stats:
+                levels = MILE_DEFS.get(stat)
+                if not levels or stat not in ps.stat_distributions:
                     continue
                 dist = ps.stat_distributions[stat]
                 m_rows = []
@@ -341,8 +449,26 @@ for ps in sims_filtered:
                         "No odds":   ml_m.under_odds,
                     })
                 if m_rows:
-                    st.markdown(f"**Milestones -- {STAT_LABELS.get(stat,stat)}**")
+                    if not any_mile:
+                        st.markdown("**Milestones**")
+                        any_mile = True
                     st.dataframe(pd.DataFrame(m_rows), use_container_width=True, hide_index=True)
+
+            # SOG milestones separately
+            if pos not in ("G", "FO") and "shots_on_goal" in ps.stat_distributions:
+                sog_levels = MILE_DEFS.get("shots_on_goal", [])
+                sog_dist   = ps.stat_distributions["shots_on_goal"]
+                sog_rows   = []
+                for lvl in sog_levels:
+                    ml_m = pricing.price_prop(ps, "shots_on_goal", line=lvl - 0.5)
+                    sog_rows.append({
+                        "Milestone": f"SOG {lvl}+",
+                        "P(Hit)":    f"{float(np.mean(sog_dist >= lvl)):.3f}",
+                        "Yes odds":  ml_m.over_odds,
+                        "No odds":   ml_m.under_odds,
+                    })
+                if sog_rows:
+                    st.dataframe(pd.DataFrame(sog_rows), use_container_width=True, hide_index=True)
 
 st.markdown("---")
 st.markdown(
