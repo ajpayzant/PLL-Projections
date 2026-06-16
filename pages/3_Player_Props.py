@@ -280,7 +280,7 @@ if view_mode == "Table (all players)":
                 if df.empty:
                     st.caption(f"No {lbl} data available.")
                 else:
-                    # Colour-code Over odds: green if positive (+), slate if negative (-)
+                    # applymap was removed in pandas 2.1+; use map instead.
                     def _style_odds(val):
                         if isinstance(val, str) and val.startswith("+"):
                             return "color:#34d399;font-weight:600"
@@ -288,7 +288,7 @@ if view_mode == "Table (all players)":
                             return "color:#f1f5f9"
                         return ""
 
-                    styled = df.style.applymap(
+                    styled = df.style.map(
                         _style_odds, subset=["Over", "Under"]
                     ).format(precision=2)
                     st.dataframe(styled, use_container_width=True, hide_index=True)
