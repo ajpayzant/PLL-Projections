@@ -107,7 +107,13 @@ GAMEDAY_COLUMNS = [
 
 # ── Auth ──────────────────────────────────────────────────────────────────
 def _get_token() -> str:
-    token = os.environ.get("PLL_BEARER_TOKEN", "").strip()
+    token = (
+        os.environ.get("PLL_BEARER_TOKEN", "")
+        or os.environ.get("PLL_API_TOKEN", "")
+        or os.environ.get("PLL_TOKEN", "")
+    ).strip()
+    # Strip any stray carets or whitespace that can corrupt the value
+    token = token.replace("^", "").strip()
     if not token:
         raise RuntimeError(
             "PLL_BEARER_TOKEN environment variable is not set.\n"
@@ -120,14 +126,26 @@ def _get_token() -> str:
 
 
 def _headers(token: str) -> Dict[str, str]:
+    # Use the same headers as build_warehouse.py — authsource="stats" and
+    # stats.premierlacrosseleague.com origin are required for the v4 API.
+    # The "web" authsource was returning 401; "stats" matches the working warehouse.
+    tok = token if token.lower().startswith("bearer ") else f"Bearer {token}"
     return {
-        "accept":        "application/json",
-        "content-type":  "application/json",
-        "origin":        "https://premierlacrosseleague.com",
-        "referer":       "https://premierlacrosseleague.com/",
-        "authsource":    "web",
-        "time-zone":     "America/Los_Angeles",
-        "Authorization": f"Bearer {token}",
+        "accept":           "*/*",
+        "accept-language":  "en-US,en;q=0.9",
+        "cache-control":    "no-cache",
+        "content-type":     "application/json",
+        "origin":           "https://stats.premierlacrosseleague.com",
+        "pragma":           "no-cache",
+        "referer":          "https://stats.premierlacrosseleague.com/",
+        "authsource":       "stats",
+        "time-zone":        "America/Los_Angeles",
+        "user-agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/146.0.0.0 Safari/537.36"
+        ),
+        "authorization":    tok,
     }
 
 
