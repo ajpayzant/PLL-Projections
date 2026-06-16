@@ -42,27 +42,24 @@ if fresh.get("available"):
 
 st.markdown("---")
 
-# -- Check calibrator status -----------------------------------------------
-cal = engine.calibrator
-if not cal._fitted:
-    st.warning(
-        "Calibrator not fitted. The backtest runs automatically at startup but may "
-        "not have completed yet. Try refreshing the page in 30 seconds."
-    )
-    st.stop()
-
-# -- Pull backtest results via a lightweight re-run ------------------------
-# The engine stores raw_rows on the Calibrator's backing Backtester.
-# We re-run a quick backtest here just for the UI stats — uses 5k sims,
-# same as the calibration run, so it's fast (~20s) and cached.
-@st.cache_data(show_spinner="Running backtest analysis…", ttl=3600)
-def _get_backtest_result():
+# -- Run backtest lazily (only when this page is visited) ------------------
+# The backtest takes ~25-35s but is cached for the session via cache_data.
+# It also fits the calibrator so win probabilities are calibrated for the
+# rest of the session after this page has been visited once.
+@st.cache_data(show_spinner="Running backtest (~30s, once per session)…", ttl=7200)
+def _get_backtest_result(_engine_id: int):
     from projection_engine_v3 import Backtester
     bt = Backtester(engine.loader, n_sims=5_000)
-    return bt.run()
+    result = bt.run()
+    return result, bt.raw_rows
 
-with st.spinner("Loading backtest results…"):
-    bt = _get_backtest_result()
+with st.spinner("Running backtest analysis — this takes ~30 seconds the first time…"):
+    bt, raw_rows = _get_backtest_result(id(engine))
+
+# Fit the calibrator on the backtest results so win probabilities are
+# calibrated for the rest of this session.
+if raw_rows and not engine.calibrator._fitted:
+    engine.calibrator.fit(raw_rows)
 
 if bt.n_games == 0:
     st.warning("No backtest games available. Check that historical data is loaded.")

@@ -120,9 +120,9 @@ _ensure_db()
 def get_engine() -> ProjectionEngine:
     engine = ProjectionEngine(db_path=DB_PATH)
     engine.load()
-    # run_backtest=True fits the calibrator on historical games (2023+).
-    # Takes ~25-35 seconds but only runs once per session (cached by Streamlit).
-    engine.fit(run_backtest=True)
+    # run_backtest=False keeps startup fast (~2-3s).
+    # The calibrator is fitted lazily when the Model Performance page is visited.
+    engine.fit(run_backtest=False)
     return engine
 
 
