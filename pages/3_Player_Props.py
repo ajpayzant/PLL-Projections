@@ -326,9 +326,10 @@ if view_mode == "Table (all players)":
             unsafe_allow_html=True,
         )
         MILE_SECTIONS = [
-            ("points",  "Points", [1, 2, 3, 4]),
-            ("goals",   "Goals",  [1, 2, 3]),
-            ("assists", "Assists",[1, 2]),
+            ("points",        "Points", [1, 2, 3, 4]),
+            ("goals",         "Goals",  [1, 2, 3]),
+            ("assists",       "Assists",[1, 2]),
+            ("shots_on_goal", "SOG",    [2, 3, 4]),
         ]
         mile_tabs = st.tabs([lbl for _, lbl, _ in MILE_SECTIONS])
         for tab, (stat, lbl, levels) in zip(mile_tabs, MILE_SECTIONS):
