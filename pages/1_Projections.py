@@ -209,6 +209,43 @@ with st.sidebar:
                 if key in get_team_rating_overrides(team_id):
                     del st.session_state.team_rating_overrides[team_id][key]
 
+        # -- Read-only FO display -------------------------------------------
+        # FO win rate is driven by active FO players in Depth Charts, not by
+        # a team-level override. Show the effective rate and active specialists
+        # so the user can see what's being used without a misleading editable field.
+        result_now = st.session_state.get("last_result")
+        if result_now is not None:
+            team_players = (
+                result_now.home_players if team_id == result_now.home_proj.team_id
+                else result_now.away_players
+            )
+            fo_active = [p for p in team_players if p.position == "FO" and p.active]
+            team_proj_now = (
+                result_now.home_proj if team_id == result_now.home_proj.team_id
+                else result_now.away_proj
+            )
+            eff_fo_pct = team_proj_now.proj_faceoff_pct
+            if fo_active:
+                fo_names = ", ".join(p.full_name.split()[-1] for p in fo_active)
+                fo_detail = "  ·  ".join(
+                    f"{p.full_name.split()[-1]} {p.proj_faceoff_pct:.1%}"
+                    for p in sorted(fo_active, key=lambda x: -x.proj_faceoff_wins)
+                )
+                st.markdown(
+                    f'<span class="note-text">Faceoff win rate: '
+                    f'<b style="color:#f1f5f9;">{eff_fo_pct:.1%}</b> '
+                    f'(driven by active FO players — adjust in Depth Charts)<br>'
+                    f'{fo_detail}</span>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    f'<span class="note-text">Faceoff win rate: '
+                    f'<b style="color:#f1f5f9;">{eff_fo_pct:.1%}</b> '
+                    f'(no active FO specialist — adjust in Depth Charts)</span>',
+                    unsafe_allow_html=True,
+                )
+
     _rating_sliders(home_id, home_nm + " (Home)", hf_current)
     st.markdown("")
     _rating_sliders(away_id, away_nm + " (Away)", af_current)

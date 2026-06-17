@@ -673,11 +673,11 @@ TEAM_RATING_DEFS = {
         "help": "Shots per game. League avg ~41.",
         "min": 25.0, "max": 60.0, "step": 0.5, "fmt": "{:.1f}",
     },
-    "bayes_fo_pct": {
-        "label": "Faceoff win rate",
-        "help": "Career Bayesian FO win%. League avg 0.500.",
-        "min": 0.25, "max": 0.75, "step": 0.01, "fmt": "{:.3f}",
-    },
+    # bayes_fo_pct removed from team-level adjustments.
+    # FO win rate is now driven entirely by active FO players' individual ratings
+    # via _apply_fo_correction() in ProjectionEngine.project(). Adjusting the
+    # team-level FO% here had no effect because the roster-derived rate overwrote
+    # it. Adjust FO player ratings directly in Depth Charts instead.
     "bayes_save_pct": {
         "label": "Goalie save% (saves / shots faced)",
         "help": "Starting goalie's Bayesian save%. League avg ~0.537.",
