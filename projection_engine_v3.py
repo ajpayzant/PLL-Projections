@@ -2923,6 +2923,56 @@ class ProjectionEngine:
             override_roster_filter=_effective_roster_filter(away_team_id),
         )
 
+        # ── Roster-aware FO correction ───────────────────────────────────────
+        # If the active FO roster's win rate differs materially from the team
+        # rating's bayes_fo_pct (e.g. elite FO player ruled out, weak backup in),
+        # re-predict the team projection with the corrected FO% so the full
+        # possession chain (FO → TOP → shots → goals) reflects the scratch.
+        # Threshold: 3 percentage points — below that the effect is negligible.
+        _FO_CORRECTION_THRESHOLD = 0.03
+
+        def _apply_fo_correction(
+            team_id: str,
+            team_rating: Dict,
+            team_proj: TeamProjection,
+            players: List[PlayerProjection],
+            opp_rating: Dict,
+            adj: Optional[Dict],
+        ):
+            eff_fo = _effective_fo_pct_from_roster(players)
+            if eff_fo is None:
+                return team_proj, players  # no active FO players — leave as-is
+            model_fo = _nan(float(team_rating.get("bayes_fo_pct", LG_FO_PCT)), LG_FO_PCT)
+            if abs(eff_fo - model_fo) < _FO_CORRECTION_THRESHOLD:
+                return team_proj, players  # difference too small to matter
+            logger.info(
+                "FO correction for %s: model_fo=%.3f → roster_fo=%.3f (delta=%.3f)",
+                team_id, model_fo, eff_fo, eff_fo - model_fo,
+            )
+            # Inject corrected FO% into team rating and re-predict
+            corrected_rating = {**team_rating, "bayes_fo_pct": eff_fo}
+            new_proj = self.team_model.predict(corrected_rating, opp_rating, adj)
+            # Re-project the roster against the updated team totals so player
+            # projections (goals, shots, etc.) are also updated.
+            new_players = self.player_model.project_roster(
+                team_id, new_proj, _team_ov(team_id),
+                starter_goalie=starters.get(team_id),
+                use_current_roster_filter=use_current_rosters,
+                override_roster_filter=_effective_roster_filter(team_id),
+            )
+            return new_proj, new_players
+
+        h_proj, h_players = _apply_fo_correction(
+            home_team_id, hf, h_proj, h_players, af, adj_map.get(home_team_id)
+        )
+        a_proj, a_players = _apply_fo_correction(
+            away_team_id, af, a_proj, a_players, hf, adj_map.get(away_team_id)
+        )
+
+        # Re-sync team-level goalie stats after FO correction may have changed SOG
+        _assign_goalie_saves_team(h_proj, a_proj)
+        _assign_goalie_saves_team(a_proj, h_proj)
+
         # Assign goalie saves using correct opponent SOG and designated starter
         _assign_player_goalie_saves(h_players, a_proj.proj_sog, starters.get(home_team_id))
         _assign_player_goalie_saves(a_players, h_proj.proj_sog, starters.get(away_team_id))
@@ -3076,6 +3126,32 @@ class ProjectionEngine:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+def _effective_fo_pct_from_roster(
+    player_projs: List[PlayerProjection],
+) -> Optional[float]:
+    """
+    Compute the effective team FO% from the active FO players on the roster.
+
+    Returns the usage-weighted average of active FO players' proj_faceoff_pct,
+    or None if there are no active FO players (caller should leave team rating as-is).
+
+    Used to detect when deactivating an elite FO player materially changes the
+    team's expected faceoff win rate, so the possession chain model can be
+    re-run with the corrected rate rather than the stale season-average.
+    """
+    active_fo = [p for p in player_projs if p.active and p.position == "FO"]
+    if not active_fo:
+        return None
+    total_wins = sum(p.proj_faceoff_wins for p in active_fo)
+    if total_wins <= 0:
+        # Fallback to simple average of rates
+        rates = [p.proj_faceoff_pct for p in active_fo if p.proj_faceoff_pct > 0]
+        return float(np.mean(rates)) if rates else None
+    # Weighted average: players with more projected wins get more weight
+    weighted = sum(p.proj_faceoff_pct * p.proj_faceoff_wins for p in active_fo)
+    return float(weighted / total_wins)
+
 
 def _assign_goalie_saves_team(team_proj: TeamProjection, opp_proj: TeamProjection) -> None:
     """Set team-level save projection using opponent's projected SOG.
