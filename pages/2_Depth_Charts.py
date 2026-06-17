@@ -152,19 +152,12 @@ def _model_val_for(pid: str, key: str, p) -> float:
     }
     if key in fallback_map:
         return fallback_map[key]
-    # For share keys, read the raw EWM value from the DB rating row.
-    # This must match what the engine's _share() function reads as ewm_s,
-    # so that when the user overrides share_goals_ewm the starting point
-    # is the same value the engine uses — not the post-blend projected share
-    # (which would cause a jump on first override due to the blend factor).
-    pm = engine.player_model
-    if pm is not None and not pm.pr.empty:
-        rows = pm.pr[pm.pr["player_id"] == pid]
-        if not rows.empty and key in rows.columns:
-            v = float(rows[key].iloc[-1])
-            if np.isfinite(v) and v > 0:
-                return v
-    # Hard fallback if DB row missing
+    # For share keys, use the player's actual projected share (proj/team_total).
+    # This is the effective blended share the engine is already using, so when
+    # the user edits from this value the override moves in the correct direction.
+    # Raw share_goals_ewm is NOT used here because for low-gp players it is much
+    # lower than the blended share (prior dominates), causing overrides to drop
+    # projections when the user thinks they are raising them.
     team_proj = result.home_proj if p.team_id == home_id else result.away_proj
     share_map = {
         "share_goals_ewm":   p.proj_goals   / max(team_proj.proj_goals,   1.0),

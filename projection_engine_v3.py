@@ -920,6 +920,7 @@ class PlayerProjection:
     usage_multiplier: float = 1.0
     is_starter: bool = False
     _fo_pct_overridden: bool = False
+    _share_overridden: bool = False  # goals/assists/shots share was directly set by user
 
 
 @dataclass
@@ -1934,8 +1935,12 @@ class PlayerModel:
                 # Tighter prior for new/unknown players: 0.10 × pos_s so they don't
                 # steal meaningful volume from established players before user sets a role.
                 return min(pos_s * 0.10, 0.008)
-            # User explicitly set this share — honour it directly, bypassing the
-            # credibility blend so the override is fully reflected in projections.
+            # User explicitly set this share — use it as the final share directly,
+            # bypassing the credibility blend. The value the user set represents
+            # their desired fraction of team goals/assists/shots, and should be
+            # used as-is without any blend with prior or career data.
+            # Note: this still goes through _reconcile proportional rescaling.
+            # To also bypass reconcile, the caller sets _direct_share_override.
             if share_key in _user_overrides:
                 return max(ewm_s, 0.0)
             # Credibility-weighted blend (Bühlmann-Straub style).
@@ -2085,6 +2090,8 @@ class PlayerModel:
         confidence = min(0.40 + 0.025 * gp, 0.85)
 
         fo_pct_was_overridden = pos == "FO" and "bayes_fo_pct" in _user_overrides
+        share_was_overridden = any(k in _user_overrides for k in
+                                   ("share_goals_ewm", "share_assists_ewm", "share_shots_ewm"))
         raw = PlayerProjection(
             player_id=pid, full_name=name, team_id=tid, position=pos,
             proj_goals=max(proj_goals, 0.0),
@@ -2106,9 +2113,11 @@ class PlayerModel:
             confidence=confidence,
         )
         capped = self._apply_caps(raw)
-        # Tag the projection so _reconcile knows not to overwrite this player's
-        # fo_wins with the team total rescale — the user explicitly set their rate.
         capped._fo_pct_overridden = fo_pct_was_overridden
+        # Tag share-overridden players so _reconcile skips proportional rescaling
+        # for goals/assists/shots. The user set an explicit share fraction that
+        # should be preserved as-is — rescaling would change it unpredictably.
+        capped._share_overridden = share_was_overridden
         return capped
 
     def _apply_caps(self, p: PlayerProjection) -> PlayerProjection:
@@ -2141,17 +2150,25 @@ class PlayerModel:
         def _rescale(stat: str, team_total: float):
             """
             Proportionally rescale active player projections to match team total.
-            Always applies — the share model produces inflated sums from multi-season
-            rosters, and full proportional rescaling preserves relative player rankings
-            while bringing totals in line.
+            Players with explicit share overrides (_share_overridden=True) are kept
+            fixed; only non-overridden players are rescaled to fill the remainder.
             """
-            s = sum(getattr(p, f"proj_{stat}", 0.0) for p in active)
-            if s <= 0 or team_total <= 0:
+            if team_total <= 0:
                 return
-            scale = team_total / s
-            for p in active:
-                orig = getattr(p, f"proj_{stat}", 0.0)
-                setattr(p, f"proj_{stat}", max(orig * scale, 0.0))
+            overridden = [p for p in active if getattr(p, "_share_overridden", False)]
+            free       = [p for p in active if not getattr(p, "_share_overridden", False)]
+            fixed_sum  = sum(getattr(p, f"proj_{stat}", 0.0) for p in overridden)
+            free_sum   = sum(getattr(p, f"proj_{stat}", 0.0) for p in free)
+            remaining  = max(team_total - fixed_sum, 0.0)
+            if free_sum > 0 and remaining > 0:
+                scale = remaining / free_sum
+                for p in free:
+                    orig = getattr(p, f"proj_{stat}", 0.0)
+                    setattr(p, f"proj_{stat}", max(orig * scale, 0.0))
+            elif free_sum > 0 and remaining == 0:
+                # All team volume consumed by overridden players — zero out the rest
+                for p in free:
+                    setattr(p, f"proj_{stat}", 0.0)
 
         _rescale("goals", tp.proj_goals)
         _rescale("assists", tp.proj_assists)
