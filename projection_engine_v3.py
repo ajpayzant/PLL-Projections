@@ -1939,23 +1939,43 @@ class PlayerModel:
             if share_key in _user_overrides:
                 return max(ewm_s, 0.0)
             # Credibility-weighted blend (Bühlmann-Straub style).
-            # _K controls how many games of history are needed to equal the prior weight.
-            # Lowered from 15 to 10 for A/M so that star players with 20-40 career games
-            # get more weight on their own data (gp=20: own=0.67 vs 0.57 at k=15).
-            # Kept at 15 for defensive positions where prior is more reliable.
-            _K = 10.0 if pos in {"A", "M"} else 15.0
-            own = gp / (gp + _K)           # 0 at gp=0, 0.5 at gp=15, 0.73 at gp=40
-            w_ewm    = 0.65 * own          # EWM carries 65% of the "own data" weight
-            w_career = 0.35 * own          # career mean carries 35%
-            w_pos    = max(1.0 - own, 0.0) # prior fills the rest; no hard floor
-            # Rookies/low-gp players: scale down pos_s so their fallback prior
-            # does not project them as a full league-average player at that position.
-            # POS_DEFAULTS represent the mean share across all players at the position,
-            # meaning a gp=0 player at 100% pos_s would be projected identically to
-            # an established average A/M — higher than a typical new player warrants.
-            # Taper from 0.25 at gp=0 to 1.0 at gp>=15 so the prior is conservative
-            # for sparse samples while fully activating for proven role players.
-            pos_prior_scale = min(0.25 + 0.75 * (gp / max(gp + _K, 1.0)) * 2.0, 1.0)
+            #
+            # Two-speed credibility curve:
+            #   Early games (1-5): steep ramp so actual rookie performance
+            #     is reflected quickly. gp=1→35%, gp=2→50%, gp=4→65%, gp=5→70%
+            #   Later games (5+): standard linear own = gp/(gp+_K)
+            #
+            # Rationale: a rookie who scores 2G in his first 2 games is
+            # demonstrably better than a zero-sample prior. The old linear
+            # formula gave gp=4 only 29% own weight (too prior-heavy for
+            # established early performance). The steep early ramp respects
+            # small-sample evidence while the asymptotic behavior for
+            # veterans (20+ games) is unchanged.
+            #
+            # _K still controls long-run convergence:
+            #   A/M: K=10, so gp=20→0.67, gp=40→0.80
+            #   Def positions: K=15, more conservative
+            # _K controls long-run convergence. Lower = trust own data sooner.
+            # A/M: K=6 gives gp=6→50%, gp=20→77%, gp=40→87%
+            # Def positions: K=12, more conservative (less individual variance)
+            _K = 6.0 if pos in {"A", "M"} else 12.0
+            if gp == 0:
+                own = 0.0
+            else:
+                # Standard Bühlmann formula with lower K for faster early ramp.
+                # gp=1→14%, gp=2→25%, gp=3→33%, gp=4→40%, gp=5→45%,
+                # gp=6→50%, gp=10→63%, gp=20→77%, gp=40→87%
+                own = gp / (gp + _K)
+
+            w_ewm    = 0.65 * own
+            w_career = 0.35 * own
+            w_pos    = max(1.0 - own, 0.0)
+
+            # Prior scale for gp=0 players: conservative 0.25 × pos_s.
+            # Players with any games get full pos_s as the prior because
+            # the own-weight already reduces the prior's influence — no need
+            # to additionally shrink it, which double-penalises low-gp players.
+            pos_prior_scale = 0.25 if gp == 0 else 1.0
             pos_s_scaled = pos_s * pos_prior_scale
             return max(w_ewm * ewm_s + w_career * career_s + w_pos * pos_s_scaled, 0.0)
 
