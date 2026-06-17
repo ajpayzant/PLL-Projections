@@ -480,14 +480,27 @@ def _render_team(team_id: str, team_nm: str, players):
                     model_val = _model_val_for(pid, key, p)
                     wgt_key   = f"pr_num_{team_id}_{pid}_{key}"
 
-                    # Seed the widget's session state from saved rating_overrides
-                    # the first time this panel opens, or after a reset.
-                    # We only write to st.session_state[wgt_key] when it doesn't
-                    # exist yet so we never overwrite a value the user just typed.
-                    if wgt_key not in st.session_state:
-                        seed_val = rating_overrides.get(key, model_val)
+                    # Seed the widget from the current model value unless the
+                    # user has an active saved override for this key.
+                    # We must re-seed on every render when there is no override
+                    # because the model value changes after Update Projection
+                    # (e.g. deactivating players causes reconcile to redistribute
+                    # goals, so Weisshaar's implied share rises from 0.066 to 0.092
+                    # after others are scratched — the widget must reflect that or
+                    # the user will see a stale value and get wrong override results).
+                    has_saved_override = key in rating_overrides
+                    if has_saved_override:
+                        # User has an active override — keep widget at their value
+                        if wgt_key not in st.session_state:
+                            seed_val = rating_overrides[key]
+                            st.session_state[wgt_key] = float(
+                                min(max(float(seed_val), meta["min"]), meta["max"])
+                            )
+                    else:
+                        # No active override — always sync widget to current model value
+                        # so it reflects the latest projection (post-scratch redistribution)
                         st.session_state[wgt_key] = float(
-                            min(max(float(seed_val), meta["min"]), meta["max"])
+                            min(max(float(model_val), meta["min"]), meta["max"])
                         )
 
                     def _on_change(t=team_id, p_=pid, k=key, wk=wgt_key, mn=meta["min"], mx=meta["max"], mv=model_val, stp=meta["step"]):
