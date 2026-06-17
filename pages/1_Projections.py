@@ -210,9 +210,9 @@ with st.sidebar:
                     del st.session_state.team_rating_overrides[team_id][key]
 
         # -- Read-only FO display -------------------------------------------
-        # FO win rate is driven by active FO players in Depth Charts, not by
-        # a team-level override. Show the effective rate and active specialists
-        # so the user can see what's being used without a misleading editable field.
+        # Rendered as a disabled number_input so it matches the visual style
+        # of the editable inputs above. FO win rate is driven by active FO
+        # player ratings in Depth Charts — it cannot be overridden here.
         result_now = st.session_state.get("last_result")
         if result_now is not None:
             team_players = (
@@ -225,24 +225,47 @@ with st.sidebar:
                 else result_now.away_proj
             )
             eff_fo_pct = team_proj_now.proj_faceoff_pct
+
+            # Build tooltip showing each active FO player's individual rate
             if fo_active:
-                fo_names = ", ".join(p.full_name.split()[-1] for p in fo_active)
+                fo_lines = "\n".join(
+                    f"{p.full_name}: {p.proj_faceoff_pct:.1%} "
+                    f"({p.proj_faceoff_wins:.1f} wins)"
+                    for p in sorted(fo_active, key=lambda x: -x.proj_faceoff_wins)
+                )
+                fo_help = (
+                    f"Effective team FO rate from active FO specialists:\n{fo_lines}\n\n"
+                    "Adjust individual FO win rates in Depth Charts → Edit."
+                )
+            else:
+                fo_help = (
+                    "No active FO specialist. Team falls back to model base rate. "
+                    "Assign an FO player in Depth Charts."
+                )
+
+            st.number_input(
+                "Faceoff win rate",
+                value=round(eff_fo_pct, 3),
+                min_value=0.25,
+                max_value=0.75,
+                step=0.001,
+                format="%.3f",
+                disabled=True,
+                help=fo_help,
+                key=f"tr_fo_display_{team_id}",
+            )
+            if fo_active:
                 fo_detail = "  ·  ".join(
                     f"{p.full_name.split()[-1]} {p.proj_faceoff_pct:.1%}"
                     for p in sorted(fo_active, key=lambda x: -x.proj_faceoff_wins)
                 )
                 st.markdown(
-                    f'<span class="note-text">Faceoff win rate: '
-                    f'<b style="color:#f1f5f9;">{eff_fo_pct:.1%}</b> '
-                    f'(driven by active FO players — adjust in Depth Charts)<br>'
-                    f'{fo_detail}</span>',
+                    f'<span class="note-text">Adjust in Depth Charts · {fo_detail}</span>',
                     unsafe_allow_html=True,
                 )
             else:
                 st.markdown(
-                    f'<span class="note-text">Faceoff win rate: '
-                    f'<b style="color:#f1f5f9;">{eff_fo_pct:.1%}</b> '
-                    f'(no active FO specialist — adjust in Depth Charts)</span>',
+                    '<span class="note-text">No active FO specialist · Adjust in Depth Charts</span>',
                     unsafe_allow_html=True,
                 )
 
