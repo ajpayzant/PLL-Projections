@@ -229,6 +229,14 @@ with st.sidebar:
 
     if st.button("Reset all adjustments", key="reset_adj"):
         st.session_state.team_rating_overrides = {}
+        # Also clear the widget seed keys so the number inputs visually reset
+        # to the model values. Without this, Streamlit re-reads the stale
+        # tr_num_* widget state and immediately re-applies the old overrides.
+        stale = [k for k in st.session_state if k.startswith("tr_num_")]
+        for k in stale:
+            del st.session_state[k]
+        from _engine_state import _autosave
+        _autosave()
         st.rerun()
 
     run_btn = st.button("▶  Run Projection", type="primary", width="stretch")
