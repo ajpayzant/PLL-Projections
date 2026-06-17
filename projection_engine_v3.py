@@ -919,6 +919,7 @@ class PlayerProjection:
     active: bool = True
     usage_multiplier: float = 1.0
     is_starter: bool = False
+    _fo_pct_overridden: bool = False
 
 
 @dataclass
@@ -1884,6 +1885,10 @@ class PlayerModel:
             feats["_baseline_shot_pct"] = _nan(
                 float(feats.get("shot_pct_ewm", LG_SHOT_PCT)), LG_SHOT_PCT
             )
+            # Capture DB baseline for bayes_fo_pct before any user override is applied.
+            feats["_baseline_bayes_fo_pct"] = _nan(
+                float(feats.get("bayes_fo_pct", LG_FO_PCT)), LG_FO_PCT
+            )
             # _override_keys is pre-built by build_overrides() — grab it directly
             # rather than reconstructing from po iteration to avoid double-counting.
             override_keys = list(po.get("_override_keys", []))
@@ -2014,34 +2019,39 @@ class PlayerModel:
 
         # FO
         if pos == "FO":
-            # bayes_fo_pct: use actual faceoff counts if available (handles single-game
-            # players where the shift-before-EWM produces NaN for bayes_fo_pct).
-            fo_w = _nan(float(f.get("faceoffs_won", 0)), 0.0)
-            fo_t = _nan(float(f.get("fo_denom_p", f.get("faceoffs", 0))), 0.0)
-            if fo_t >= 5:
-                # Enough data: Bayesian rate with weak prior
-                fo_pct = _bayesian_rate(fo_w, fo_t, 2, 2)
-            else:
-                # Sparse: fall back to stored bayes_fo_pct or league average
+            # If the user explicitly overrode bayes_fo_pct, honour it directly and
+            # derive proj_fo from it so the override is fully reflected in win count.
+            if "bayes_fo_pct" in _user_overrides:
                 fo_pct = _nan(float(f.get("bayes_fo_pct", LG_FO_PCT)), LG_FO_PCT)
-            fo_pct = min(max(fo_pct, 0.25), 0.75)
-
-            # fo_wins_ewm: the column exists in the player ratings but is NaN for
-            # players with only 1 game (shift before EWM = all NaN). Fall back to
-            # fo_pct * LG_FOS_PER_GAME so the player gets a meaningful projection.
-            raw_fo_ewm = f.get("fo_wins_ewm")
-            try:
-                fo_ewm_val = float(raw_fo_ewm)
-            except (TypeError, ValueError):
-                fo_ewm_val = float("nan")
-
-            import math
-            if math.isnan(fo_ewm_val) or fo_ewm_val <= 0:
-                # Use actual per-game average if available, else fo_pct * league total
-                fo_pg = fo_w / max(fo_t, 1.0) * LG_FOS_PER_GAME if fo_t > 0 else fo_pct * LG_FOS_PER_GAME
-                proj_fo = max(fo_pg * usage, 0.0)
+                fo_pct = min(max(fo_pct, 0.25), 0.75)
+                # Direct projection: override_rate * league_faceoffs_per_game * usage.
+                # This is the most intuitive interpretation — 70% FO rate = 70% of
+                # ~26 faceoffs = ~18.2 wins. The _reconcile FO rescale is bypassed
+                # for this player so the override is fully preserved.
+                proj_fo = max(fo_pct * LG_FOS_PER_GAME * usage, 0.0)
             else:
-                proj_fo = max(fo_ewm_val * usage, 0.0)
+                # No user override — derive fo_pct from actual faceoff counts when
+                # available (handles single-game players where the shift-before-EWM
+                # produces NaN for bayes_fo_pct).
+                fo_w = _nan(float(f.get("faceoffs_won", 0)), 0.0)
+                fo_t = _nan(float(f.get("fo_denom_p", f.get("faceoffs", 0))), 0.0)
+                if fo_t >= 5:
+                    fo_pct = _bayesian_rate(fo_w, fo_t, 2, 2)
+                else:
+                    fo_pct = _nan(float(f.get("bayes_fo_pct", LG_FO_PCT)), LG_FO_PCT)
+                fo_pct = min(max(fo_pct, 0.25), 0.75)
+
+                raw_fo_ewm = f.get("fo_wins_ewm")
+                try:
+                    fo_ewm_val = float(raw_fo_ewm)
+                except (TypeError, ValueError):
+                    fo_ewm_val = float("nan")
+                import math
+                if math.isnan(fo_ewm_val) or fo_ewm_val <= 0:
+                    fo_pg = fo_w / max(fo_t, 1.0) * LG_FOS_PER_GAME if fo_t > 0 else fo_pct * LG_FOS_PER_GAME
+                    proj_fo = max(fo_pg * usage, 0.0)
+                else:
+                    proj_fo = max(fo_ewm_val * usage, 0.0)
             proj_fo_pct = fo_pct
         else:
             proj_fo = 0.0
@@ -2053,6 +2063,7 @@ class PlayerModel:
 
         confidence = min(0.40 + 0.025 * gp, 0.85)
 
+        fo_pct_was_overridden = pos == "FO" and "bayes_fo_pct" in _user_overrides
         raw = PlayerProjection(
             player_id=pid, full_name=name, team_id=tid, position=pos,
             proj_goals=max(proj_goals, 0.0),
@@ -2073,7 +2084,11 @@ class PlayerModel:
             zero_prob_assists=z_assists,
             confidence=confidence,
         )
-        return self._apply_caps(raw)
+        capped = self._apply_caps(raw)
+        # Tag the projection so _reconcile knows not to overwrite this player's
+        # fo_wins with the team total rescale — the user explicitly set their rate.
+        capped._fo_pct_overridden = fo_pct_was_overridden
+        return capped
 
     def _apply_caps(self, p: PlayerProjection) -> PlayerProjection:
         caps = POS_CAPS.get(p.position, {})
@@ -2128,10 +2143,25 @@ class PlayerModel:
         _rescale("sog", tp.proj_sog)
 
         fo_players = [p for p in active if p.position == "FO"]
-        fo_sum = sum(p.proj_faceoff_wins for p in fo_players)
-        if fo_players and fo_sum > 0 and tp.proj_faceoff_wins > 0:
+        # If any FO player has an explicit bayes_fo_pct override, their individual
+        # proj_faceoff_wins already reflects the user's intent — do not rescale them
+        # back to the team total (which would erase the override). Only rescale
+        # players whose fo_wins came from the model, not from a user override.
+        fo_overridden = {p.player_id for p in fo_players
+                         if getattr(p, "_fo_pct_overridden", False)}
+        fo_free = [p for p in fo_players if p.player_id not in fo_overridden]
+        fo_sum = sum(p.proj_faceoff_wins for p in fo_free)
+        overridden_sum = sum(p.proj_faceoff_wins for p in fo_players
+                             if p.player_id in fo_overridden)
+        remaining_total = max(tp.proj_faceoff_wins - overridden_sum, 0.0)
+        if fo_free and fo_sum > 0 and remaining_total > 0:
+            scale = remaining_total / fo_sum
+            for p in fo_free:
+                p.proj_faceoff_wins = max(p.proj_faceoff_wins * scale, 0.0)
+        elif fo_free and fo_sum > 0 and not fo_overridden:
+            # No overrides anywhere — standard rescale to team total
             scale = tp.proj_faceoff_wins / fo_sum
-            for p in fo_players:
+            for p in fo_free:
                 p.proj_faceoff_wins = max(p.proj_faceoff_wins * scale, 0.0)
 
         for p in active:
