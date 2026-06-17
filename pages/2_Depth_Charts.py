@@ -500,7 +500,14 @@ def _render_team(team_id: str, team_nm: str, players):
                     def _on_change(t=team_id, p_=pid, k=key, wk=wgt_key, mn=meta["min"], mx=meta["max"], mv=model_val, stp=meta["step"]):
                         raw = st.session_state.get(wk, mv)
                         val = float(min(max(float(raw), mn), mx))
-                        if abs(val - mv) > stp * 0.5:
+                        # Clear override only when the value is within one full step
+                        # of the model value — small enough that it's essentially
+                        # "reset to model". Use full step (not 0.5×) to avoid
+                        # accidentally clearing legitimate small adjustments,
+                        # especially for share keys where a 0.01 change is meaningful.
+                        # Save if value differs from model by more than half a step.
+                        # Clear only if essentially equal (within 1% of step size).
+                        if abs(val - mv) > stp * 0.01:
                             set_player_rating(t, p_, k, val)
                         else:
                             dc_ = get_depth_chart(t)
@@ -519,7 +526,7 @@ def _render_team(team_id: str, team_nm: str, players):
                         )
                     with rc2:
                         current_val = float(st.session_state.get(wgt_key, model_val))
-                        changed = abs(current_val - model_val) > meta["step"] * 0.5
+                        changed = abs(current_val - model_val) > meta["step"] * 0.01
                         color   = "#fbbf24" if changed else "#64748b"
                         label   = ("→ " + meta["fmt"].format(current_val)) if changed else ("model: " + meta["fmt"].format(model_val))
                         st.markdown(
