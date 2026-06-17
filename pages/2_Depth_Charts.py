@@ -131,7 +131,30 @@ ALL_POSITIONS = ["A", "M", "FO", "SSDM", "LSM", "D", "G"]
 
 
 def _model_val_for(pid: str, key: str, p) -> float:
-    """Get the model's raw DB value for a rating key (pre-override baseline)."""
+    """
+    Return the baseline value to display in the rating override input.
+
+    Share keys (share_goals_ewm, share_assists_ewm) are derived from the
+    current projection result — p.proj_goals / team_proj.proj_goals — NOT
+    from the raw DB value. The DB value (e.g. 0.055) never changes after
+    scratches, but the effective projection share changes (e.g. 0.055 -> 0.092
+    after 5 players are deactivated and _reconcile redistributes their goals).
+    Using the DB value here causes the Edit panel to show a stale number and
+    makes overrides move in the wrong direction.
+
+    All other keys read from the DB so they remain stable across reruns.
+    """
+    from projection_engine_v3 import LG_SHOT_PCT, LG_2PT_RATE, LG_SAVE_PCT, LG_FO_PCT
+
+    # Share keys: always derive from current projection, never from DB
+    if key in ("share_goals_ewm", "share_assists_ewm"):
+        team_proj = result.home_proj if p.team_id == home_id else result.away_proj
+        if key == "share_goals_ewm":
+            return round(p.proj_goals / max(team_proj.proj_goals, 1.0), 4)
+        if key == "share_assists_ewm":
+            return round(p.proj_assists / max(team_proj.proj_assists, 1.0), 4)
+
+    # Rate/pct keys: read from DB (stable, not affected by roster changes)
     pm = engine.player_model
     if pm is not None and not pm.pr.empty:
         rows = pm.pr[pm.pr["player_id"] == pid]
@@ -139,31 +162,15 @@ def _model_val_for(pid: str, key: str, p) -> float:
             v = float(rows[key].iloc[-1])
             if v != 0.0:
                 return v
-    # Fallback to stable league-average constants — do NOT derive from the
-    # projection result, since post-override projections give a shifted ratio
-    # that makes model_val drift between reruns and corrupts the change-detection
-    # threshold in _on_change.
-    from projection_engine_v3 import LG_SHOT_PCT, LG_2PT_RATE, LG_SAVE_PCT, LG_FO_PCT
+
+    # Hard fallbacks
     fallback_map = {
         "shot_pct_ewm":      LG_SHOT_PCT,
         "bayes_save_pct":    LG_SAVE_PCT,
         "bayes_fo_pct":      LG_FO_PCT,
         "two_pt_rate_ewm":   LG_2PT_RATE,
     }
-    if key in fallback_map:
-        return fallback_map[key]
-    # For share keys, use the player's actual projected share (proj/team_total).
-    # This is the effective blended share the engine is already using, so when
-    # the user edits from this value the override moves in the correct direction.
-    # Raw share_goals_ewm is NOT used here because for low-gp players it is much
-    # lower than the blended share (prior dominates), causing overrides to drop
-    # projections when the user thinks they are raising them.
-    team_proj = result.home_proj if p.team_id == home_id else result.away_proj
-    share_map = {
-        "share_goals_ewm":   p.proj_goals   / max(team_proj.proj_goals,   1.0),
-        "share_assists_ewm": p.proj_assists / max(team_proj.proj_assists, 1.0),
-    }
-    return share_map.get(key, 0.0)
+    return fallback_map.get(key, 0.0)
 
 
 def _effective_pos(p, dc: dict) -> str:
