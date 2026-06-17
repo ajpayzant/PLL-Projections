@@ -2030,17 +2030,18 @@ class PlayerModel:
                 # for this player so the override is fully preserved.
                 proj_fo = max(fo_pct * LG_FOS_PER_GAME * usage, 0.0)
             else:
-                # No user override — derive fo_pct from actual faceoff counts when
-                # available (handles single-game players where the shift-before-EWM
-                # produces NaN for bayes_fo_pct).
-                fo_w = _nan(float(f.get("faceoffs_won", 0)), 0.0)
-                fo_t = _nan(float(f.get("fo_denom_p", f.get("faceoffs", 0))), 0.0)
-                if fo_t >= 5:
-                    fo_pct = _bayesian_rate(fo_w, fo_t, 2, 2)
-                else:
-                    fo_pct = _nan(float(f.get("bayes_fo_pct", LG_FO_PCT)), LG_FO_PCT)
+                # Use the career Bayesian FO rate built leakage-safe by _player_chunk.
+                # bayes_fo_pct uses shift(1).cumsum() so it reflects all games up to
+                # but NOT including the last row — correct and stable.
+                # Never recompute from raw single-game faceoffs_won/fo_denom_p on the
+                # last row, which would make Baptiste look average after one bad game
+                # and Laliberte look elite after one good game.
+                fo_pct = _nan(float(f.get("bayes_fo_pct", LG_FO_PCT)), LG_FO_PCT)
                 fo_pct = min(max(fo_pct, 0.25), 0.75)
 
+                # fo_wins_ewm is the leakage-safe EWM of per-game faceoff wins,
+                # built in _player_chunk. Falls back gracefully for single-game
+                # players via the prior fill in _player_chunk.
                 raw_fo_ewm = f.get("fo_wins_ewm")
                 try:
                     fo_ewm_val = float(raw_fo_ewm)
@@ -2048,8 +2049,8 @@ class PlayerModel:
                     fo_ewm_val = float("nan")
                 import math
                 if math.isnan(fo_ewm_val) or fo_ewm_val <= 0:
-                    fo_pg = fo_w / max(fo_t, 1.0) * LG_FOS_PER_GAME if fo_t > 0 else fo_pct * LG_FOS_PER_GAME
-                    proj_fo = max(fo_pg * usage, 0.0)
+                    # Genuine fallback: no EWM available, use fo_pct * league total
+                    proj_fo = max(fo_pct * LG_FOS_PER_GAME * usage, 0.0)
                 else:
                     proj_fo = max(fo_ewm_val * usage, 0.0)
             proj_fo_pct = fo_pct
