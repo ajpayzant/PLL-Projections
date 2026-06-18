@@ -410,10 +410,15 @@ def _render_team(team_id: str, team_nm: str, players):
 
         # Usage multiplier
         with c5:
+            wk = f"use_{team_id}_{pid}"
+            # Seed widget from saved override value only when not yet in session state
+            # (e.g. first render, or after active toggle reset it). Once the key exists,
+            # let Streamlit own it so incremental +/- clicks accumulate correctly.
+            if wk not in st.session_state:
+                st.session_state[wk] = usage_val
             new_usage = st.number_input(
                 "", min_value=0.0, max_value=2.5, step=0.05,
-                value=usage_val,
-                key=f"use_{team_id}_{pid}",
+                key=wk,
                 label_visibility="collapsed",
                 disabled=not is_active,
                 help="1.0=normal · 1.3=elevated · 0.7=limited · 0.0=inactive",
