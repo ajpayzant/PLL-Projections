@@ -257,6 +257,15 @@ if view_mode == "Table (all players)":
             "tid": proj.team_id,
         })
 
+    # Map stat key -> PlayerProjection attribute for deterministic proj values
+    _DET_ATTR = {
+        "goals": "proj_goals", "assists": "proj_assists", "points": "proj_points",
+        "shots": "proj_shots", "shots_on_goal": "proj_sog",
+        "two_pt_goals": "proj_2pt_goals", "one_pt_goals": "proj_1pt_goals",
+        "saves": "proj_saves", "faceoff_wins": "proj_faceoff_wins",
+        "ground_balls": "proj_ground_balls",
+    }
+
     def _stat_table(stat: str, label: str, pd_list: list, sort_col: str = "Proj") -> pd.DataFrame:
         """Build one clean stat table: Player | Team | Pos | Proj | P10 | P90 | Line | Over | Under | P(Over)"""
         rows = []
@@ -264,10 +273,14 @@ if view_mode == "Table (all players)":
             ps  = d["ps"]
             pv  = d["pv"]
             ms  = d["ms"]
+            proj = d["proj"]
             if stat not in ps.stat_distributions:
                 continue
             dist = ps.stat_distributions[stat]
-            proj_val = float(pv.get(stat, 0))
+            # Use deterministic PlayerProjection value so Proj column matches
+            # the left panel exactly. Fall back to sim mean only if missing.
+            attr = _DET_ATTR.get(stat)
+            proj_val = float(getattr(proj, attr, None) or pv.get(stat, 0))
             if proj_val < 0.02:
                 continue
             m = ms.get(stat, {})
@@ -482,6 +495,21 @@ for ps in sims_filtered:
                 st.plotly_chart(fig, width="stretch")
 
         # -- Model line table ----------------------------------------------
+        # Proj column uses the deterministic PlayerProjection values (same as
+        # the left panel) so the numbers are identical. Pricing still uses the
+        # full sim distributions — only the display label is standardised.
+        det_proj_map = {
+            "goals":         proj.proj_goals,
+            "assists":       proj.proj_assists,
+            "points":        proj.proj_points,
+            "shots":         proj.proj_shots,
+            "shots_on_goal": proj.proj_sog,
+            "two_pt_goals":  proj.proj_2pt_goals,
+            "one_pt_goals":  proj.proj_1pt_goals,
+            "saves":         proj.proj_saves,
+            "faceoff_wins":  proj.proj_faceoff_wins,
+            "ground_balls":  proj.proj_ground_balls,
+        }
         stat_list = GOALIE_STATS if pos == "G" else (FO_STATS if pos == "FO" else FIELD_STATS)
         rows = []
         for stat in stat_list:
@@ -495,7 +523,7 @@ for ps in sims_filtered:
             pct = float(np.percentile(dist, 75)) - float(np.percentile(dist, 25))
             rows.append({
                 "Stat":     STAT_LABELS.get(stat, stat),
-                "Proj":     f"{pv.get(stat,0):.3f}",
+                "Proj":     f"{det_proj_map.get(stat, pv.get(stat, 0)):.3f}",
                 "Line":     f"{ml.line:.1f}",
                 "P(Over)":  f"{ml.fair_over_prob:.3f}",
                 "Over":     ml.over_odds,
