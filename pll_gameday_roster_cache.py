@@ -57,6 +57,8 @@ LAST_WEEK    = 14
 PUBLIC_TO_ENGINE: Dict[str, str] = {
     "BOS": "CAN", "CAL": "RED", "CAR": "CHA", "DEN": "OUT",
     "MD":  "WHP", "NY":  "ATL", "PHI": "WAT", "UTA": "ARC",
+    # locationCode variants seen in API responses
+    "NYA": "ATL", "MDW": "WHP",
     # Engine IDs may also appear directly
     "CAN": "CAN", "RED": "RED", "CHA": "CHA", "OUT": "OUT",
     "WHP": "WHP", "ATL": "ATL", "WAT": "WAT", "ARC": "ARC",
@@ -249,8 +251,9 @@ def _parse_player(player: Dict, game_meta: Dict, year: int, week: int,
         is_active = bool(is_active_raw)
     else:
         # Infer from status string: "Active" / "Inactive" / "Injured" / "Suspended"
+        # "starter" means designated starting goalie — treat as active
         sl = status_raw.lower()
-        is_active = sl in ("", "active", "1", "true", "yes") and "inactive" not in sl and "injur" not in sl
+        is_active = sl in ("", "active", "starter", "1", "true", "yes") and "inactive" not in sl and "injur" not in sl
 
     status = status_raw if status_raw else ("Active" if is_active else "Inactive")
 
@@ -370,9 +373,9 @@ def _parse_gamedayRoster_player(player: Dict, team_obj: Dict, game_meta: Dict,
 
     jersey = _clean(player.get("jerseyNum") or player.get("jerseyNumber") or player.get("number", ""))
 
-    # Roster status
+    # Roster status — "starter" means the designated starting goalie; treat as active
     status_raw = _clean(player.get("rosterStatus", ""))
-    is_active  = status_raw.lower() in ("", "active", "1", "true", "yes")
+    is_active  = status_raw.lower() in ("", "active", "starter", "1", "true", "yes")
     status     = status_raw if status_raw else ("Active" if is_active else "Inactive")
 
     return {

@@ -201,6 +201,9 @@ PUBLIC_TEAM_TO_ENGINE_TEAM: Dict[str, str] = {
     "NY":  "ATL",   # New York Atlas
     "PHI": "WAT",   # Philadelphia Waterdogs
     "UTA": "ARC",   # Utah Archers
+    # locationCode variants seen in gameday API responses
+    "NYA": "ATL",   # New York Atlas alternate code
+    "MDW": "WHP",   # Maryland Whipsnakes alternate code
 }
 
 ENGINE_TEAM_IDS = {"CAN", "RED", "CHA", "OUT", "WHP", "ATL", "WAT", "ARC"}
@@ -751,7 +754,10 @@ class GamedayRosterFilter:
                 ("true", "1", "yes", "active")
             )].copy()
 
-        # Build one CurrentRosterFilter per team using the gameday data
+        # Build one CurrentRosterFilter per team using the gameday data.
+        # CurrentRosterFilter.available normally requires >= 100 players across all 8 teams,
+        # which a single-game gameday slice never satisfies. Force available=True after
+        # construction because the data is already filtered and validated above.
         for tid in [self.home_team_id, self.away_team_id]:
             team_rows = game_df[
                 game_df.get("Team_ID", game_df.get("team_id", pd.Series(dtype=str)))
@@ -760,7 +766,8 @@ class GamedayRosterFilter:
 
             if not team_rows.empty:
                 flt = CurrentRosterFilter(team_rows)
-                if flt.available:
+                if flt._name_keys_by_team:
+                    flt.available = True
                     self._filter_by_team[tid] = flt
 
         if not self._filter_by_team:
