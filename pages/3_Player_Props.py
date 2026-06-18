@@ -289,7 +289,7 @@ if view_mode == "Table (all players)":
                 "Player":   d["nm"],
                 "Team":     team_name(d["tid"]),
                 "Pos":      d["pos"],
-                "Proj":     round(proj_val, 2),
+                "Proj":     round(proj_val, 1),
                 "P10":      round(float(np.percentile(dist, 10)), 1),
                 "Median":   round(float(np.percentile(dist, 50)), 1),
                 "P90":      round(float(np.percentile(dist, 90)), 1),
@@ -523,7 +523,7 @@ for ps in sims_filtered:
             pct = float(np.percentile(dist, 75)) - float(np.percentile(dist, 25))
             rows.append({
                 "Stat":     STAT_LABELS.get(stat, stat),
-                "Proj":     f"{det_proj_map.get(stat, pv.get(stat, 0)):.3f}",
+                "Proj":     f"{det_proj_map.get(stat, pv.get(stat, 0)):.1f}",
                 "Line":     f"{ml.line:.1f}",
                 "P(Over)":  f"{ml.fair_over_prob:.3f}",
                 "Over":     ml.over_odds,
