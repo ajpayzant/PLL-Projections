@@ -673,6 +673,16 @@ TEAM_RATING_DEFS = {
         "help": "Shots per game. League avg ~41.",
         "min": 25.0, "max": 60.0, "step": 0.5, "fmt": "{:.1f}",
     },
+    "assists_ewm": {
+        "label": "Assists/game",
+        "help": (
+            "Team's recent avg assists per game. League avg ~7.3. "
+            "Some teams assist on most goals (high assist culture); others shoot more unassisted. "
+            "Raise to boost all player assist projections proportionally; lower to reduce them. "
+            "Affects proj_assists for every active player via team-level scaling."
+        ),
+        "min": 2.0, "max": 14.0, "step": 0.1, "fmt": "{:.1f}",
+    },
     # bayes_fo_pct removed from team-level adjustments.
     # FO win rate is now driven entirely by active FO players' individual ratings
     # via _apply_fo_correction() in ProjectionEngine.project(). Adjusting the
