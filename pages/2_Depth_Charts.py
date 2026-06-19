@@ -132,29 +132,12 @@ ALL_POSITIONS = ["A", "M", "FO", "SSDM", "LSM", "D", "G"]
 
 def _model_val_for(pid: str, key: str, p) -> float:
     """
-    Return the baseline value to display in the rating override input.
-
-    Share keys (share_goals_ewm, share_assists_ewm) are derived from the
-    current projection result — p.proj_goals / team_proj.proj_goals — NOT
-    from the raw DB value. The DB value (e.g. 0.055) never changes after
-    scratches, but the effective projection share changes (e.g. 0.055 -> 0.092
-    after 5 players are deactivated and _reconcile redistributes their goals).
-    Using the DB value here causes the Edit panel to show a stale number and
-    makes overrides move in the wrong direction.
-
-    All other keys read from the DB so they remain stable across reruns.
+    Return the true DB model baseline for a rating override input.
+    Always reads from pm.pr so the value is unaffected by usage multipliers,
+    scratches, or any session overrides. This is what Reset ratings restores to.
     """
     from projection_engine_v3 import LG_SHOT_PCT, LG_2PT_RATE, LG_SAVE_PCT, LG_FO_PCT
 
-    # Share keys: always derive from current projection, never from DB
-    if key in ("share_goals_ewm", "share_assists_ewm"):
-        team_proj = result.home_proj if p.team_id == home_id else result.away_proj
-        if key == "share_goals_ewm":
-            return round(p.proj_goals / max(team_proj.proj_goals, 1.0), 4)
-        if key == "share_assists_ewm":
-            return round(p.proj_assists / max(team_proj.proj_assists, 1.0), 4)
-
-    # Rate/pct keys: read from DB (stable, not affected by roster changes)
     pm = engine.player_model
     if pm is not None and not pm.pr.empty:
         rows = pm.pr[pm.pr["player_id"] == pid]
@@ -163,12 +146,13 @@ def _model_val_for(pid: str, key: str, p) -> float:
             if v != 0.0:
                 return v
 
-    # Hard fallbacks
     fallback_map = {
         "shot_pct_ewm":      LG_SHOT_PCT,
         "bayes_save_pct":    LG_SAVE_PCT,
         "bayes_fo_pct":      LG_FO_PCT,
         "two_pt_rate_ewm":   LG_2PT_RATE,
+        "share_goals_ewm":   0.05,
+        "share_assists_ewm": 0.05,
     }
     return fallback_map.get(key, 0.0)
 
@@ -509,14 +493,12 @@ def _render_team(team_id: str, team_nm: str, players):
                                 min(max(float(seed_val), meta["min"]), meta["max"])
                             )
                     else:
-                        # No active override — seed widget from model value only on
-                        # first render. Do NOT overwrite on every render: that causes
-                        # the widget to adopt a usage-adjusted projection value as its
-                        # "model" baseline, so Reset ratings restores to the wrong number.
-                        if wgt_key not in st.session_state:
-                            st.session_state[wgt_key] = float(
-                                min(max(float(model_val), meta["min"]), meta["max"])
-                            )
+                        # No active override — always sync widget to current model value.
+                        # model_val always reads from DB so this is safe: it never
+                        # reflects usage overrides or scratch redistributions.
+                        st.session_state[wgt_key] = float(
+                            min(max(float(model_val), meta["min"]), meta["max"])
+                        )
 
                     def _on_change(t=team_id, p_=pid, k=key, wk=wgt_key, mn=meta["min"], mx=meta["max"], mv=model_val, stp=meta["step"]):
                         raw = st.session_state.get(wk, mv)
