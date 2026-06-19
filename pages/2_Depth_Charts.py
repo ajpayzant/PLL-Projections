@@ -509,11 +509,14 @@ def _render_team(team_id: str, team_nm: str, players):
                                 min(max(float(seed_val), meta["min"]), meta["max"])
                             )
                     else:
-                        # No active override — always sync widget to current model value
-                        # so it reflects the latest projection (post-scratch redistribution)
-                        st.session_state[wgt_key] = float(
-                            min(max(float(model_val), meta["min"]), meta["max"])
-                        )
+                        # No active override — seed widget from model value only on
+                        # first render. Do NOT overwrite on every render: that causes
+                        # the widget to adopt a usage-adjusted projection value as its
+                        # "model" baseline, so Reset ratings restores to the wrong number.
+                        if wgt_key not in st.session_state:
+                            st.session_state[wgt_key] = float(
+                                min(max(float(model_val), meta["min"]), meta["max"])
+                            )
 
                     def _on_change(t=team_id, p_=pid, k=key, wk=wgt_key, mn=meta["min"], mx=meta["max"], mv=model_val, stp=meta["step"]):
                         raw = st.session_state.get(wk, mv)
