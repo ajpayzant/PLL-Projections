@@ -132,12 +132,34 @@ ALL_POSITIONS = ["A", "M", "FO", "SSDM", "LSM", "D", "G"]
 
 def _model_val_for(pid: str, key: str, p) -> float:
     """
-    Return the true DB model baseline for a rating override input.
-    Always reads from pm.pr so the value is unaffected by usage multipliers,
-    scratches, or any session overrides. This is what Reset ratings restores to.
+    Return the model baseline value for a rating override input.
+
+    Share keys (share_goals_ewm, share_assists_ewm) use the effective
+    post-reconcile share derived from the current projection result, NOT the
+    raw DB value. The DB value (e.g. 0.12) is the input to the credibility
+    blend, but _reconcile then rescales all players to fill the team total,
+    producing an effective share (e.g. 0.16). If we showed 0.12 as the model,
+    setting the override to 0.12 would bypass reconcile and give a lower
+    projection (1.52G) than the base model (2.06G) — inconsistent.
+
+    Using the effective share ensures: model value shown = value that, when
+    set as an explicit override, reproduces the base projection.
+
+    All other keys read from DB (stable, unaffected by roster changes).
     """
     from projection_engine_v3 import LG_SHOT_PCT, LG_2PT_RATE, LG_SAVE_PCT, LG_FO_PCT
 
+    # Share keys: derive from current projection so displayed value matches projection.
+    # Using the effective post-reconcile share (proj_goals / team_goals) ensures that
+    # setting the override to the shown model value reproduces the base projection exactly.
+    if key in ("share_goals_ewm", "share_assists_ewm"):
+        team_proj = result.home_proj if p.team_id == home_id else result.away_proj
+        if key == "share_goals_ewm":
+            return round(p.proj_goals / max(team_proj.proj_goals, 1.0), 4)
+        if key == "share_assists_ewm":
+            return round(p.proj_assists / max(team_proj.proj_assists, 1.0), 4)
+
+    # All other keys: read from DB (unaffected by overrides or reconcile)
     pm = engine.player_model
     if pm is not None and not pm.pr.empty:
         rows = pm.pr[pm.pr["player_id"] == pid]
@@ -151,8 +173,6 @@ def _model_val_for(pid: str, key: str, p) -> float:
         "bayes_save_pct":    LG_SAVE_PCT,
         "bayes_fo_pct":      LG_FO_PCT,
         "two_pt_rate_ewm":   LG_2PT_RATE,
-        "share_goals_ewm":   0.05,
-        "share_assists_ewm": 0.05,
     }
     return fallback_map.get(key, 0.0)
 
@@ -493,12 +513,19 @@ def _render_team(team_id: str, team_nm: str, players):
                                 min(max(float(seed_val), meta["min"]), meta["max"])
                             )
                     else:
-                        # No active override — always sync widget to current model value.
-                        # model_val always reads from DB so this is safe: it never
-                        # reflects usage overrides or scratch redistributions.
-                        st.session_state[wgt_key] = float(
-                            min(max(float(model_val), meta["min"]), meta["max"])
-                        )
+                        # No active override — sync widget to model value.
+                        # Share keys reseed every render because model_val reflects
+                        # the current post-reconcile projection (changes after scratches
+                        # or Update Projection). Non-share keys come from DB and are
+                        # stable, so only seed once to avoid fighting widget state.
+                        if key in ("share_goals_ewm", "share_assists_ewm"):
+                            st.session_state[wgt_key] = float(
+                                min(max(float(model_val), meta["min"]), meta["max"])
+                            )
+                        elif wgt_key not in st.session_state:
+                            st.session_state[wgt_key] = float(
+                                min(max(float(model_val), meta["min"]), meta["max"])
+                            )
 
                     def _on_change(t=team_id, p_=pid, k=key, wk=wgt_key, mn=meta["min"], mx=meta["max"], mv=model_val, stp=meta["step"]):
                         raw = st.session_state.get(wk, mv)
@@ -574,6 +601,14 @@ def _render_team(team_id: str, team_nm: str, players):
                             wk2 = f"pr_num_{team_id}_{pid}_{k2}"
                             if wk2 in st.session_state:
                                 del st.session_state[wk2]
+                        # Re-run projection so last_result reflects cleared overrides
+                        # before share widgets reseed from p.proj_goals/team_goals.
+                        # Without this, share model_val derives from the stale result
+                        # that still has the just-cleared rating overrides applied.
+                        game = st.session_state.get("selected_game")
+                        if game:
+                            from _engine_state import run_projection_for_game
+                            run_projection_for_game(engine, game)
                         st.session_state[f"show_ratings_{team_id}_{pid}"] = False
                         st.rerun()
                 with col_close:
