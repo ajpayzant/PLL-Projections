@@ -938,7 +938,9 @@ class PlayerProjection:
     usage_multiplier: float = 1.0
     is_starter: bool = False
     _fo_pct_overridden: bool = False
-    _share_overridden: bool = False  # goals/assists/shots share was directly set by user
+    _goals_overridden: bool = False    # user explicitly set share_goals_ewm or shot_pct_ewm
+    _assists_overridden: bool = False  # user explicitly set share_assists_ewm
+    _shots_overridden: bool = False    # user explicitly set share_shots_ewm
 
 
 @dataclass
@@ -2153,9 +2155,12 @@ class PlayerModel:
 
         confidence = min(0.40 + 0.025 * gp, 0.85)
 
-        fo_pct_was_overridden = pos == "FO" and "bayes_fo_pct" in _user_overrides
-        share_was_overridden = any(k in _user_overrides for k in
-                                   ("share_goals_ewm", "share_assists_ewm", "share_shots_ewm"))
+        fo_pct_was_overridden  = pos == "FO" and "bayes_fo_pct" in _user_overrides
+        # Per-stat override flags — only pin the stat the user actually touched.
+        # shot_pct_ewm also pins goals because it directly scales proj_goals.
+        goals_was_overridden   = any(k in _user_overrides for k in ("share_goals_ewm", "shot_pct_ewm"))
+        assists_was_overridden = "share_assists_ewm" in _user_overrides
+        shots_was_overridden   = "share_shots_ewm"   in _user_overrides
         raw = PlayerProjection(
             player_id=pid, full_name=name, team_id=tid, position=pos,
             proj_goals=max(proj_goals, 0.0),
@@ -2177,11 +2182,10 @@ class PlayerModel:
             confidence=confidence,
         )
         capped = self._apply_caps(raw)
-        capped._fo_pct_overridden = fo_pct_was_overridden
-        # Tag share-overridden players so _reconcile skips proportional rescaling
-        # for goals/assists/shots. The user set an explicit share fraction that
-        # should be preserved as-is — rescaling would change it unpredictably.
-        capped._share_overridden = share_was_overridden
+        capped._fo_pct_overridden  = fo_pct_was_overridden
+        capped._goals_overridden   = goals_was_overridden
+        capped._assists_overridden = assists_was_overridden
+        capped._shots_overridden   = shots_was_overridden
         return capped
 
     def _apply_caps(self, p: PlayerProjection) -> PlayerProjection:
@@ -2214,13 +2218,19 @@ class PlayerModel:
         def _rescale(stat: str, team_total: float):
             """
             Proportionally rescale active player projections to match team total.
-            Players with explicit share overrides (_share_overridden=True) are kept
-            fixed; only non-overridden players are rescaled to fill the remainder.
+            Only players whose specific stat was explicitly overridden are held fixed;
+            players whose other stats were overridden are still free for this stat.
+            This means overriding a player's goal share does not accidentally pin
+            their assists or shots during reconcile.
             """
             if team_total <= 0:
                 return
-            overridden = [p for p in active if getattr(p, "_share_overridden", False)]
-            free       = [p for p in active if not getattr(p, "_share_overridden", False)]
+            flag = f"_{stat}_overridden"
+            # sog is pinned when shots are pinned (sog = shots × sog_rate)
+            if stat == "sog":
+                flag = "_shots_overridden"
+            overridden = [p for p in active if getattr(p, flag, False)]
+            free       = [p for p in active if not getattr(p, flag, False)]
             fixed_sum  = sum(getattr(p, f"proj_{stat}", 0.0) for p in overridden)
             free_sum   = sum(getattr(p, f"proj_{stat}", 0.0) for p in free)
             remaining  = max(team_total - fixed_sum, 0.0)
