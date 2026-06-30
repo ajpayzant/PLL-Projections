@@ -722,21 +722,38 @@ game_date_str = str(game.get("game_date", ""))[:10].replace("-", "")
 fname = (f"PLL_{team_name(away_id)}_{team_name(home_id)}_"
          f"Game{game.get('game_number','?')}_{game_date_str}.xlsx")
 
-if st.button("📥 Download Projection Package (Excel)", type="secondary",
-             width="content"):
-    with st.spinner("Building Excel export..."):
-        try:
-            xlsx_bytes = _build_export(result, game, hold_pct, engine)
-            st.download_button(
-                label="⬇ Click to download",
-                data=xlsx_bytes,
-                file_name=fname,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="dl_xlsx",
-            )
-            st.success(f"Ready: {fname}")
-        except Exception as e:
-            st.error(f"Export failed: {e}")
+_SNAPSHOTS_DIR = _ROOT / "data" / "saved_projections"
+
+btn_dl, btn_save = st.columns([1, 1], gap="small")
+
+with btn_dl:
+    if st.button("📥 Download Projection Package (Excel)", type="secondary",
+                 width="stretch"):
+        with st.spinner("Building Excel export..."):
+            try:
+                xlsx_bytes = _build_export(result, game, hold_pct, engine)
+                st.download_button(
+                    label="⬇ Click to download",
+                    data=xlsx_bytes,
+                    file_name=fname,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="dl_xlsx",
+                )
+                st.success(f"Ready: {fname}")
+            except Exception as e:
+                st.error(f"Export failed: {e}")
+
+with btn_save:
+    if st.button("💾 Save Projection Snapshot", type="primary", width="stretch"):
+        with st.spinner("Saving snapshot..."):
+            try:
+                xlsx_bytes = _build_export(result, game, hold_pct, engine)
+                _SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+                save_path = _SNAPSHOTS_DIR / fname
+                save_path.write_bytes(xlsx_bytes)
+                st.success(f"Saved → data/saved_projections/{fname}")
+            except Exception as e:
+                st.error(f"Save failed: {e}")
 
 st.markdown(
     '<span class="note-text">Export includes: Game Lines · Player Props · '

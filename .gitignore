@@ -22,6 +22,9 @@ data/standardized_data/
 # Projection output files
 projection_*.json
 
+# Saved projection snapshots (local tracking, never commit)
+data/saved_projections/
+
 # Auto-saved session state (local persistence, never commit)
 data/session_autosave.json
 
