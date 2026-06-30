@@ -147,17 +147,21 @@ def _model_val_for(pid: str, key: str, p) -> float:
 
     All other keys read from DB (stable, unaffected by roster changes).
     """
-    from projection_engine_v3 import LG_SHOT_PCT, LG_2PT_RATE, LG_SAVE_PCT, LG_FO_PCT
+    from projection_engine_v3 import (
+        LG_SHOT_PCT, LG_2PT_RATE, LG_SAVE_PCT, LG_FO_PCT, LG_SOG_RATE,
+        LG_SHOTS_PER_TOUCH, LG_ASSIST_CONV,
+    )
 
-    # Share keys: derive from current projection so displayed value matches projection.
-    # Using the effective post-reconcile share (proj_goals / team_goals) ensures that
-    # setting the override to the shown model value reproduces the base projection exactly.
-    if key in ("share_goals_ewm", "share_assists_ewm"):
+    # Share keys: derive from current post-reconcile projection so that setting
+    # the override to the displayed value exactly reproduces the base projection.
+    if key in ("share_goals_ewm", "share_assists_ewm", "share_shots_ewm"):
         team_proj = result.home_proj if p.team_id == home_id else result.away_proj
         if key == "share_goals_ewm":
-            return round(p.proj_goals / max(team_proj.proj_goals, 1.0), 4)
+            return round(p.proj_goals   / max(team_proj.proj_goals,   1.0), 4)
         if key == "share_assists_ewm":
             return round(p.proj_assists / max(team_proj.proj_assists, 1.0), 4)
+        if key == "share_shots_ewm":
+            return round(p.proj_shots   / max(team_proj.proj_shots,   1.0), 4)
 
     # All other keys: read from DB (unaffected by overrides or reconcile)
     pm = engine.player_model
@@ -168,11 +172,15 @@ def _model_val_for(pid: str, key: str, p) -> float:
             if v != 0.0:
                 return v
 
+    pos = _effective_pos(p, get_depth_chart(p.team_id))
     fallback_map = {
-        "shot_pct_ewm":      LG_SHOT_PCT,
-        "bayes_save_pct":    LG_SAVE_PCT,
-        "bayes_fo_pct":      LG_FO_PCT,
-        "two_pt_rate_ewm":   LG_2PT_RATE,
+        "shot_pct_ewm":          LG_SHOT_PCT,
+        "sog_rate_ewm":          LG_SOG_RATE,
+        "shots_per_touch_ewm":   LG_SHOTS_PER_TOUCH.get(pos, 0.20),
+        "assist_conv_ewm":       LG_ASSIST_CONV.get(pos, 0.28),
+        "bayes_save_pct":        LG_SAVE_PCT,
+        "bayes_fo_pct":          LG_FO_PCT,
+        "two_pt_rate_ewm":       LG_2PT_RATE,
     }
     return fallback_map.get(key, 0.0)
 
@@ -518,7 +526,7 @@ def _render_team(team_id: str, team_nm: str, players):
                         # the current post-reconcile projection (changes after scratches
                         # or Update Projection). Non-share keys come from DB and are
                         # stable, so only seed once to avoid fighting widget state.
-                        if key in ("share_goals_ewm", "share_assists_ewm"):
+                        if key in ("share_goals_ewm", "share_assists_ewm", "share_shots_ewm"):
                             st.session_state[wgt_key] = float(
                                 min(max(float(model_val), meta["min"]), meta["max"])
                             )

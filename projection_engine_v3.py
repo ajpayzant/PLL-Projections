@@ -83,6 +83,17 @@ HL_SHOTS: int = 5
 HL_GOALS: int = 4    # least persistent
 HL_POSS: int = 4
 
+# Per-touch league averages by position (measured from clean.player_game_stats, touches > 3)
+# Used as positional priors for shots_per_touch_ewm and assist_conv_ewm nudges.
+LG_SHOTS_PER_TOUCH: Dict[str, float] = {
+    "A": 0.207, "M": 0.207, "FO": 0.142,
+    "SSDM": 0.084, "LSM": 0.117, "D": 0.042, "G": 0.008,
+}
+LG_ASSIST_CONV: Dict[str, float] = {
+    "A": 0.309, "M": 0.254, "FO": 0.210,
+    "SSDM": 0.241, "LSM": 0.303, "D": 0.234, "G": 0.185,
+}
+
 SEASON_HALFLIFE: float = 1.5
 N_SIMS: int = 20_000
 
@@ -1384,6 +1395,22 @@ class RatingBuilder:
             )
             df[f"career_{stat}_pg"] = df[stat].shift(1).expanding(min_periods=1).mean().fillna(0)
 
+        # Per-touch efficiency ratings
+        # shots_per_touch: how shot-generative is this player per possession touch.
+        # Most stable of the touch-rate signals (CV ~0.35 vs ~1.3 for assist_conv).
+        touches_s = df.get("touches", pd.Series(0, index=df.index)).fillna(0)
+        spt = _safe_div_s(df["shots"].fillna(0), touches_s.clip(lower=1))
+        lg_spt = LG_SHOTS_PER_TOUCH.get(pos, 0.20)
+        blocks.append(_pstat(spt, lg_spt, HL_SHOTS, "shots_per_touch"))
+
+        # assist_conv: assists / assist_opportunities — feeder quality signal.
+        # Noisier game-to-game (CV ~1.3) so uses a longer half-life (HL_FO=8)
+        # to smooth toward the player's true conversion rate.
+        aopp_s = df.get("assist_opportunities", pd.Series(0, index=df.index)).fillna(0)
+        aconv = _safe_div_s(df["assists"].fillna(0), aopp_s.clip(lower=1))
+        lg_aconv = LG_ASSIST_CONV.get(pos, 0.28)
+        blocks.append(_pstat(aconv, lg_aconv, HL_FO, "assist_conv"))
+
         # Zero-inflation: EWM fraction of games player scored 0.
         # Uses same half-life as goals so recent form drives zero rates
         # the same way it drives counting stat projections.
@@ -2016,11 +2043,41 @@ class PlayerModel:
         else:
             proj_assists = tp.proj_assists * _share("assists", tp.proj_assists) * usage
 
+        # Assists — touch-efficiency nudge
+        # When the user has not overridden assist share directly, nudge proj_assists
+        # by how the player's assist conversion rate (assists/assist_opportunities)
+        # compares to the league average for their position.
+        # Blend weight 0.15 keeps the nudge conservative; cap at ±20% so a single
+        # outlier game can't swing the projection off a cliff.
+        if pos != "G" and "share_assists_ewm" not in _user_overrides:
+            aconv_ewm = _nan(float(f.get("assist_conv_ewm", LG_ASSIST_CONV.get(pos, 0.28))),
+                             LG_ASSIST_CONV.get(pos, 0.28))
+            lg_aconv  = LG_ASSIST_CONV.get(pos, 0.28)
+            if lg_aconv > 0 and aconv_ewm > 0:
+                aconv_ratio  = aconv_ewm / lg_aconv
+                aconv_nudge  = 1.0 + 0.15 * (aconv_ratio - 1.0)
+                aconv_nudge  = min(max(aconv_nudge, 0.80), 1.20)
+                proj_assists = proj_assists * aconv_nudge
+
         # Shots
         if pos == "G":
             proj_shots = max(_nan(float(f.get("shots_ewm", 0.2)), 0.2) * usage, 0.0)
         else:
             proj_shots = tp.proj_shots * _share("shots", tp.proj_shots) * usage
+
+        # Shots — touch-efficiency nudge
+        # When the user has not overridden shot share directly, nudge proj_shots
+        # by how the player's shots-per-touch compares to the positional league avg.
+        # Most stable touch signal (CV ~0.35). Blend weight 0.20, cap at ±30%.
+        if pos != "G" and "share_shots_ewm" not in _user_overrides:
+            spt_ewm  = _nan(float(f.get("shots_per_touch_ewm", LG_SHOTS_PER_TOUCH.get(pos, 0.20))),
+                            LG_SHOTS_PER_TOUCH.get(pos, 0.20))
+            lg_spt   = LG_SHOTS_PER_TOUCH.get(pos, 0.20)
+            if lg_spt > 0 and spt_ewm > 0:
+                spt_ratio  = spt_ewm / lg_spt
+                spt_nudge  = 1.0 + 0.20 * (spt_ratio - 1.0)
+                spt_nudge  = min(max(spt_nudge, 0.70), 1.30)
+                proj_shots = proj_shots * spt_nudge
 
         sog_rate = _nan(float(f.get("sog_rate_ewm", LG_SOG_RATE)), LG_SOG_RATE)
         sog_rate = min(max(sog_rate, 0.20), 1.0)

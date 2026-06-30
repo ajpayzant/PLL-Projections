@@ -32,6 +32,7 @@ from projection_engine_v3 import (   # noqa: E402
     _norm_pos,
     LG_GOALS, LG_SHOTS, LG_SHOT_PCT, LG_SOG_RATE,
     LG_FO_PCT, LG_SAVE_PCT, LG_2PT_RATE,
+    LG_SHOTS_PER_TOUCH, LG_ASSIST_CONV,
 )
 
 # -- DB path ---------------------------------------------------------------
@@ -701,22 +702,48 @@ TEAM_RATING_DEFS = {
 }
 
 PLAYER_RATING_DEFS = {
+    # ── Volume shares — what fraction of team totals does this player produce ──
     "share_goals_ewm": {
         "label": "Goal share",
-        "help": "Player's share of team goals (0.20 = 20% of all team goals).",
+        "help": "Player's share of team goals (0.20 = 20% of all team goals). Overriding this pins the player to the exact fraction you set, bypassing the credibility blend.",
         "min": 0.0, "max": 0.50, "step": 0.01, "fmt": "{:.3f}",
         "positions": ["A", "M", "D", "FO", "SSDM", "LSM"],
     },
     "share_assists_ewm": {
         "label": "Assist share",
-        "help": "Player's share of team assists.",
+        "help": "Player's share of team assists. Overriding disables the assist-conv nudge for this player.",
         "min": 0.0, "max": 0.50, "step": 0.01, "fmt": "{:.3f}",
         "positions": ["A", "M", "D", "FO", "SSDM", "LSM"],
     },
+    "share_shots_ewm": {
+        "label": "Shot share",
+        "help": "Player's share of team shots (0.18 = 18% of all team shots). Overriding disables the shots-per-touch nudge for this player.",
+        "min": 0.0, "max": 0.50, "step": 0.01, "fmt": "{:.3f}",
+        "positions": ["A", "M", "D", "FO", "SSDM", "LSM"],
+    },
+    # ── Efficiency ratings — quality of production per opportunity ──────────
     "shot_pct_ewm": {
         "label": "Shooting %",
-        "help": "Player's goals-per-shot rate. League avg ~0.27.",
+        "help": "Goals per shot. League avg ~0.27. Raising this scales up proj goals relative to the baseline.",
         "min": 0.05, "max": 0.60, "step": 0.01, "fmt": "{:.3f}",
+        "positions": ["A", "M", "SSDM", "LSM"],
+    },
+    "sog_rate_ewm": {
+        "label": "Shots on goal %",
+        "help": "Fraction of shots that are on goal. League avg ~0.63. Affects proj SOG without changing goal projection.",
+        "min": 0.20, "max": 1.00, "step": 0.01, "fmt": "{:.3f}",
+        "positions": ["A", "M", "SSDM", "LSM"],
+    },
+    "shots_per_touch_ewm": {
+        "label": "Shots per touch",
+        "help": "How often a player generates a shot from each touch. League avg ~0.21 (A/M). Nudges shot projection up/down vs position average (20% blend, ±30% cap).",
+        "min": 0.02, "max": 0.60, "step": 0.01, "fmt": "{:.3f}",
+        "positions": ["A", "M", "SSDM", "LSM"],
+    },
+    "assist_conv_ewm": {
+        "label": "Assist conversion",
+        "help": "Assists per assist opportunity — how often a pass in a scoring situation becomes a real assist. League avg ~0.31 (A), 0.25 (M). Nudges assist projection up/down (15% blend, ±20% cap).",
+        "min": 0.00, "max": 1.00, "step": 0.01, "fmt": "{:.3f}",
         "positions": ["A", "M", "SSDM", "LSM"],
     },
     "two_pt_rate_ewm": {
@@ -725,6 +752,7 @@ PLAYER_RATING_DEFS = {
         "min": 0.0, "max": 0.65, "step": 0.01, "fmt": "{:.3f}",
         "positions": ["A", "M", "SSDM", "LSM"],
     },
+    # ── Position-specific ratings ────────────────────────────────────────────
     "bayes_save_pct": {
         "label": "Save %",
         "help": "Goalie's Bayesian save%. League avg ~0.537.",
@@ -733,7 +761,7 @@ PLAYER_RATING_DEFS = {
     },
     "bayes_fo_pct": {
         "label": "FO win %",
-        "help": "Player's Bayesian faceoff win rate. 0.500 = league avg.",
+        "help": "Faceoff win rate. 0.500 = league avg.",
         "min": 0.25, "max": 0.75, "step": 0.01, "fmt": "{:.3f}",
         "positions": ["FO"],
     },
