@@ -33,6 +33,7 @@ from projection_engine_v3 import (   # noqa: E402
     LG_GOALS, LG_SHOTS, LG_SHOT_PCT, LG_SOG_RATE,
     LG_FO_PCT, LG_SAVE_PCT, LG_2PT_RATE,
     LG_SHOTS_PER_TOUCH, LG_ASSIST_CONV,
+    LG_2PT_SHOT_RATE, LG_PASS_PER_TOUCH, LG_CLEAN_SAVE_RATE,
 )
 
 # -- DB path ---------------------------------------------------------------
@@ -748,8 +749,20 @@ PLAYER_RATING_DEFS = {
     },
     "two_pt_rate_ewm": {
         "label": "2PT goal rate",
-        "help": "Fraction of goals that are 2-pointers. League avg ~7%.",
+        "help": "Fraction of goals that are 2-pointers (outcome). Blended 40% with intent rate. League avg ~7%.",
         "min": 0.0, "max": 0.65, "step": 0.01, "fmt": "{:.3f}",
+        "positions": ["A", "M", "SSDM", "LSM"],
+    },
+    "two_pt_shot_rate_ewm": {
+        "label": "2PT shot rate",
+        "help": "Fraction of shots attempted as 2-pointers (intent). Blended 60% into 2PT projection. League avg ~4% (A), ~12% (M).",
+        "min": 0.0, "max": 0.80, "step": 0.01, "fmt": "{:.3f}",
+        "positions": ["A", "M", "SSDM", "LSM"],
+    },
+    "pass_per_touch_ewm": {
+        "label": "Pass per touch",
+        "help": "Passes per possession touch — distributor archetype signal. High = feeder (nudges assists up). League avg ~0.73. Very stable (CV ~0.12).",
+        "min": 0.30, "max": 1.00, "step": 0.01, "fmt": "{:.3f}",
         "positions": ["A", "M", "SSDM", "LSM"],
     },
     # ── Position-specific ratings ────────────────────────────────────────────
@@ -757,6 +770,12 @@ PLAYER_RATING_DEFS = {
         "label": "Save %",
         "help": "Goalie's Bayesian save%. League avg ~0.537.",
         "min": 0.35, "max": 0.75, "step": 0.005, "fmt": "{:.3f}",
+        "positions": ["G"],
+    },
+    "clean_save_rate_ewm": {
+        "label": "Clean save rate",
+        "help": "Fraction of saves that are clean (controlled stops). High = consistent goalie, gets tighter sim variance. League avg ~0.34.",
+        "min": 0.10, "max": 0.70, "step": 0.01, "fmt": "{:.3f}",
         "positions": ["G"],
     },
     "bayes_fo_pct": {

@@ -94,6 +94,22 @@ LG_ASSIST_CONV: Dict[str, float] = {
     "SSDM": 0.241, "LSM": 0.303, "D": 0.234, "G": 0.185,
 }
 
+# 2PT shot rate: fraction of shots that are attempted as 2-pointers (intent, not outcome)
+# Measured from clean.player_game_stats two_point_shots/shots by position
+LG_2PT_SHOT_RATE: Dict[str, float] = {
+    "A": 0.042, "M": 0.125, "FO": 0.125,
+    "SSDM": 0.194, "LSM": 0.627, "D": 0.671, "G": 0.978,
+}
+
+# Pass per touch: how pass-oriented a player is (stable archetype signal, CV ~0.10-0.16)
+LG_PASS_PER_TOUCH: Dict[str, float] = {
+    "A": 0.731, "M": 0.737, "FO": 0.754,
+    "SSDM": 0.870, "LSM": 0.815, "D": 0.909, "G": 0.963,
+}
+
+# Clean save rate: clean_saves / saves — goalie consistency signal
+LG_CLEAN_SAVE_RATE: float = 0.344
+
 SEASON_HALFLIFE: float = 1.5
 N_SIMS: int = 20_000
 
@@ -937,6 +953,7 @@ class PlayerProjection:
     active: bool = True
     usage_multiplier: float = 1.0
     is_starter: bool = False
+    clean_save_rate: float = LG_CLEAN_SAVE_RATE  # goalie consistency signal
     _fo_pct_overridden: bool = False
     _goals_overridden: bool = False    # user explicitly set share_goals_ewm or shot_pct_ewm
     _assists_overridden: bool = False  # user explicitly set share_assists_ewm
@@ -1093,6 +1110,21 @@ class DataLoader:
                 """).df()
             logger.info("Loaded %d schedule rows", len(df))
             return df
+        finally:
+            con.close()
+
+    def load_team_defense(self) -> pd.DataFrame:
+        """Load per-season defensive stats per team for opponent context adjustment."""
+        con = self._conn()
+        try:
+            df = con.execute(
+                "SELECT * FROM marts.team_defense_season_stats ORDER BY season, team_id"
+            ).df()
+            logger.info("Loaded %d team-defense rows", len(df))
+            return df
+        except Exception:
+            logger.warning("team_defense_season_stats not available; skipping opp defense context")
+            return pd.DataFrame()
         finally:
             con.close()
 
@@ -1355,6 +1387,26 @@ class RatingBuilder:
         pos = _norm_pos(pos_raw)
         df["pos_norm"] = pos
 
+        # Season progression weighting: tighten half-lives late-season so recent
+        # form matters more, loosen early-season to regress harder to career average.
+        # Uses the max week in the player's current-season data as the season position.
+        # Week 1-2: +2 to HL (more regression), week 7+: -1 to HL (trust recent form).
+        _current_max_week = 0
+        if "week" in df.columns and "season" in df.columns:
+            curr_season = int(df["season"].max()) if df["season"].notna().any() else 0
+            curr_rows = df[df["season"] == curr_season]
+            if not curr_rows.empty and curr_rows["week"].notna().any():
+                _current_max_week = int(curr_rows["week"].max())
+        if _current_max_week <= 2:
+            _hl_goals = HL_GOALS + 2
+            _hl_shots = HL_SHOTS + 2
+        elif _current_max_week >= 7:
+            _hl_goals = max(HL_GOALS - 1, 2)
+            _hl_shots = max(HL_SHOTS - 1, 3)
+        else:
+            _hl_goals = HL_GOALS
+            _hl_shots = HL_SHOTS
+
         def _pstat(series: pd.Series, fill: float, hl: int, name: str):
             s = series.fillna(fill)
             exp = s.shift(1).expanding(min_periods=1)
@@ -1366,23 +1418,23 @@ class RatingBuilder:
             }, index=df.index)
 
         blocks = []
-        blocks.append(_pstat(df["goals"].fillna(0), 0, HL_GOALS, "goals"))
-        blocks.append(_pstat(df["assists"].fillna(0), 0, HL_GOALS, "assists"))
-        blocks.append(_pstat(df["shots"].fillna(0), 0, HL_SHOTS, "shots"))
-        blocks.append(_pstat(df["shots_on_goal"].fillna(0), 0, HL_SHOTS, "sog"))
-        blocks.append(_pstat(df["ground_balls"].fillna(0), 0, HL_SHOTS, "ground_balls"))
+        blocks.append(_pstat(df["goals"].fillna(0), 0, _hl_goals, "goals"))
+        blocks.append(_pstat(df["assists"].fillna(0), 0, _hl_goals, "assists"))
+        blocks.append(_pstat(df["shots"].fillna(0), 0, _hl_shots, "shots"))
+        blocks.append(_pstat(df["shots_on_goal"].fillna(0), 0, _hl_shots, "sog"))
+        blocks.append(_pstat(df["ground_balls"].fillna(0), 0, _hl_shots, "ground_balls"))
         blocks.append(_pstat(df["turnovers"].fillna(0), 0, HL_TO, "turnovers"))
         blocks.append(_pstat(df["caused_turnovers"].fillna(0), 0, HL_TO, "caused_turnovers"))
 
         two_pt = df.get("two_point_goals", pd.Series(0, index=df.index)).fillna(0)
         two_rate = _safe_div_s(two_pt, df["goals"].clip(lower=1))
-        blocks.append(_pstat(two_rate, LG_2PT_RATE, HL_GOALS, "two_pt_rate"))
+        blocks.append(_pstat(two_rate, LG_2PT_RATE, _hl_goals, "two_pt_rate"))
 
         sp = _safe_div_s(df["goals"].fillna(0), df["shots"].clip(lower=1))
-        blocks.append(_pstat(sp, LG_SHOT_PCT, HL_SHOTS, "shot_pct"))
+        blocks.append(_pstat(sp, LG_SHOT_PCT, _hl_shots, "shot_pct"))
 
         sogr = _safe_div_s(df["shots_on_goal"].fillna(0), df["shots"].clip(lower=1))
-        blocks.append(_pstat(sogr, LG_SOG_RATE, HL_SHOTS, "sog_rate"))
+        blocks.append(_pstat(sogr, LG_SOG_RATE, _hl_shots, "sog_rate"))
 
         # Share features (player's share of team totals)
         for stat, fill_team in [("goals", LG_GOALS), ("assists", LG_GOALS * 0.65), ("shots", LG_SHOTS)]:
@@ -1392,7 +1444,7 @@ class RatingBuilder:
             tcol = f"team_{stat}"
             denom = df[tcol].fillna(fill_team).clip(lower=1) if tcol in df.columns else pd.Series(fill_team, index=df.index)
             share = _safe_div_s(df[stat].fillna(0), denom)
-            df[f"share_{stat}_ewm"] = _ewm_shift(share, HL_GOALS).fillna(
+            df[f"share_{stat}_ewm"] = _ewm_shift(share, _hl_goals).fillna(
                 POS_DEFAULTS.get(pos, {}).get(f"{stat}_share", 0.05)
             )
             df[f"career_{stat}_pg"] = df[stat].shift(1).expanding(min_periods=1).mean().fillna(0)
@@ -1413,6 +1465,30 @@ class RatingBuilder:
         lg_aconv = LG_ASSIST_CONV.get(pos, 0.28)
         blocks.append(_pstat(aconv, lg_aconv, HL_FO, "assist_conv"))
 
+        # 2PT shot rate: two_point_shots / shots — intent-based 2PT signal.
+        # Better than outcome-based two_pt_rate (2pt_goals/goals) because it
+        # captures the player's shooting decision, not just conversion luck.
+        twopts_s = df.get("two_point_shots", pd.Series(0, index=df.index)).fillna(0)
+        two_shot_rate = _safe_div_s(twopts_s, df["shots"].fillna(0).clip(lower=1))
+        lg_2pt_sr = LG_2PT_SHOT_RATE.get(pos, 0.12)
+        blocks.append(_pstat(two_shot_rate, lg_2pt_sr, HL_GOALS, "two_pt_shot_rate"))
+
+        # pass_per_touch: total_passes / touches — player archetype (passer vs shooter).
+        # Extremely stable signal (CV ~0.10-0.16). High value = distributor, low = shooter.
+        # Nudges assist projections upward for high-pass-rate players.
+        passes_s = df.get("total_passes", pd.Series(0, index=df.index)).fillna(0)
+        ppt = _safe_div_s(passes_s, touches_s.clip(lower=1))
+        lg_ppt = LG_PASS_PER_TOUCH.get(pos, 0.75)
+        blocks.append(_pstat(ppt, lg_ppt, HL_POSS, "pass_per_touch"))
+
+        # clean_save_rate: clean_saves / saves — goalie consistency signal.
+        # High rate = controlled stops, low rate = reactive/traffic-heavy.
+        if pos == "G":
+            cs_s = df.get("clean_saves", pd.Series(0, index=df.index)).fillna(0)
+            sv_s = df.get("saves", pd.Series(0, index=df.index)).fillna(0)
+            csr = _safe_div_s(cs_s, sv_s.clip(lower=1))
+            blocks.append(_pstat(csr, LG_CLEAN_SAVE_RATE, HL_SHOTS, "clean_save_rate"))
+
         # Zero-inflation: EWM fraction of games player scored 0.
         # Uses same half-life as goals so recent form drives zero rates
         # the same way it drives counting stat projections.
@@ -1420,7 +1496,7 @@ class RatingBuilder:
             if stat in df.columns:
                 zero_series = (df[stat].fillna(0) == 0).astype(float)
                 df[f"zero_rate_{stat}"] = zero_series.shift(1).ewm(
-                    halflife=HL_GOALS, min_periods=1
+                    halflife=_hl_goals, min_periods=1
                 ).mean().fillna(ZERO_RATE.get(f"{pos}_{stat}", 0.6))
             else:
                 df[f"zero_rate_{stat}"] = ZERO_RATE.get(f"{pos}_{stat}", 0.6)
@@ -1810,6 +1886,7 @@ class PlayerModel:
         starter_goalie: Optional[str] = None,
         use_current_roster_filter: bool = True,
         override_roster_filter: Optional[CurrentRosterFilter] = None,
+        opp_def_mult: float = 1.0,
     ) -> List[PlayerProjection]:
         """
         Parameters
@@ -1933,6 +2010,7 @@ class PlayerModel:
                 if k not in ("active", "usage_multiplier", "is_starter", "_override_keys"):
                     feats[k] = v
             feats["_override_keys"] = override_keys
+            feats["_opp_def_mult"] = opp_def_mult
 
             proj = self._project_player(feats, team_proj)
             proj.active = active
@@ -1956,6 +2034,10 @@ class PlayerModel:
 
         # Keys the user explicitly overrode — these bypass credibility blending.
         _user_overrides: set = set(f.get("_override_keys", []))
+        # Opponent defensive multiplier — suppresses/boosts player projections based
+        # on how tough the opposing defense is vs league average. Only applied when
+        # no share overrides are active (user overrides take precedence over model).
+        _opp_def_mult = _nan(float(f.get("_opp_def_mult", 1.0)), 1.0)
 
         def _share(stat: str, team_total: float) -> float:
             team_total = max(team_total, 1.0)
@@ -2045,12 +2127,11 @@ class PlayerModel:
         else:
             proj_assists = tp.proj_assists * _share("assists", tp.proj_assists) * usage
 
-        # Assists — touch-efficiency nudge
-        # When the user has not overridden assist share directly, nudge proj_assists
-        # by how the player's assist conversion rate (assists/assist_opportunities)
-        # compares to the league average for their position.
-        # Blend weight 0.15 keeps the nudge conservative; cap at ±20% so a single
-        # outlier game can't swing the projection off a cliff.
+        # Assists — dual touch-efficiency nudge (assist_conv + pass_per_touch)
+        # Both signals only engage when the user has not overridden assist share.
+        # assist_conv (assists/assist_opp): feeder quality, 15% blend, ±20% cap.
+        # pass_per_touch: distributor archetype, 10% blend, ±15% cap — stable CV ~0.12.
+        # Combined nudge is multiplicative so both signals contribute independently.
         if pos != "G" and "share_assists_ewm" not in _user_overrides:
             aconv_ewm = _nan(float(f.get("assist_conv_ewm", LG_ASSIST_CONV.get(pos, 0.28))),
                              LG_ASSIST_CONV.get(pos, 0.28))
@@ -2060,6 +2141,15 @@ class PlayerModel:
                 aconv_nudge  = 1.0 + 0.15 * (aconv_ratio - 1.0)
                 aconv_nudge  = min(max(aconv_nudge, 0.80), 1.20)
                 proj_assists = proj_assists * aconv_nudge
+
+            ppt_ewm = _nan(float(f.get("pass_per_touch_ewm", LG_PASS_PER_TOUCH.get(pos, 0.75))),
+                           LG_PASS_PER_TOUCH.get(pos, 0.75))
+            lg_ppt  = LG_PASS_PER_TOUCH.get(pos, 0.75)
+            if lg_ppt > 0 and ppt_ewm > 0:
+                ppt_ratio  = ppt_ewm / lg_ppt
+                ppt_nudge  = 1.0 + 0.10 * (ppt_ratio - 1.0)
+                ppt_nudge  = min(max(ppt_nudge, 0.85), 1.15)
+                proj_assists = proj_assists * ppt_nudge
 
         # Shots
         if pos == "G":
@@ -2090,12 +2180,23 @@ class PlayerModel:
         proj_to = max(_nan(float(f.get("turnovers_ewm", pos_def.get("to_pg", 0.5))), pos_def.get("to_pg", 0.5)) * usage, 0.0)
         proj_cto = max(_nan(float(f.get("caused_turnovers_ewm", pos_def.get("cto_pg", 0.2))), pos_def.get("cto_pg", 0.2)) * usage, 0.0)
 
-        # 2pt split
-        two_rate = _nan(float(f.get("two_pt_rate_ewm", LG_2PT_RATE)), LG_2PT_RATE)
+        # 2pt split — blend intent signal with outcome signal
+        # two_pt_rate_ewm: outcome-based (2pt_goals/goals) — what actually converted
+        # two_pt_shot_rate_ewm: intent-based (2pt_shots/shots) — what was attempted
+        # 50/50 blend uses both; intent rate is less luck-dependent but needs conversion
+        # context. If user overrode two_pt_rate_ewm directly, use only that value.
+        two_rate_outcome = _nan(float(f.get("two_pt_rate_ewm", LG_2PT_RATE)), LG_2PT_RATE)
+        if "two_pt_rate_ewm" in _user_overrides:
+            two_rate = two_rate_outcome
+        else:
+            two_sr = _nan(float(f.get("two_pt_shot_rate_ewm", LG_2PT_SHOT_RATE.get(pos, LG_2PT_RATE))),
+                          LG_2PT_SHOT_RATE.get(pos, LG_2PT_RATE))
+            # Intent rate is an upper bound on outcome rate (can't score more 2pts than attempted)
+            # Blend: 60% intent, 40% outcome — intent carries more signal, outcome provides calibration
+            two_rate = 0.60 * two_sr + 0.40 * two_rate_outcome
         two_rate = min(max(two_rate, 0.0), 0.45)
         proj_2pt = proj_goals * two_rate
         proj_1pt = max(proj_goals - proj_2pt, 0.0)
-        # Correct points formula: 1pt_goals + 2*2pt_goals + assists
         proj_points = proj_1pt + 2.0 * proj_2pt + proj_assists
 
         # Saves (goalie only) — using correct denominator
@@ -2155,12 +2256,30 @@ class PlayerModel:
 
         confidence = min(0.40 + 0.025 * gp, 0.85)
 
+        # Goalie clean save rate — passed to simulator to adjust variance.
+        # Use 0-fallback because global fill zeros this for non-G positions;
+        # for goalies, 0 means no data so fall back to league average.
+        _csr_raw = float(f.get("clean_save_rate_ewm", 0.0) or 0.0)
+        csr = _csr_raw if _csr_raw > 0.01 else LG_CLEAN_SAVE_RATE
+        csr = min(max(csr, 0.0), 1.0)
+
         fo_pct_was_overridden  = pos == "FO" and "bayes_fo_pct" in _user_overrides
         # Per-stat override flags — only pin the stat the user actually touched.
         # shot_pct_ewm also pins goals because it directly scales proj_goals.
         goals_was_overridden   = any(k in _user_overrides for k in ("share_goals_ewm", "shot_pct_ewm"))
         assists_was_overridden = "share_assists_ewm" in _user_overrides
         shots_was_overridden   = "share_shots_ewm"   in _user_overrides
+
+        # Opponent defensive context — applied after all share/touch nudges and
+        # after override flags are known. Suppresses goals and shots when facing a
+        # tough defense. Bypassed when user has explicitly overridden those stats.
+        if pos != "G" and _opp_def_mult != 1.0:
+            if not goals_was_overridden:
+                proj_goals = max(proj_goals * _opp_def_mult, 0.0)
+            if not shots_was_overridden:
+                proj_shots = max(proj_shots * _opp_def_mult, 0.0)
+            # Recompute SOG and points to stay consistent after defense adjustment
+            proj_sog = proj_shots * sog_rate
         raw = PlayerProjection(
             player_id=pid, full_name=name, team_id=tid, position=pos,
             proj_goals=max(proj_goals, 0.0),
@@ -2180,6 +2299,7 @@ class PlayerModel:
             zero_prob_goals=z_goals,
             zero_prob_assists=z_assists,
             confidence=confidence,
+            clean_save_rate=csr,
         )
         capped = self._apply_caps(raw)
         capped._fo_pct_overridden  = fo_pct_was_overridden
@@ -2309,6 +2429,48 @@ class GameSimulator:
     def __init__(self, n_sims: int = N_SIMS, seed: int = 42):
         self.n_sims = n_sims
         self.seed = seed
+        # Correlation matrices keyed by frozenset of player_ids — built lazily
+        self._corr_cache: Dict[frozenset, np.ndarray] = {}
+
+    @staticmethod
+    def build_team_correlation(player_games: pd.DataFrame, team_id: str,
+                               top_n: int = 4) -> Optional[np.ndarray]:
+        """
+        Estimate a goal-correlation matrix for the top-N scorers on a team
+        from historical per-game data.
+
+        Returns an (N x N) correlation matrix, or None if insufficient data.
+        Only players with >= 6 shared games are included; others get rho=0.
+        """
+        pg = player_games
+        if pg.empty or "goals" not in pg.columns:
+            return None
+        team_rows = pg[pg["team_id"] == team_id][["player_id", "game_id", "goals"]].copy()
+        if team_rows.empty:
+            return None
+        # Pivot to wide: rows=games, cols=players
+        pivot = team_rows.pivot_table(index="game_id", columns="player_id",
+                                      values="goals", aggfunc="sum").fillna(0)
+        if pivot.shape[1] < 2:
+            return None
+        # Select top-N by mean goals
+        top_players = pivot.mean().nlargest(top_n).index.tolist()
+        sub = pivot[top_players]
+        if len(sub) < 8:
+            return None
+        # Pairwise correlation with shared-games check
+        n = len(top_players)
+        corr = np.eye(n)
+        for i in range(n):
+            for j in range(i + 1, n):
+                shared = sub[[top_players[i], top_players[j]]].dropna()
+                if len(shared) >= 6:
+                    r = float(np.corrcoef(shared.iloc[:, 0], shared.iloc[:, 1])[0, 1])
+                    r = float(np.clip(r, -0.95, 0.95))
+                else:
+                    r = 0.0
+                corr[i, j] = corr[j, i] = r
+        return corr
 
     def simulate_game(self, home_proj: TeamProjection, away_proj: TeamProjection) -> GameSimulation:
         rng = np.random.default_rng(self.seed)
@@ -2374,6 +2536,7 @@ class GameSimulator:
         team_goal_draws: np.ndarray,
         team_proj_goals: float,
         opp_save_pct: float = LG_SAVE_PCT,
+        player_games: Optional[pd.DataFrame] = None,
     ) -> List[PlayerSimulation]:
         """
         Simulate player stats. Player goals conditioned on team goal draws.
@@ -2427,6 +2590,50 @@ class GameSimulator:
             raw_assists[pp.player_id] = _zinb(pp.proj_assists, "assists", pp.zero_prob_assists)
             raw_shots[pp.player_id] = _nb(pp.proj_shots, "shots")
 
+        # Player correlation adjustment via Cholesky decomposition.
+        # Applies to the top-N field players on the team (by proj_goals).
+        # Converts independent uniform percentile ranks to correlated ranks, then
+        # maps back through each player's own marginal CDF.
+        # This preserves marginal distributions (P10/P50/P90 unchanged) while
+        # making joint draws realistically correlated (teammates share possessions).
+        if field and player_games is not None and len(field) >= 2:
+            try:
+                team_id = field[0].team_id
+                corr = self.build_team_correlation(player_games, team_id, top_n=min(4, len(field)))
+                if corr is not None and corr.shape[0] >= 2:
+                    # Get top-N players ordered by proj_goals descending
+                    top_field = sorted(field, key=lambda p: p.proj_goals, reverse=True)[:corr.shape[0]]
+                    top_ids = [p.player_id for p in top_field]
+                    # Cholesky decomposition of correlation matrix
+                    # Add small jitter to ensure positive definiteness
+                    C = corr + np.eye(len(top_ids)) * 1e-6
+                    try:
+                        L = np.linalg.cholesky(C)
+                    except np.linalg.LinAlgError:
+                        L = None
+                    if L is not None:
+                        n_corr = len(top_ids)
+                        # Draw independent standard normals and correlate them
+                        z_indep = rng.standard_normal((n_corr, self.n_sims))
+                        z_corr  = L @ z_indep   # shape (n_corr, n_sims)
+                        # Convert to uniform percentile ranks [0,1]
+                        from scipy.stats import norm as _snorm
+                        u_corr = _snorm.cdf(z_corr)   # shape (n_corr, n_sims)
+                        # Map back through each player's empirical marginal CDF
+                        for i, pid in enumerate(top_ids):
+                            orig = raw_goals[pid]
+                            if orig.std() < 0.01:
+                                continue  # all-zero draws, skip
+                            sorted_orig = np.sort(orig)
+                            # Map correlated quantiles to player's own distribution
+                            idx = np.clip(
+                                (u_corr[i] * len(sorted_orig)).astype(int),
+                                0, len(sorted_orig) - 1
+                            )
+                            raw_goals[pid] = sorted_orig[idx]
+            except Exception:
+                pass  # correlation adjustment is best-effort, never crash the sim
+
         # Condition field players' goals on team draw
         if field and len(raw_goals) > 0:
             sum_raw = sum(raw_goals[p.player_id] for p in field)
@@ -2473,7 +2680,13 @@ class GameSimulator:
 
         for pp in goalies:
             pid = pp.player_id
-            sv = _nb(pp.proj_saves, "saves")
+            # Consistent goalies (high clean_save_rate) get tighter variance.
+            # phi=20 is baseline; clean rate above lg_avg tightens toward phi=40,
+            # below average loosens toward phi=10. Range is [10, 40].
+            csr_ratio = pp.clean_save_rate / max(LG_CLEAN_SAVE_RATE, 0.01)
+            goalie_phi = float(np.clip(PHI_PLAYER["saves"] * csr_ratio, 10.0, 40.0))
+            nb_n_sv, nb_p_sv = _negbinom_params(max(pp.proj_saves, 0.01), goalie_phi)
+            sv = rng.negative_binomial(nb_n_sv, nb_p_sv, n).astype(float)
             shots_faced = max(pp.proj_saves / max(pp.proj_save_pct, 0.01), 1.0)
             dists = {
                 "saves": sv,
@@ -2839,6 +3052,7 @@ class ProjectionEngine:
         self.schedule: pd.DataFrame = pd.DataFrame()
         self.current_rosters: pd.DataFrame = pd.DataFrame()
         self.current_rosters_status: Dict[str, object] = {}
+        self.team_defense: pd.DataFrame = pd.DataFrame()
         self.current_roster_filter: Optional[CurrentRosterFilter] = None
         self.rating_builder: Optional[RatingBuilder] = None
         self.team_model: Optional[TeamModel] = None
@@ -2849,12 +3063,50 @@ class ProjectionEngine:
         self._loaded = False
         self._fitted = False
 
+    def _opp_defense_mult(self, opp_team_id: str, game_date: Optional[str] = None) -> float:
+        """
+        Compute a defensive multiplier for players facing opp_team_id.
+        Uses goals_allowed_per_game vs league average from the current season.
+        Credibility-weighted by games played: engages at >=4 games, full weight at 10.
+        Returns a value near 1.0 — e.g. 0.92 = tough defense (8% suppression).
+        Capped at ±20% to prevent early-season noise from dominating.
+        """
+        if self.team_defense.empty:
+            return 1.0
+        td = self.team_defense
+        # Prefer current season; fall back to prior season if current < 4 games
+        current_season = int(self.team_games["season"].max()) if not self.team_games.empty else 2026
+        for season in [current_season, current_season - 1]:
+            mask = (td["team_id"] == opp_team_id) & (td["season"] == season)
+            row = td[mask]
+            if row.empty:
+                continue
+            row = row.iloc[0]
+            games = int(row.get("games", 0))
+            if games < 4:
+                continue
+            goals_allowed_pg = float(row.get("goals_allowed_per_game", LG_GOALS))
+            # League average from all teams this season
+            season_rows = td[td["season"] == season]
+            lg_avg = float(season_rows["goals_allowed_per_game"].mean()) if not season_rows.empty else LG_GOALS
+            if lg_avg <= 0:
+                return 1.0
+            # Raw multiplier: tougher defense (lower goals allowed) → multiplier < 1
+            raw_mult = goals_allowed_pg / lg_avg
+            # Credibility: 4 games = 40%, 7 games = 70%, 10 games = 100%
+            cred = min((games - 3) / 7.0, 1.0)
+            # Blend toward 1.0 with credibility weight
+            mult = 1.0 + cred * (raw_mult - 1.0)
+            return float(np.clip(mult, 0.80, 1.20))
+        return 1.0
+
     def load(self) -> None:
         logger.info("Loading warehouse data...")
         self.team_games = self.loader.load_team_games()
         self.player_games = self.loader.load_player_games()
         self.schedule = self.loader.load_schedule(include_completed=False)
         self.current_rosters, self.current_rosters_status = self.loader.load_current_rosters()
+        self.team_defense = self.loader.load_team_defense()
         self._loaded = True
         logger.info("Loaded: %d team-game rows | %d player-game rows | %d upcoming games",
                     len(self.team_games), len(self.player_games), len(self.schedule))
@@ -3022,17 +3274,23 @@ class ProjectionEngine:
                         "applied": True,
                     }
 
+        # Opponent defensive context multipliers (each team faces the other's defense)
+        h_opp_def = self._opp_defense_mult(away_team_id, game_date)
+        a_opp_def = self._opp_defense_mult(home_team_id, game_date)
+
         h_players = self.player_model.project_roster(
             home_team_id, h_proj, _team_ov(home_team_id),
             starter_goalie=starters.get(home_team_id),
             use_current_roster_filter=use_current_rosters,
             override_roster_filter=_effective_roster_filter(home_team_id),
+            opp_def_mult=h_opp_def,
         )
         a_players = self.player_model.project_roster(
             away_team_id, a_proj, _team_ov(away_team_id),
             starter_goalie=starters.get(away_team_id),
             use_current_roster_filter=use_current_rosters,
             override_roster_filter=_effective_roster_filter(away_team_id),
+            opp_def_mult=a_opp_def,
         )
 
         # ── Roster-aware FO correction ───────────────────────────────────────
@@ -3095,10 +3353,12 @@ class ProjectionEngine:
         h_psims = self.simulator.simulate_players(
             h_players, game_sim.home_goals, h_proj.proj_goals,
             opp_save_pct=a_proj.proj_save_pct,
+            player_games=self.player_games,
         )
         a_psims = self.simulator.simulate_players(
             a_players, game_sim.away_goals, a_proj.proj_goals,
             opp_save_pct=h_proj.proj_save_pct,
+            player_games=self.player_games,
         )
 
         game_market = self.pricing.price_game(

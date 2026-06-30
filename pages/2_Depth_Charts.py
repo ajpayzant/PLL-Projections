@@ -66,6 +66,35 @@ home_nm = team_name(home_id)
 away_nm = team_name(away_id)
 game    = st.session_state.selected_game or {}
 
+# -- Baseline projection (no overrides) for delta display --------------------
+def _has_any_override() -> bool:
+    """Return True if any player has a rating override or non-default usage."""
+    for team_dc in st.session_state.get("depth_charts", {}).values():
+        for pid, settings in team_dc.items():
+            if settings.get("rating_overrides"):
+                return True
+            usage = float(settings.get("usage_multiplier", 1.0))
+            if usage != 1.0 and settings.get("active", True):
+                return True
+    return False
+
+def _get_baseline_result():
+    """Run a zero-override projection and cache it in session state."""
+    cache_key = f"baseline_{home_id}_{away_id}_{game.get('game_date','')}"
+    cached = st.session_state.get("_baseline_result_key")
+    if cached == cache_key and st.session_state.get("_baseline_result") is not None:
+        return st.session_state["_baseline_result"]
+    baseline = run_projection_for_game(engine, game)  # temporarily uses no overrides
+    # But run_projection_for_game uses current overrides — we need clean run
+    base = engine.project(
+        home_team_id=home_id,
+        away_team_id=away_id,
+        game_date=game.get("game_date"),
+    )
+    st.session_state["_baseline_result"] = base
+    st.session_state["_baseline_result_key"] = cache_key
+    return base
+
 st.title("📋 Depth Charts")
 st.markdown(
     f"**{away_nm} @ {home_nm}** · "
@@ -77,6 +106,24 @@ st.markdown(
 with st.sidebar:
     st.markdown("### Controls")
     render_update_projection_btn(engine, key="p3")
+
+    st.markdown("---")
+    show_deltas = st.toggle(
+        "Show baseline deltas",
+        value=_has_any_override(),
+        key="show_baseline_deltas",
+        help="Show model baseline (no overrides) alongside current projections",
+    )
+    if show_deltas and _has_any_override():
+        baseline_result = _get_baseline_result()
+        # Build lookup: player_id → baseline PlayerProjection
+        _baseline_map = {
+            p.player_id: p
+            for p in (baseline_result.home_players + baseline_result.away_players)
+        }
+    else:
+        baseline_result = None
+        _baseline_map = {}
 
     st.markdown("---")
     st.markdown("### Roster source")
@@ -150,6 +197,7 @@ def _model_val_for(pid: str, key: str, p) -> float:
     from projection_engine_v3 import (
         LG_SHOT_PCT, LG_2PT_RATE, LG_SAVE_PCT, LG_FO_PCT, LG_SOG_RATE,
         LG_SHOTS_PER_TOUCH, LG_ASSIST_CONV,
+        LG_2PT_SHOT_RATE, LG_PASS_PER_TOUCH, LG_CLEAN_SAVE_RATE,
     )
 
     # Share keys: derive from current post-reconcile projection so that setting
@@ -178,9 +226,12 @@ def _model_val_for(pid: str, key: str, p) -> float:
         "sog_rate_ewm":          LG_SOG_RATE,
         "shots_per_touch_ewm":   LG_SHOTS_PER_TOUCH.get(pos, 0.20),
         "assist_conv_ewm":       LG_ASSIST_CONV.get(pos, 0.28),
-        "bayes_save_pct":        LG_SAVE_PCT,
-        "bayes_fo_pct":          LG_FO_PCT,
         "two_pt_rate_ewm":       LG_2PT_RATE,
+        "two_pt_shot_rate_ewm":  LG_2PT_SHOT_RATE.get(pos, 0.10),
+        "pass_per_touch_ewm":    LG_PASS_PER_TOUCH.get(pos, 0.75),
+        "bayes_save_pct":        LG_SAVE_PCT,
+        "clean_save_rate_ewm":   LG_CLEAN_SAVE_RATE,
+        "bayes_fo_pct":          LG_FO_PCT,
     }
     return fallback_map.get(key, 0.0)
 
@@ -438,34 +489,50 @@ def _render_team(team_id: str, team_nm: str, players):
             if abs(new_usage - usage_val) > 0.001:
                 set_player_override(team_id, pid, "usage_multiplier", new_usage)
 
-        # Projected stats (compact)
+        # Projected stats (compact) with optional baseline delta
         color_g = "#34d399" if p.proj_goals > 1.0 else "#94a3b8"
         color_p = "#34d399" if p.proj_points > 1.5 else "#94a3b8"
+        b = _baseline_map.get(pid)  # baseline PlayerProjection if deltas enabled
+
+        def _delta_html(current: float, baseline: float, fmt: str = "{:.2f}") -> str:
+            """Render a small baseline 'was X.XX' line below the current value."""
+            if baseline is None or abs(current - baseline) < 0.01:
+                return ""
+            arrow = "▲" if current > baseline else "▼"
+            clr   = "#34d399" if current > baseline else "#f87171"
+            return (f'<br><span style="font-size:.68rem;color:{clr};">'
+                    f'{arrow} was {fmt.format(baseline)}</span>')
+
         with c6:
+            delta = _delta_html(p.proj_goals, b.proj_goals if b else None) if is_active else ""
             st.markdown(
                 f'<span style="font-size:.82rem;color:{color_g};">'
-                f'{"--" if not is_active else f"{p.proj_goals:.2f}"}</span>',
+                f'{"--" if not is_active else f"{p.proj_goals:.2f}"}</span>{delta}',
                 unsafe_allow_html=True,
             )
         with c7:
+            delta = _delta_html(p.proj_assists, b.proj_assists if b else None) if is_active else ""
             st.markdown(
                 f'<span style="font-size:.82rem;color:#94a3b8;">'
-                f'{"--" if not is_active else f"{p.proj_assists:.2f}"}</span>',
+                f'{"--" if not is_active else f"{p.proj_assists:.2f}"}</span>{delta}',
                 unsafe_allow_html=True,
             )
         with c8:
             if eff_pos == "G":
                 lbl = f"{p.proj_saves:.1f}sv" if is_active else "--"
-                st.markdown(f'<span style="font-size:.82rem;color:#94a3b8;">{lbl}</span>',
+                delta = _delta_html(p.proj_saves, b.proj_saves if b else None, "{:.1f}") if is_active else ""
+                st.markdown(f'<span style="font-size:.82rem;color:#94a3b8;">{lbl}</span>{delta}',
                             unsafe_allow_html=True)
             elif eff_pos == "FO":
                 lbl = f"{p.proj_faceoff_wins:.1f}fw" if is_active else "--"
-                st.markdown(f'<span style="font-size:.82rem;color:#94a3b8;">{lbl}</span>',
+                delta = _delta_html(p.proj_faceoff_wins, b.proj_faceoff_wins if b else None, "{:.1f}") if is_active else ""
+                st.markdown(f'<span style="font-size:.82rem;color:#94a3b8;">{lbl}</span>{delta}',
                             unsafe_allow_html=True)
             else:
+                delta = _delta_html(p.proj_points, b.proj_points if b else None) if is_active else ""
                 st.markdown(
                     f'<span style="font-size:.82rem;color:{color_p};">'
-                    f'{"--" if not is_active else f"{p.proj_points:.2f}pts"}</span>',
+                    f'{"--" if not is_active else f"{p.proj_points:.2f}pts"}</span>{delta}',
                     unsafe_allow_html=True,
                 )
 
