@@ -722,9 +722,7 @@ game_date_str = str(game.get("game_date", ""))[:10].replace("-", "")
 fname = (f"PLL_{team_name(away_id)}_{team_name(home_id)}_"
          f"Game{game.get('game_number','?')}_{game_date_str}.xlsx")
 
-_SNAPSHOTS_DIR = _ROOT / "data" / "saved_projections"
-
-btn_dl, btn_save = st.columns([1, 1], gap="small")
+btn_dl, btn_save, btn_sync = st.columns([1, 1, 1], gap="small")
 
 with btn_dl:
     if st.button("📥 Download Projection Package (Excel)", type="secondary",
@@ -744,16 +742,39 @@ with btn_dl:
                 st.error(f"Export failed: {e}")
 
 with btn_save:
-    if st.button("💾 Save Projection Snapshot", type="primary", width="stretch"):
-        with st.spinner("Saving snapshot..."):
+    if st.button("☁️ Save to Google Sheets", type="primary", width="stretch"):
+        with st.spinner("Saving to Google Sheets..."):
             try:
-                xlsx_bytes = _build_export(result, game, hold_pct, engine)
-                _SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
-                save_path = _SNAPSHOTS_DIR / fname
-                save_path.write_bytes(xlsx_bytes)
-                st.success(f"Saved → data/saved_projections/{fname}")
+                import sys
+                sys.path.insert(0, str(_ROOT))
+                from gsheets_writer import save_snapshot
+                tab = save_snapshot(result, game, hold_pct, engine)
+                st.success(f"Saved → PLL Projections 2026 · tab: {tab}")
             except Exception as e:
-                st.error(f"Save failed: {e}")
+                st.error(f"Google Sheets save failed: {e}")
+
+with btn_sync:
+    if st.button("🔄 Sync Actuals", type="secondary", width="stretch"):
+        with st.spinner("Syncing actuals from warehouse..."):
+            try:
+                import sys
+                sys.path.insert(0, str(_ROOT))
+                from gsheets_writer import sync_actuals, _tab_name
+                import os
+                db_path = os.getenv(
+                    "PLL_DB_PATH",
+                    str(_ROOT / "data" / "analytics_database" / "pll_warehouse.duckdb"),
+                )
+                tab = _tab_name(game)
+                counts = sync_actuals(tab, db_path)
+                st.success(
+                    f"Synced actuals → {counts['players_updated']} player rows, "
+                    f"{counts['teams_updated']} team rows updated"
+                )
+            except ValueError as e:
+                st.warning(str(e))
+            except Exception as e:
+                st.error(f"Sync failed: {e}")
 
 st.markdown(
     '<span class="note-text">Export includes: Game Lines · Player Props · '
