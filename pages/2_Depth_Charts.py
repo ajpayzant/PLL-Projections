@@ -84,8 +84,6 @@ def _get_baseline_result():
     cached = st.session_state.get("_baseline_result_key")
     if cached == cache_key and st.session_state.get("_baseline_result") is not None:
         return st.session_state["_baseline_result"]
-    baseline = run_projection_for_game(engine, game)  # temporarily uses no overrides
-    # But run_projection_for_game uses current overrides — we need clean run
     base = engine.project(
         home_team_id=home_id,
         away_team_id=away_id,
