@@ -211,54 +211,237 @@ def _build_sections(result, game: Dict, hold_pct: float, engine) -> List[List[An
     return rows
 
 
+def _rgb(r: int, g: int, b: int) -> Dict:
+    return {"red": r / 255, "green": g / 255, "blue": b / 255}
+
+
+def _range(sid: int, r0: int, r1: int, c0: int, c1: int) -> Dict:
+    return {"sheetId": sid, "startRowIndex": r0, "endRowIndex": r1,
+            "startColumnIndex": c0, "endColumnIndex": c1}
+
+
+def _repeat(sid: int, r0: int, r1: int, c0: int, c1: int,
+            fmt: Dict, fields: str) -> Dict:
+    return {"repeatCell": {
+        "range": _range(sid, r0, r1, c0, c1),
+        "cell": {"userEnteredFormat": fmt},
+        "fields": fields,
+    }}
+
+
 def save_snapshot(result, game: Dict, hold_pct: float, engine) -> str:
     """
     Write projection snapshot to a new tab in the master Google Sheet.
     Returns the tab name on success. Raises on failure.
     """
-    gc       = _get_client()
-    sh       = gc.open_by_key(_get_sheet_id())
-    tab      = _tab_name(game)
+    gc  = _get_client()
+    sh  = gc.open_by_key(_get_sheet_id())
+    tab = _tab_name(game)
 
     # Delete existing tab with same name if re-saving
     existing = next((ws for ws in sh.worksheets() if ws.title == tab), None)
     if existing:
         sh.del_worksheet(existing)
 
-    rows = _build_sections(result, game, hold_pct, engine)
+    rows   = _build_sections(result, game, hold_pct, engine)
     n_rows = max(len(rows) + 5, 50)
     n_cols = 14
 
     ws = sh.add_worksheet(title=tab, rows=n_rows, cols=n_cols)
+    sid = ws.id
 
     # Write all data in one batch call
     ws.update(values=rows, range_name="A1")
 
-    # Bold the section headers (rows where col B is empty and col A has text)
-    header_rows = [i + 1 for i, r in enumerate(rows)
-                   if len(r) == 1 and r[0]]
-    if header_rows:
-        fmt_reqs = []
-        for hr in header_rows:
-            fmt_reqs.append({
-                "repeatCell": {
-                    "range": {
-                        "sheetId": ws.id,
-                        "startRowIndex": hr - 1,
-                        "endRowIndex": hr,
-                        "startColumnIndex": 0,
-                        "endColumnIndex": n_cols,
-                    },
-                    "cell": {
-                        "userEnteredFormat": {
-                            "textFormat": {"bold": True},
-                            "backgroundColor": {"red": 0.13, "green": 0.23, "blue": 0.37},
-                        }
-                    },
-                    "fields": "userEnteredFormat(textFormat,backgroundColor)",
-                }
-            })
-        sh.batch_update({"requests": fmt_reqs})
+    # ── Identify key row indices (0-indexed) ─────────────────────────────────
+    section_rows: Dict[str, int] = {}   # section name → row index of header row
+    col_header_rows: List[int]   = []   # row indices of column header rows (bold)
+    data_bands: List[tuple]      = []   # (start_row, end_row) of data bands for zebra
+
+    SECTIONS = {"METADATA", "TEAM PROJECTIONS", "GAME LINES", "PLAYER PROPS"}
+    i = 0
+    while i < len(rows):
+        r = rows[i]
+        cell0 = r[0].strip().upper() if r else ""
+        if cell0 in SECTIONS and len(r) == 1:
+            section_rows[cell0] = i
+            # Next non-empty row is the column header
+            j = i + 1
+            while j < len(rows) and not any(rows[j]):
+                j += 1
+            if j < len(rows) and any(rows[j]):
+                col_header_rows.append(j)
+                # Collect data rows after the column header
+                k = j + 1
+                band_start = k
+                while k < len(rows):
+                    if not any(rows[k]):
+                        break
+                    k += 1
+                if k > band_start:
+                    data_bands.append((band_start, k))
+        i += 1
+
+    reqs = []
+
+    # ── 1. Default cell style for entire sheet ───────────────────────────────
+    reqs.append(_repeat(sid, 0, n_rows, 0, n_cols, {
+        "textFormat": {"fontFamily": "Arial", "fontSize": 10},
+        "verticalAlignment": "MIDDLE",
+        "wrapStrategy": "CLIP",
+    }, "userEnteredFormat(textFormat,verticalAlignment,wrapStrategy)"))
+
+    # ── 2. Section header rows — dark navy background, white bold text ───────
+    NAVY   = _rgb(23, 37, 63)
+    WHITE  = _rgb(255, 255, 255)
+    for ri in section_rows.values():
+        reqs.append(_repeat(sid, ri, ri + 1, 0, n_cols, {
+            "backgroundColor": NAVY,
+            "textFormat": {"bold": True, "fontSize": 11,
+                           "foregroundColor": WHITE, "fontFamily": "Arial"},
+        }, "userEnteredFormat(backgroundColor,textFormat)"))
+
+    # ── 3. Column header rows — medium blue, white bold text ─────────────────
+    MED_BLUE = _rgb(37, 77, 130)
+    for ri in col_header_rows:
+        reqs.append(_repeat(sid, ri, ri + 1, 0, n_cols, {
+            "backgroundColor": MED_BLUE,
+            "textFormat": {"bold": True, "foregroundColor": WHITE,
+                           "fontSize": 10, "fontFamily": "Arial"},
+            "horizontalAlignment": "CENTER",
+        }, "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"))
+
+    # ── 4. Alternating row shading for data bands ────────────────────────────
+    LIGHT_BLUE = _rgb(235, 242, 252)
+    WHITE_BG   = _rgb(255, 255, 255)
+    for band_start, band_end in data_bands:
+        for ri in range(band_start, band_end):
+            bg = LIGHT_BLUE if (ri - band_start) % 2 == 1 else WHITE_BG
+            reqs.append(_repeat(sid, ri, ri + 1, 0, n_cols, {
+                "backgroundColor": bg,
+            }, "userEnteredFormat(backgroundColor)"))
+
+    # ── 5. Freeze first row and set row height for section headers ───────────
+    reqs.append({"updateSheetProperties": {
+        "properties": {
+            "sheetId": sid,
+            "gridProperties": {"frozenRowCount": 0},
+        },
+        "fields": "gridProperties.frozenRowCount",
+    }})
+
+    # Set section header rows to height 28px, col headers to 24px
+    for ri in section_rows.values():
+        reqs.append({"updateDimensionProperties": {
+            "range": {"sheetId": sid, "dimension": "ROWS",
+                      "startIndex": ri, "endIndex": ri + 1},
+            "properties": {"pixelSize": 28},
+            "fields": "pixelSize",
+        }})
+    for ri in col_header_rows:
+        reqs.append({"updateDimensionProperties": {
+            "range": {"sheetId": sid, "dimension": "ROWS",
+                      "startIndex": ri, "endIndex": ri + 1},
+            "properties": {"pixelSize": 24},
+            "fields": "pixelSize",
+        }})
+
+    # ── 6. Column widths ──────────────────────────────────────────────────────
+    col_widths = [180, 90, 45, 70, 85, 80, 80, 80, 90, 55, 55, 55, 100, 70]
+    for ci, px in enumerate(col_widths[:n_cols]):
+        reqs.append({"updateDimensionProperties": {
+            "range": {"sheetId": sid, "dimension": "COLUMNS",
+                      "startIndex": ci, "endIndex": ci + 1},
+            "properties": {"pixelSize": px},
+            "fields": "pixelSize",
+        }})
+
+    # ── 7. Number formatting for numeric data columns ─────────────────────────
+    # Find Player Props data band and apply number formats
+    if "PLAYER PROPS" in section_rows and len(data_bands) >= 1:
+        pp_section_row = section_rows["PLAYER PROPS"]
+        # Find the data band that starts after the Player Props section
+        pp_band = next(
+            ((s, e) for s, e in data_bands if s > pp_section_row), None
+        )
+        if pp_band:
+            bs, be = pp_band
+            # Projection, P10, P50, P90 cols (4, 9, 10, 11 — 0-indexed)
+            for ci in [4, 9, 10, 11]:
+                reqs.append(_repeat(sid, bs, be, ci, ci + 1, {
+                    "numberFormat": {"type": "NUMBER", "pattern": "0.00"},
+                }, "userEnteredFormat.numberFormat"))
+            # Fair P(Over) col (8) — percentage
+            reqs.append(_repeat(sid, bs, be, 8, 9, {
+                "numberFormat": {"type": "NUMBER", "pattern": "0.0%"},
+            }, "userEnteredFormat.numberFormat"))
+
+    # ── 8. Conditional formatting: Hit/Miss column ────────────────────────────
+    # Hit = green, Miss = red — applied to col 13 (N) across the whole sheet
+    GREEN_BG  = _rgb(198, 239, 206)
+    GREEN_FG  = _rgb(0, 97, 0)
+    RED_BG    = _rgb(255, 199, 206)
+    RED_FG    = _rgb(156, 0, 6)
+
+    for band_start, band_end in data_bands:
+        reqs.append({"addConditionalFormatRule": {
+            "rule": {
+                "ranges": [_range(sid, band_start, band_end, 13, 14)],
+                "booleanRule": {
+                    "condition": {"type": "TEXT_EQ", "values": [{"userEnteredValue": "Hit"}]},
+                    "format": {"backgroundColor": GREEN_BG,
+                               "textFormat": {"foregroundColor": GREEN_FG, "bold": True}},
+                },
+            },
+            "index": 0,
+        }})
+        reqs.append({"addConditionalFormatRule": {
+            "rule": {
+                "ranges": [_range(sid, band_start, band_end, 13, 14)],
+                "booleanRule": {
+                    "condition": {"type": "TEXT_EQ", "values": [{"userEnteredValue": "Miss"}]},
+                    "format": {"backgroundColor": RED_BG,
+                               "textFormat": {"foregroundColor": RED_FG, "bold": True}},
+                },
+            },
+            "index": 1,
+        }})
+
+    # ── 9. Conditional formatting: Fair P(Over) — green if >55%, red if <45% ─
+    for band_start, band_end in data_bands:
+        reqs.append({"addConditionalFormatRule": {
+            "rule": {
+                "ranges": [_range(sid, band_start, band_end, 8, 9)],
+                "booleanRule": {
+                    "condition": {"type": "NUMBER_GREATER", "values": [{"userEnteredValue": "0.55"}]},
+                    "format": {"backgroundColor": GREEN_BG},
+                },
+            },
+            "index": 2,
+        }})
+        reqs.append({"addConditionalFormatRule": {
+            "rule": {
+                "ranges": [_range(sid, band_start, band_end, 8, 9)],
+                "booleanRule": {
+                    "condition": {"type": "NUMBER_LESS", "values": [{"userEnteredValue": "0.45"}]},
+                    "format": {"backgroundColor": RED_BG},
+                },
+            },
+            "index": 3,
+        }})
+
+    # ── 10. Tab colour — dark blue to match the navy headers ─────────────────
+    reqs.append({"updateSheetProperties": {
+        "properties": {
+            "sheetId": sid,
+            "tabColorStyle": {"rgbColor": _rgb(23, 37, 63)},
+        },
+        "fields": "tabColorStyle",
+    }})
+
+    # ── Fire all formatting requests in one API call ──────────────────────────
+    if reqs:
+        sh.batch_update({"requests": reqs})
 
     logger.info("Saved snapshot to tab: %s", tab)
     return tab
