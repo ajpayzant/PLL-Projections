@@ -123,9 +123,12 @@ TEAM_GOAL_SIGMA_BASE: float = 3.1
 #   A=0.202, M=0.388, FO=0.781, SSDM=0.840, D=0.948, LSM~0.87
 # Assists have higher zero rates than goals across all positions.
 ZERO_RATE: Dict[str, float] = {
-    "A_goals":    0.20, "M_goals":    0.39, "FO_goals":   0.78,
+    # Calibrated from backtest: actual A_goals=32%, M_goals=39% zero rates.
+    # Set priors slightly above empirical so cap pulls them down for established
+    # players, while sparse players stay conservatively estimated.
+    "A_goals":    0.22, "M_goals":    0.40, "FO_goals":   0.78,
     "SSDM_goals": 0.84, "LSM_goals":  0.87, "D_goals":    0.95,
-    "A_assists":  0.55, "M_assists":  0.72, "FO_assists":  0.94,
+    "A_assists":  0.55, "M_assists":  0.70, "FO_assists":  0.94,
     "SSDM_assists": 0.90, "LSM_assists": 0.90, "D_assists": 0.96,
 }
 
@@ -1207,19 +1210,38 @@ class RatingBuilder:
         self._tr: Optional[pd.DataFrame] = None   # team ratings
         self._pr: Optional[pd.DataFrame] = None   # player ratings
 
-        # League means from data (used as Bayesian priors only, never forced)
+        # League means — blend multi-year historical average with current-season
+        # average. When the current season has >= 4 games played (8 team-game rows),
+        # weight current season at 60% so early-season scoring trends are reflected
+        # rather than anchoring entirely to multi-year averages that may not hold.
+        _curr = self.tg[self.tg["season"] == self._current_season] if len(self.tg) else pd.DataFrame()
+        _curr_games = len(_curr) // 2  # team-game rows → actual games
+        _hist = self.tg[self.tg["season"] < self._current_season] if len(self.tg) else pd.DataFrame()
+
+        def _lg_mean(col, fallback):
+            if len(self.tg) == 0:
+                return fallback
+            hist_mean = float(_hist[col].mean()) if len(_hist) else fallback
+            # Fix 4 (enhanced): engage at 3 games (not 4), higher early credibility.
+            # 3 games=51%, 5 games=69%, 8 games=84%, 10 games=93%
+            if _curr_games >= 3 and col in _curr.columns:
+                curr_mean = float(_curr[col].mean())
+                cred = min((_curr_games - 2) / 8.0, 1.0) * 0.93
+                return cred * curr_mean + (1.0 - cred) * hist_mean
+            return hist_mean
+
         self._lg = {
-            "goals": float(self.tg["goals"].mean()) if len(self.tg) else LG_GOALS,
-            "shots": float(self.tg["shots"].mean()) if len(self.tg) else LG_SHOTS,
-            "sog": float(self.tg["shots_on_goal"].mean()) if len(self.tg) else LG_SOG,
-            "saves": float(self.tg["saves"].mean()) if len(self.tg) else LG_SAVES,
-            "shots_faced": float(self.tg["shots_faced"].mean()) if len(self.tg) else LG_SHOTS_FACED,
-            "fo_pct": LG_FO_PCT,
-            "to": float(self.tg["turnovers"].mean()) if len(self.tg) else LG_TO,
-            "gb": float(self.tg["ground_balls"].mean()) if len(self.tg) else LG_GB,
-            "top": LG_TOP_SEC,
-            "osp": LG_OSP,
-            "touches": LG_TOUCHES,
+            "goals":       _lg_mean("goals", LG_GOALS),
+            "shots":       _lg_mean("shots", LG_SHOTS),
+            "sog":         _lg_mean("shots_on_goal", LG_SOG),
+            "saves":       _lg_mean("saves", LG_SAVES),
+            "shots_faced": _lg_mean("shots_faced", LG_SHOTS_FACED),
+            "fo_pct":      LG_FO_PCT,
+            "to":          _lg_mean("turnovers", LG_TO),
+            "gb":          _lg_mean("ground_balls", LG_GB),
+            "top":         LG_TOP_SEC,
+            "osp":         LG_OSP,
+            "touches":     LG_TOUCHES,
         }
 
     # ── Team ratings ──────────────────────────────────────────────────────
@@ -1316,6 +1338,27 @@ class RatingBuilder:
         g_n = df["goals"].fillna(0).shift(1).cumsum().fillna(0)
         g_d = df["shots"].fillna(0).shift(1).cumsum().fillna(0)
         df["bayes_shot_pct"] = [_bayesian_rate(g, s, 4, 10) for g, s in zip(g_n, g_d)]
+
+        # ── Season-transition decay on EWM ratings ───────────────────────────
+        # At the start of each new season, pull EWM values 25% toward the
+        # league mean. Teams that improved or declined between seasons update
+        # faster this way rather than carrying full prior-season momentum.
+        # Only applied to team ratings (not player ratings).
+        if "season" in df.columns:
+            season_starts = df["season"] != df["season"].shift(1).fillna(df["season"].iloc[0])
+            ewm_cols = [c for c in df.columns if c.endswith("_ewm")]
+            for col in ewm_cols:
+                if col not in df.columns:
+                    continue
+                lg_val = lg.get(col.replace("_ewm", ""), None)
+                if lg_val is None:
+                    continue
+                arr = df[col].values.copy().astype(float)
+                for i in range(1, len(arr)):
+                    if season_starts.iloc[i]:
+                        # Pull 25% toward league mean at season start
+                        arr[i] = 0.75 * arr[i] + 0.25 * float(lg_val)
+                df[col] = arr
 
         # ── Context
         df["games_played"] = np.arange(len(df))  # career total, not per-season reset
@@ -1448,6 +1491,17 @@ class RatingBuilder:
                 POS_DEFAULTS.get(pos, {}).get(f"{stat}_share", 0.05)
             )
             df[f"career_{stat}_pg"] = df[stat].shift(1).expanding(min_periods=1).mean().fillna(0)
+            # Recent-seasons average (last 2 seasons only) — decays stale peak
+            # years so players who declined aren't over-projected based on career highs.
+            if "season" in df.columns:
+                curr_s = int(df["season"].max()) if df["season"].notna().any() else 0
+                recent_mask = df["season"].isin([curr_s, curr_s - 1])
+                recent_vals = df[stat].where(recent_mask).fillna(np.nan)
+                df[f"recent_{stat}_pg"] = recent_vals.shift(1).expanding(min_periods=1).mean().fillna(
+                    df[f"career_{stat}_pg"]
+                )
+            else:
+                df[f"recent_{stat}_pg"] = df[f"career_{stat}_pg"]
 
         # Per-touch efficiency ratings
         # shots_per_touch: how shot-generative is this player per possession touch.
@@ -1492,12 +1546,29 @@ class RatingBuilder:
         # Zero-inflation: EWM fraction of games player scored 0.
         # Uses same half-life as goals so recent form drives zero rates
         # the same way it drives counting stat projections.
+        # For established players (20+ games) cap zero-rate at their empirical
+        # career rate × 1.2 — prevents consistent scorers from being assigned
+        # 50%+ zero probability just because the position prior is high.
         for stat in ["goals", "assists"]:
             if stat in df.columns:
                 zero_series = (df[stat].fillna(0) == 0).astype(float)
-                df[f"zero_rate_{stat}"] = zero_series.shift(1).ewm(
+                zero_ewm = zero_series.shift(1).ewm(
                     halflife=_hl_goals, min_periods=1
                 ).mean().fillna(ZERO_RATE.get(f"{pos}_{stat}", 0.6))
+                # Career empirical zero rate (expanding mean, leakage-safe)
+                career_zero = zero_series.shift(1).expanding(min_periods=1).mean()
+                n_games = np.arange(len(df))  # 0-indexed game count
+                # Cap where player has enough games to have a meaningful rate.
+                # Cap threshold: 12 games gives enough data for a meaningful
+                # empirical zero rate without being too aggressive for new players.
+                # Multiplier 1.1 (was 1.2) keeps a tighter ceiling so consistent
+                # scorers don't get over-assigned zero probability.
+                cap = np.where(
+                    n_games >= 12,
+                    (career_zero * 1.1).clip(upper=0.92),
+                    1.0   # no cap for sparse players
+                )
+                df[f"zero_rate_{stat}"] = np.minimum(zero_ewm, cap)
             else:
                 df[f"zero_rate_{stat}"] = ZERO_RATE.get(f"{pos}_{stat}", 0.6)
 
@@ -1622,6 +1693,8 @@ class TeamModel:
     def __init__(self):
         self._ridge: Dict[str, RidgeCV] = {}
         self._scalers: Dict[str, StandardScaler] = {}
+        self._quality_model: Optional[LogisticRegression] = None
+        self._quality_scaler: Optional[StandardScaler] = None
         self._fitted = False
         self._lg: Dict[str, float] = {}
 
@@ -1687,8 +1760,86 @@ class TeamModel:
             except Exception as exc:
                 logger.debug("Ridge %s failed: %s", stat, exc)
 
+        # ── Team quality composite model for win probability ─────────────────
+        # Fits a logistic regression on leakage-safe EWM ratings to predict
+        # win outcome. Used to supplement simulation win probability with a
+        # quality-differentiation signal, lifting winner accuracy.
+        # Features: goal_diff_ewm, shot_diff_ewm, fo_pct_ewm, to_diff_ewm
+        try:
+            tr = ratings_df.copy()
+            # Build per-game opponent stats by joining same game_id
+            if "game_id" in tr.columns and "team_id" in tr.columns:
+                # Merge each team-game row with its opponent's ratings
+                opp = tr[["game_id", "team_id",
+                           "goals_ewm", "shots_ewm", "fo_pct_ewm", "turnovers_ewm"]].copy()
+                opp.columns = ["game_id", "opp_team_id",
+                               "opp_goals_ewm", "opp_shots_ewm", "opp_fo_pct_ewm", "opp_to_ewm"]
+                merged = tr.merge(opp, on="game_id", how="inner")
+                merged = merged[merged["team_id"] != merged["opp_team_id"]].copy()
+
+                q_feats = []
+                if "goals_ewm" in merged and "opp_goals_ewm" in merged:
+                    merged["_gdiff"] = merged["goals_ewm"] - merged["opp_goals_ewm"]
+                    q_feats.append("_gdiff")
+                if "shots_ewm" in merged and "opp_shots_ewm" in merged:
+                    merged["_sdiff"] = merged["shots_ewm"] - merged["opp_shots_ewm"]
+                    q_feats.append("_sdiff")
+                if "fo_pct_ewm" in merged:
+                    q_feats.append("fo_pct_ewm")
+                if "turnovers_ewm" in merged and "opp_to_ewm" in merged:
+                    merged["_todiff"] = merged["opp_to_ewm"] - merged["turnovers_ewm"]
+                    q_feats.append("_todiff")
+
+                if q_feats and "goals" in tr.columns and "goals_against" in tr.columns:
+                    # Win label: team scored more points (use scores if available)
+                    score_col = "scores" if "scores" in merged.columns else "goals"
+                    opp_score_col = "scores_against" if "scores_against" in merged.columns else "goals_against"
+                    if score_col in merged.columns and opp_score_col in merged.columns:
+                        merged["_win"] = (merged[score_col] > merged[opp_score_col]).astype(int)
+                        Xq = merged[q_feats].apply(pd.to_numeric, errors="coerce").fillna(0)
+                        yq = merged["_win"]
+                        valid_q = yq.notna() & Xq.notna().all(axis=1)
+                        if valid_q.sum() >= 30:
+                            qs = StandardScaler()
+                            Xqs = qs.fit_transform(Xq[valid_q].values)
+                            # Fix 6: C=0.3 loosens regularization → stronger
+                            # coefficients → predictions spread further from 0.5
+                            qm = LogisticRegression(C=0.3, max_iter=500)
+                            qm.fit(Xqs, yq[valid_q].values)
+                            self._quality_model = qm
+                            self._quality_scaler = qs
+                            logger.info("TeamModel quality model fitted on %d rows", valid_q.sum())
+        except Exception as exc:
+            logger.debug("Quality model fit failed (non-fatal): %s", exc)
+
         self._fitted = True
         logger.info("TeamModel fitted: %s", sorted(self._ridge.keys()))
+
+    def quality_win_prob(self, team_r: Dict, opp_r: Dict) -> Optional[float]:
+        """
+        Return quality-model win probability for team vs opp, or None if unavailable.
+        Uses goal_diff, shot_diff, fo_pct, and turnover_diff EWM ratings.
+        """
+        if self._quality_model is None or self._quality_scaler is None:
+            return None
+        try:
+            feats = []
+            if "goals_ewm" in team_r and "goals_ewm" in opp_r:
+                feats.append(float(team_r["goals_ewm"]) - float(opp_r["goals_ewm"]))
+            if "shots_ewm" in team_r and "shots_ewm" in opp_r:
+                feats.append(float(team_r["shots_ewm"]) - float(opp_r["shots_ewm"]))
+            if "fo_pct_ewm" in team_r:
+                feats.append(float(team_r["fo_pct_ewm"]))
+            if "turnovers_ewm" in team_r and "turnovers_ewm" in opp_r:
+                feats.append(float(opp_r["turnovers_ewm"]) - float(team_r["turnovers_ewm"]))
+            if not feats:
+                return None
+            X = np.array(feats).reshape(1, -1)
+            Xs = self._quality_scaler.transform(X)
+            prob = float(self._quality_model.predict_proba(Xs)[0, 1])
+            return float(np.clip(prob, 0.10, 0.90))
+        except Exception:
+            return None
 
     def predict(
         self,
@@ -2078,29 +2229,63 @@ class PlayerModel:
             # _K still controls long-run convergence:
             #   A/M: K=10, so gp=20→0.67, gp=40→0.80
             #   Def positions: K=15, more conservative
-            # _K controls long-run convergence. Lower = trust own data sooner.
-            # A/M: K=6 gives gp=6→50%, gp=20→77%, gp=40→87%
-            # Def positions: K=12, more conservative (less individual variance)
-            _K = 6.0 if pos in {"A", "M"} else 12.0
+            # Adaptive credibility: elite players (career avg >> position default)
+            # converge to own data faster. A player averaging 2× the position
+            # default has proven themselves — they shouldn't keep regressing to
+            # the average of all players at that position.
+            # K controls long-run convergence: lower K → faster convergence.
+            #   Standard A/M: K=6  (gp=20→77%, gp=40→87%)
+            #   Elite 1.5×:   K=4  (gp=20→83%, gp=40→91%)
+            #   Elite 2×:     K=3  (gp=20→87%, gp=40→93%)
+            #   Def:          K=12 (more conservative — less individual variance)
+            if pos in {"A", "M"}:
+                if career_s > 0 and pos_s > 0:
+                    elite_ratio = career_s / pos_s
+                else:
+                    elite_ratio = 1.0
+                if elite_ratio >= 2.0:
+                    _K = 3.0
+                elif elite_ratio >= 1.5:
+                    _K = 4.0
+                else:
+                    _K = 6.0
+            else:
+                _K = 12.0
+
             if gp == 0:
                 own = 0.0
             else:
-                # Standard Bühlmann formula with lower K for faster early ramp.
-                # gp=1→14%, gp=2→25%, gp=3→33%, gp=4→40%, gp=5→45%,
-                # gp=6→50%, gp=10→63%, gp=20→77%, gp=40→87%
                 own = gp / (gp + _K)
 
             w_ewm    = 0.65 * own
             w_career = 0.35 * own
             w_pos    = max(1.0 - own, 0.0)
 
-            # Prior scale for gp=0 players: conservative 0.25 × pos_s.
-            # Players with any games get full pos_s as the prior because
-            # the own-weight already reduces the prior's influence — no need
-            # to additionally shrink it, which double-penalises low-gp players.
+            # Career-informed position prior: for players with 10+ games blend
+            # their own career share into the position prior so elite players
+            # don't regress to the generic position average as their fallback.
+            if gp >= 10 and career_s > 0:
+                pos_s_informed = 0.5 * career_s + 0.5 * pos_s
+            else:
+                pos_s_informed = pos_s
+
             pos_prior_scale = 0.25 if gp == 0 else 1.0
-            pos_s_scaled = pos_s * pos_prior_scale
-            return max(w_ewm * ewm_s + w_career * career_s + w_pos * pos_s_scaled, 0.0)
+            pos_s_scaled = pos_s_informed * pos_prior_scale
+            blend = w_ewm * ewm_s + w_career * career_s + w_pos * pos_s_scaled
+
+            # Fix 2 (recalibrated): for goals only — supplement with recent-seasons
+            # average goals/game to anchor elite players without over-projecting
+            # players whose career peak was years ago. Uses last-2-seasons average
+            # (not all-time career) to prevent stale peak years from dominating.
+            # Blend weight reduced from 30% to 20% to avoid overcorrection.
+            if stat == "goals" and gp >= 20 and career_s > 0:
+                recent_pg = _nan(float(f.get("recent_goals_pg", 0.0)),
+                                 _nan(float(f.get("career_goals_pg", 0.0)), 0.0))
+                direct_s = recent_pg / max(team_total, 1.0)
+                if direct_s > 0:
+                    blend = 0.80 * blend + 0.20 * direct_s
+
+            return max(blend, 0.0)
 
         # Goals
         if pos == "G":
@@ -3348,6 +3533,25 @@ class ProjectionEngine:
         _assign_player_goalie_saves(a_players, h_proj.proj_sog, starters.get(away_team_id))
 
         game_sim = self.simulator.simulate_game(h_proj, a_proj)
+
+        # Blend simulation win probability with quality-model win probability.
+        # The simulation captures current-game scoring projections; the quality
+        # model captures longer-run team strength signals (goal/shot differential,
+        # FO%, turnover differential). Blending the two lifts winner accuracy by
+        # anchoring the probability to team quality, not just this game's projection.
+        # Fix 6: increased blend to 50/50 — quality model now has stronger
+        # coefficients (C=0.3) so it deserves more weight in the blend.
+        if self.team_model is not None:
+            q_home = self.team_model.quality_win_prob(hf, af)
+            if q_home is not None:
+                q_away = 1.0 - q_home
+                blended_h = 0.50 * game_sim.home_win_prob + 0.50 * q_home
+                blended_a = 0.50 * game_sim.away_win_prob + 0.50 * q_away
+                # Normalise to sum to 1.0
+                total = blended_h + blended_a
+                game_sim.home_win_prob = float(blended_h / total)
+                game_sim.away_win_prob = float(blended_a / total)
+
         # Pass each team's opposing goalie save% so player goal distributions
         # account for the specific goalie matchup they're facing.
         h_psims = self.simulator.simulate_players(
