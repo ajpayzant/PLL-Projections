@@ -607,8 +607,17 @@ def _update_dashboard(sh, latest_tab: str) -> None:
         rows.append(["Actual Result", "Filled in automatically by Sync Actuals after the game"])
         rows.append(["Hit/Miss", "Green = Hit (actual ≥ line), Red = Miss"])
 
-        # Write all rows
+        # Write all rows — clear values AND all existing formatting first so
+        # stale formatting from prior versions doesn't bleed through.
         ws.clear()
+        sh.batch_update({"requests": [{
+            "updateCells": {
+                "range": {"sheetId": sid,
+                          "startRowIndex": 0, "endRowIndex": 100,
+                          "startColumnIndex": 0, "endColumnIndex": 10},
+                "fields": "userEnteredFormat",
+            }
+        }]})
         ws.update(values=rows, range_name="A1")
 
         # ── Format dashboard ──────────────────────────────────────────────────
