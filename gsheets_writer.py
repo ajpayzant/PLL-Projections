@@ -547,9 +547,15 @@ def _update_dashboard(sh, latest_tab: str) -> None:
                 matchup, rest = t.split("_G", 1)
                 gn, date = rest.split("_", 1)
                 away, home = matchup.split("@", 1)
-                # Check if actuals have been synced by scanning col N (Actual Result)
-                vals = w.col_values(13)   # col 13 = M = Actual Result (1-indexed)
-                has_actuals = any(v.strip() not in ("", "Actual Result") for v in vals)
+                # Check if actuals have been synced by scanning col N (Actual Result).
+                # Col N is index 14 (1-indexed) in the sheet. Skip the header value
+                # itself and only count non-empty numeric-looking values.
+                vals = w.col_values(14)   # col 14 = N = Actual Result (1-indexed)
+                has_actuals = any(
+                    v.strip() not in ("", "Actual Result")
+                    and v.strip().lstrip("-").replace(".", "", 1).isdigit()
+                    for v in vals
+                )
                 games.append({
                     "tab": t, "away": away, "home": home,
                     "gn": gn, "date": date, "actuals": has_actuals,
@@ -641,10 +647,11 @@ def _update_dashboard(sh, latest_tab: str) -> None:
                            "foregroundColor": WHITE, "fontFamily": "Arial"},
         }, "userEnteredFormat(backgroundColor,textFormat)"))
 
-        # Subtitle rows (rows 1–3)
+        # Subtitle rows (rows 1–3) — explicit white foreground to prevent black text
         reqs.append(_repeat(sid, 1, 4, 0, 10, {
-            "backgroundColor": _rgb(37, 77, 130),
-            "textFormat": {"foregroundColor": WHITE, "fontSize": 10, "fontFamily": "Arial"},
+            "backgroundColor": MED_BLUE,
+            "textFormat": {"foregroundColor": WHITE, "fontSize": 10,
+                           "fontFamily": "Arial", "bold": False},
         }, "userEnteredFormat(backgroundColor,textFormat)"))
 
         # Section headers (SAVED GAMES, HOW TO USE, COLUMN GUIDE)
