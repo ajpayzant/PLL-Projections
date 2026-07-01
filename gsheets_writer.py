@@ -634,27 +634,35 @@ def _update_dashboard(sh, latest_tab: str) -> None:
 
         reqs = []
 
-        # Default style
+        BLACK = _rgb(0, 0, 0)
+
+        # Step 1 — font/alignment baseline for entire sheet (no color set here)
         reqs.append(_repeat(sid, 0, len(rows) + 5, 0, 10, {
             "textFormat": {"fontFamily": "Arial", "fontSize": 10},
             "verticalAlignment": "MIDDLE",
         }, "userEnteredFormat(textFormat,verticalAlignment)"))
 
-        # Title row — large navy
+        # Step 2 — explicitly black text on all rows so data rows are readable
+        reqs.append(_repeat(sid, 0, len(rows) + 5, 0, 10, {
+            "textFormat": {"foregroundColor": BLACK},
+        }, "userEnteredFormat.textFormat.foregroundColor"))
+
+        # Step 3 — coloured header rows override foreground to white AFTER step 2
+        # Title row — large navy, white text
         reqs.append(_repeat(sid, title_row, title_row + 1, 0, 10, {
             "backgroundColor": NAVY,
             "textFormat": {"bold": True, "fontSize": 14,
                            "foregroundColor": WHITE, "fontFamily": "Arial"},
         }, "userEnteredFormat(backgroundColor,textFormat)"))
 
-        # Subtitle rows (rows 1–3) — explicit white foreground to prevent black text
+        # Subtitle rows (rows 1–3) — medium blue, white text
         reqs.append(_repeat(sid, 1, 4, 0, 10, {
             "backgroundColor": MED_BLUE,
             "textFormat": {"foregroundColor": WHITE, "fontSize": 10,
                            "fontFamily": "Arial", "bold": False},
         }, "userEnteredFormat(backgroundColor,textFormat)"))
 
-        # Section headers (SAVED GAMES, HOW TO USE, COLUMN GUIDE)
+        # Section headers (SAVED GAMES, HOW TO USE, COLUMN GUIDE) — navy, white text
         for ri in [r for r in [games_hdr, how_hdr, col_guide] if r is not None]:
             reqs.append(_repeat(sid, ri, ri + 1, 0, 10, {
                 "backgroundColor": NAVY,
@@ -662,7 +670,7 @@ def _update_dashboard(sh, latest_tab: str) -> None:
                                "foregroundColor": WHITE, "fontFamily": "Arial"},
             }, "userEnteredFormat(backgroundColor,textFormat)"))
 
-        # Column header rows
+        # Column header rows — medium blue, white text, centered
         for ri in [r for r in [games_col_hdr, how_col_hdr, col_guide_hdr] if r is not None]:
             reqs.append(_repeat(sid, ri, ri + 1, 0, 10, {
                 "backgroundColor": MED_BLUE,
