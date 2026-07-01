@@ -245,7 +245,7 @@ def save_snapshot(result, game: Dict, hold_pct: float, engine) -> str:
 
     rows   = _build_sections(result, game, hold_pct, engine)
     n_rows = max(len(rows) + 5, 50)
-    n_cols = 14
+    n_cols = 15   # A–O: 14 data cols + Actual Score in col O
 
     ws = sh.add_worksheet(title=tab, rows=n_rows, cols=n_cols)
     sid = ws.id
@@ -346,15 +346,18 @@ def save_snapshot(result, game: Dict, hold_pct: float, engine) -> str:
             "fields": "pixelSize",
         }})
 
-    # ── 6. Column widths ──────────────────────────────────────────────────────
-    col_widths = [180, 90, 45, 70, 85, 80, 80, 80, 90, 55, 55, 55, 100, 70]
-    for ci, px in enumerate(col_widths[:n_cols]):
-        reqs.append({"updateDimensionProperties": {
-            "range": {"sheetId": sid, "dimension": "COLUMNS",
-                      "startIndex": ci, "endIndex": ci + 1},
-            "properties": {"pixelSize": px},
-            "fields": "pixelSize",
-        }})
+    # ── 6. Column widths — fixed for A and B, autofit deferred for C–O ─────────
+    # Col A: fixed 180px for long player names
+    # Col B: fixed 120px for team names / value labels
+    # Cols C–O: autofit fired in a second batch after data is committed
+    reqs.append({"updateDimensionProperties": {
+        "range": {"sheetId": sid, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 1},
+        "properties": {"pixelSize": 180}, "fields": "pixelSize",
+    }})
+    reqs.append({"updateDimensionProperties": {
+        "range": {"sheetId": sid, "dimension": "COLUMNS", "startIndex": 1, "endIndex": 2},
+        "properties": {"pixelSize": 120}, "fields": "pixelSize",
+    }})
 
     # ── 7. Number formatting for numeric data columns ─────────────────────────
     # Find Player Props data band and apply number formats
@@ -376,7 +379,48 @@ def save_snapshot(result, game: Dict, hold_pct: float, engine) -> str:
                 "numberFormat": {"type": "NUMBER", "pattern": "0.0%"},
             }, "userEnteredFormat.numberFormat"))
 
-    # ── 8. Conditional formatting: Hit/Miss column ────────────────────────────
+    # ── 8. Merge B2:D2 — matchup title spans three columns ───────────────────
+    # Only merge — do NOT touch textFormat or alignment so it keeps the same
+    # font/size/color as the rest of the metadata and stays left-aligned.
+    reqs.append({"mergeCells": {
+        "range": _range(sid, 1, 2, 1, 4),
+        "mergeType": "MERGE_ALL",
+    }})
+
+    # ── 9. Centering — ALL columns in data bands, ALL columns in headers ─────
+    # Every data cell (A through O) is centered. This covers:
+    #   Team Projections: col A (Atlas/Waterdogs), cols B-O (all numbers)
+    #   Game Lines: col A (Market), col B (Line), col C (Odds), col D (Fair Prob)
+    #   Player Props: col A (Player name), col B (Team), col C+ (all values)
+    # Col A player names are intentionally centered — looks cleaner in a table.
+    for band_start, band_end in data_bands:
+        reqs.append(_repeat(sid, band_start, band_end, 0, n_cols, {
+            "horizontalAlignment": "CENTER",
+        }, "userEnteredFormat(horizontalAlignment)"))
+        # Override col A in Player Props to left-align long player names only
+        # Player Props is the last data band — detect it by being the largest band
+    # Column header rows — center all columns
+    for ri in col_header_rows:
+        reqs.append(_repeat(sid, ri, ri + 1, 0, n_cols, {
+            "horizontalAlignment": "CENTER",
+        }, "userEnteredFormat(horizontalAlignment)"))
+
+    # Player names (col A in the largest/last data band) left-aligned for readability
+    if data_bands:
+        pp_start, pp_end = max(data_bands, key=lambda b: b[1] - b[0])
+        reqs.append(_repeat(sid, pp_start, pp_end, 0, 1, {
+            "horizontalAlignment": "LEFT",
+        }, "userEnteredFormat(horizontalAlignment)"))
+
+    # Metadata value column (col B, first/smallest data band) — left-aligned.
+    # These are text labels like team names, dates, roster sources, not numbers.
+    if data_bands:
+        meta_start, meta_end = min(data_bands, key=lambda b: b[0])
+        reqs.append(_repeat(sid, meta_start, meta_end, 1, 2, {
+            "horizontalAlignment": "LEFT",
+        }, "userEnteredFormat(horizontalAlignment)"))
+
+    # ── 10. Conditional formatting: Hit/Miss column ──────────────────────────
     # Hit = green, Miss = red — applied to col 13 (N) across the whole sheet
     GREEN_BG  = _rgb(198, 239, 206)
     GREEN_FG  = _rgb(0, 97, 0)
@@ -439,9 +483,20 @@ def save_snapshot(result, game: Dict, hold_pct: float, engine) -> str:
         "fields": "tabColorStyle",
     }})
 
-    # ── Fire all formatting requests in one API call ──────────────────────────
+    # ── Fire all formatting requests ─────────────────────────────────────────
     if reqs:
         sh.batch_update({"requests": reqs})
+
+    # ── Autofit cols C–O in a second call so data is committed first ──────────
+    # autoResizeDimensions measures actual rendered cell content — it must run
+    # after the data write and formatting batch are fully committed, otherwise
+    # it measures empty cells and sets all columns to minimum width.
+    sh.batch_update({"requests": [{
+        "autoResizeDimensions": {
+            "dimensions": {"sheetId": sid, "dimension": "COLUMNS",
+                           "startIndex": 2, "endIndex": n_cols},
+        }
+    }]})
 
     logger.info("Saved snapshot to tab: %s", tab)
     return tab
