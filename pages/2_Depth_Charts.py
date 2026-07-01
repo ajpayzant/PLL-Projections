@@ -593,26 +593,21 @@ def _render_team(team_id: str, team_nm: str, players):
                     # the user will see a stale value and get wrong override results).
                     has_saved_override = key in rating_overrides
                     if has_saved_override:
-                        # User has an active override — keep widget at their value
+                        # User has an active override — keep widget at their saved value.
                         if wgt_key not in st.session_state:
                             seed_val = rating_overrides[key]
                             st.session_state[wgt_key] = float(
                                 min(max(float(seed_val), meta["min"]), meta["max"])
                             )
                     else:
-                        # No active override — sync widget to model value.
-                        # Share keys reseed every render because model_val reflects
-                        # the current post-reconcile projection (changes after scratches
-                        # or Update Projection). Non-share keys come from DB and are
-                        # stable, so only seed once to avoid fighting widget state.
-                        if key in ("share_goals_ewm", "share_assists_ewm", "share_shots_ewm"):
-                            st.session_state[wgt_key] = float(
-                                min(max(float(model_val), meta["min"]), meta["max"])
-                            )
-                        elif wgt_key not in st.session_state:
-                            st.session_state[wgt_key] = float(
-                                min(max(float(model_val), meta["min"]), meta["max"])
-                            )
+                        # No active override — always reseed from model value every render.
+                        # This guarantees the textbox reflects the model value immediately
+                        # after a reset, without requiring a second interaction.
+                        # Safe for all keys: share keys change after reconcile (correct to
+                        # always update), non-share keys come from DB (stable, no flicker).
+                        st.session_state[wgt_key] = float(
+                            min(max(float(model_val), meta["min"]), meta["max"])
+                        )
 
                     def _on_change(t=team_id, p_=pid, k=key, wk=wgt_key, mn=meta["min"], mx=meta["max"], mv=model_val, stp=meta["step"]):
                         raw = st.session_state.get(wk, mv)
@@ -679,38 +674,27 @@ def _render_team(team_id: str, team_nm: str, players):
                 col_rst, col_close = st.columns(2)
                 with col_rst:
                     if st.button(f"Reset ratings", key=f"rst_p_{team_id}_{pid}"):
-                        # 1. Clear saved rating overrides for this player
+                        # Clear saved rating overrides
                         dc_ = st.session_state.depth_charts.get(team_id, {})
                         if pid in dc_:
                             dc_[pid].pop("rating_overrides", None)
 
-                        # 2. Persist the cleared state to disk immediately so the
-                        #    autosave file doesn't resurrect old overrides on reload.
+                        # Persist immediately so autosave doesn't resurrect old values
                         from _engine_state import _autosave
                         _autosave()
 
-                        # 3. Clear ALL pr_num widget keys for this player so every
-                        #    input reseeds from the fresh model value on next render.
-                        #    Use prefix match so newly-added rating keys are always caught.
-                        stale_keys = [k for k in st.session_state
-                                      if k.startswith(f"pr_num_{team_id}_{pid}_")]
-                        for k in stale_keys:
-                            del st.session_state[k]
-
-                        # 4. Invalidate the baseline result cache so deltas refresh
+                        # Invalidate baseline cache so delta display refreshes
                         st.session_state.pop("_baseline_result", None)
                         st.session_state.pop("_baseline_result_key", None)
 
-                        # 5. Re-run projection so last_result and share model_val
-                        #    both reflect the cleared overrides before widgets reseed.
+                        # Re-run projection so share model_val is fresh
                         game = st.session_state.get("selected_game")
                         if game:
                             from _engine_state import run_projection_for_game
                             run_projection_for_game(engine, game)
 
-                        # 6. Keep panel open so user sees the inputs update to model
-                        #    values — closing it would hide the confirmation.
-                        #    Widget keys were deleted above so they reseed on this rerun.
+                        # Rerun — seeding block now always reseeds when no override
+                        # is active, so textboxes update to model values automatically.
                         st.rerun()
                 with col_close:
                     if st.button("Close", key=f"close_r_{team_id}_{pid}"):
