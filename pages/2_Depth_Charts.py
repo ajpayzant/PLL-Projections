@@ -157,10 +157,21 @@ with st.sidebar:
         if st.button("Reset usage", key="bulk_use", width="stretch"):
             for p in (result.away_players if bulk_team == away_nm else result.home_players):
                 set_player_override(bulk_tid, p.player_id, "usage_multiplier", 1.0)
+                # Clear widget state so the spinner immediately shows 1.0
+                wk = f"use_{bulk_tid}_{p.player_id}"
+                if wk in st.session_state:
+                    del st.session_state[wk]
             st.rerun()
     with b2:
         if st.button("Clear overrides", key="bulk_clr", width="stretch"):
             st.session_state.depth_charts[bulk_tid] = {}
+            # Clear ALL widget state for this team so inputs reseed correctly
+            stale = [k for k in st.session_state
+                     if k.startswith(f"pr_num_{bulk_tid}_")
+                     or k.startswith(f"use_{bulk_tid}_")
+                     or k.startswith(f"pos_{bulk_tid}_")]
+            for k in stale:
+                del st.session_state[k]
             st.rerun()
 
 st.markdown("---")
@@ -665,23 +676,31 @@ def _render_team(team_id: str, team_nm: str, players):
                 col_rst, col_close = st.columns(2)
                 with col_rst:
                     if st.button(f"Reset ratings", key=f"rst_p_{team_id}_{pid}"):
-                        if pid in st.session_state.depth_charts.get(team_id, {}):
-                            st.session_state.depth_charts[team_id][pid].pop(
-                                "rating_overrides", None
-                            )
-                        # Clear widget session state so inputs reseed from model values
-                        for k2 in PLAYER_RATING_DEFS:
-                            wk2 = f"pr_num_{team_id}_{pid}_{k2}"
-                            if wk2 in st.session_state:
-                                del st.session_state[wk2]
-                        # Re-run projection so last_result reflects cleared overrides
-                        # before share widgets reseed from p.proj_goals/team_goals.
-                        # Without this, share model_val derives from the stale result
-                        # that still has the just-cleared rating overrides applied.
+                        # 1. Clear saved rating overrides for this player
+                        dc_ = st.session_state.depth_charts.get(team_id, {})
+                        if pid in dc_:
+                            dc_[pid].pop("rating_overrides", None)
+
+                        # 2. Clear ALL pr_num widget keys for this player so every
+                        #    input reseeds from the fresh model value on next render.
+                        #    Use prefix match rather than iterating PLAYER_RATING_DEFS
+                        #    so newly-added rating keys are always caught.
+                        stale_keys = [k for k in st.session_state
+                                      if k.startswith(f"pr_num_{team_id}_{pid}_")]
+                        for k in stale_keys:
+                            del st.session_state[k]
+
+                        # 3. Also invalidate the baseline result cache so deltas refresh
+                        st.session_state.pop("_baseline_result", None)
+                        st.session_state.pop("_baseline_result_key", None)
+
+                        # 4. Re-run projection so the result (and share model_val)
+                        #    reflects the cleared overrides before widgets reseed.
                         game = st.session_state.get("selected_game")
                         if game:
                             from _engine_state import run_projection_for_game
                             run_projection_for_game(engine, game)
+
                         st.session_state[f"show_ratings_{team_id}_{pid}"] = False
                         st.rerun()
                 with col_close:
