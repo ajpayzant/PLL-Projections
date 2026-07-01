@@ -487,10 +487,28 @@ def save_snapshot(result, game: Dict, hold_pct: float, engine) -> str:
     if reqs:
         sh.batch_update({"requests": reqs})
 
-    # ── Autofit cols C–O in a second call so data is committed first ──────────
-    # autoResizeDimensions measures actual rendered cell content — it must run
-    # after the data write and formatting batch are fully committed, otherwise
-    # it measures empty cells and sets all columns to minimum width.
+    # ── Add filter on Player Props column headers ─────────────────────────────
+    # Must come BEFORE autofit so the dropdown arrows are present when column
+    # widths are measured — otherwise the arrow clips the header text.
+    if "PLAYER PROPS" in section_rows:
+        pp_hdr_idx = next(
+            (r for r in col_header_rows if r > section_rows["PLAYER PROPS"]), None
+        )
+        if pp_hdr_idx is not None and data_bands:
+            pp_band = next(
+                ((s, e) for s, e in data_bands if s > section_rows["PLAYER PROPS"]), None
+            )
+            if pp_band:
+                pp_start, pp_end = pp_band
+                sh.batch_update({"requests": [{
+                    "setBasicFilter": {
+                        "filter": {
+                            "range": _range(sid, pp_hdr_idx, pp_end, 0, n_cols),
+                        }
+                    }
+                }]})
+
+    # ── Autofit cols C–O — runs last so filter arrows are already rendered ────
     sh.batch_update({"requests": [{
         "autoResizeDimensions": {
             "dimensions": {"sheetId": sid, "dimension": "COLUMNS",
@@ -498,8 +516,207 @@ def save_snapshot(result, game: Dict, hold_pct: float, engine) -> str:
         }
     }]})
 
+    # ── Update Sheet1 dashboard ───────────────────────────────────────────────
+    _update_dashboard(sh, tab)
+
     logger.info("Saved snapshot to tab: %s", tab)
     return tab
+
+
+def _update_dashboard(sh, latest_tab: str) -> None:
+    """
+    Rewrite Sheet1 as a dashboard showing all saved games and instructions.
+    Called every time a snapshot is saved so the index stays current.
+    """
+    try:
+        ws = next((w for w in sh.worksheets()
+                   if w.title in ("Sheet1", "Overview")), None)
+        if ws is None:
+            ws = sh.add_worksheet(title="Overview", rows=100, cols=10)
+        elif ws.title == "Sheet1":
+            ws.update_title("Overview")
+        sid = ws.id
+
+        # ── Collect all game tabs ─────────────────────────────────────────────
+        games = []
+        for w in sh.worksheets():
+            t = w.title
+            if "@" not in t or "_G" not in t:
+                continue
+            try:
+                matchup, rest = t.split("_G", 1)
+                gn, date = rest.split("_", 1)
+                away, home = matchup.split("@", 1)
+                # Check if actuals have been synced by scanning col N (Actual Result)
+                vals = w.col_values(13)   # col 13 = M = Actual Result (1-indexed)
+                has_actuals = any(v.strip() not in ("", "Actual Result") for v in vals)
+                games.append({
+                    "tab": t, "away": away, "home": home,
+                    "gn": gn, "date": date, "actuals": has_actuals,
+                })
+            except Exception:
+                continue
+        games.sort(key=lambda g: g["date"], reverse=True)
+
+        # ── Build dashboard rows ──────────────────────────────────────────────
+        rows: List[List[Any]] = []
+
+        # Title block
+        rows.append(["PLL PROJECTION SNAPSHOTS"])
+        rows.append(["Master tracking sheet for all game projections and actuals"])
+        rows.append([f"Last updated: {_dt.datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"])
+        rows.append(["Service account:", "pll-projections-writer@pll-projections.iam.gserviceaccount.com"])
+        rows.append([])
+
+        # Game index
+        rows.append(["SAVED GAMES"])
+        rows.append(["Game Date", "Matchup", "Game #", "Tab Name", "Actuals Synced"])
+        for g in games:
+            rows.append([
+                g["date"],
+                f"{g['away']} @ {g['home']}",
+                g["gn"],
+                g["tab"],
+                "✓ Yes" if g["actuals"] else "Pending",
+            ])
+        if not games:
+            rows.append(["No games saved yet.", "", "", "", ""])
+        rows.append([])
+        rows.append([])
+
+        # Instructions
+        rows.append(["HOW TO USE"])
+        rows.append(["Step", "Action", "Details"])
+        rows.append(["1", "Run projection", "Go to the PLL app, select a game, run the projection"])
+        rows.append(["2", "Save snapshot", "Click ☁️ Save to Google Sheets — creates a new tab here"])
+        rows.append(["3", "Sync actuals", "After the game, click 🔄 Sync Actuals to fill in real results"])
+        rows.append(["4", "Review history", "Go to Page 5 (Projection History) in the app for model accuracy stats"])
+        rows.append([])
+        rows.append(["COLUMN GUIDE — PLAYER PROPS TAB"])
+        rows.append(["Column", "Description"])
+        rows.append(["Projection", "Model's expected value for this stat"])
+        rows.append(["Main Line", "Balanced prop line (x.5)"])
+        rows.append(["Fair P(Over)", "Model's true probability of going over — green >55%, red <45%"])
+        rows.append(["P10 / P50 / P90", "10th / 50th / 90th percentile from 20,000 simulations"])
+        rows.append(["Actual Result", "Filled in automatically by Sync Actuals after the game"])
+        rows.append(["Hit/Miss", "Green = Hit (actual ≥ line), Red = Miss"])
+
+        # Write all rows
+        ws.clear()
+        ws.update(values=rows, range_name="A1")
+
+        # ── Format dashboard ──────────────────────────────────────────────────
+        NAVY     = _rgb(23, 37, 63)
+        MED_BLUE = _rgb(37, 77, 130)
+        WHITE    = _rgb(255, 255, 255)
+        GREEN_BG = _rgb(198, 239, 206)
+        GREEN_FG = _rgb(0, 97, 0)
+        AMBER_BG = _rgb(255, 243, 205)
+        AMBER_FG = _rgb(133, 77, 14)
+        LIGHT    = _rgb(235, 242, 252)
+
+        # Find row indices for section headers
+        title_row   = 0
+        games_hdr   = next((i for i, r in enumerate(rows) if r and r[0] == "SAVED GAMES"), None)
+        games_col_hdr = games_hdr + 1 if games_hdr is not None else None
+        games_data_start = games_col_hdr + 1 if games_col_hdr is not None else None
+        games_data_end   = games_data_start + len(games) if games_data_start is not None else None
+        how_hdr     = next((i for i, r in enumerate(rows) if r and r[0] == "HOW TO USE"), None)
+        how_col_hdr = how_hdr + 1 if how_hdr is not None else None
+        col_guide   = next((i for i, r in enumerate(rows) if r and r[0] == "COLUMN GUIDE — PLAYER PROPS TAB"), None)
+        col_guide_hdr = col_guide + 1 if col_guide is not None else None
+
+        reqs = []
+
+        # Default style
+        reqs.append(_repeat(sid, 0, len(rows) + 5, 0, 10, {
+            "textFormat": {"fontFamily": "Arial", "fontSize": 10},
+            "verticalAlignment": "MIDDLE",
+        }, "userEnteredFormat(textFormat,verticalAlignment)"))
+
+        # Title row — large navy
+        reqs.append(_repeat(sid, title_row, title_row + 1, 0, 10, {
+            "backgroundColor": NAVY,
+            "textFormat": {"bold": True, "fontSize": 14,
+                           "foregroundColor": WHITE, "fontFamily": "Arial"},
+        }, "userEnteredFormat(backgroundColor,textFormat)"))
+
+        # Subtitle rows (rows 1–3)
+        reqs.append(_repeat(sid, 1, 4, 0, 10, {
+            "backgroundColor": _rgb(37, 77, 130),
+            "textFormat": {"foregroundColor": WHITE, "fontSize": 10, "fontFamily": "Arial"},
+        }, "userEnteredFormat(backgroundColor,textFormat)"))
+
+        # Section headers (SAVED GAMES, HOW TO USE, COLUMN GUIDE)
+        for ri in [r for r in [games_hdr, how_hdr, col_guide] if r is not None]:
+            reqs.append(_repeat(sid, ri, ri + 1, 0, 10, {
+                "backgroundColor": NAVY,
+                "textFormat": {"bold": True, "fontSize": 11,
+                               "foregroundColor": WHITE, "fontFamily": "Arial"},
+            }, "userEnteredFormat(backgroundColor,textFormat)"))
+
+        # Column header rows
+        for ri in [r for r in [games_col_hdr, how_col_hdr, col_guide_hdr] if r is not None]:
+            reqs.append(_repeat(sid, ri, ri + 1, 0, 10, {
+                "backgroundColor": MED_BLUE,
+                "textFormat": {"bold": True, "foregroundColor": WHITE,
+                               "fontSize": 10, "fontFamily": "Arial"},
+                "horizontalAlignment": "CENTER",
+            }, "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"))
+
+        # Game index data rows — zebra + conditional for actuals column
+        if games_data_start is not None and games_data_end is not None:
+            for ri in range(games_data_start, games_data_end):
+                bg = LIGHT if (ri - games_data_start) % 2 == 1 else WHITE
+                reqs.append(_repeat(sid, ri, ri + 1, 0, 10, {
+                    "backgroundColor": bg,
+                }, "userEnteredFormat(backgroundColor)"))
+            # Conditional: "✓ Yes" in col E (index 4) → green
+            reqs.append({"addConditionalFormatRule": {
+                "rule": {
+                    "ranges": [_range(sid, games_data_start, games_data_end, 4, 5)],
+                    "booleanRule": {
+                        "condition": {"type": "TEXT_CONTAINS",
+                                      "values": [{"userEnteredValue": "Yes"}]},
+                        "format": {"backgroundColor": GREEN_BG,
+                                   "textFormat": {"foregroundColor": GREEN_FG, "bold": True}},
+                    },
+                },
+                "index": 0,
+            }})
+            reqs.append({"addConditionalFormatRule": {
+                "rule": {
+                    "ranges": [_range(sid, games_data_start, games_data_end, 4, 5)],
+                    "booleanRule": {
+                        "condition": {"type": "TEXT_CONTAINS",
+                                      "values": [{"userEnteredValue": "Pending"}]},
+                        "format": {"backgroundColor": AMBER_BG,
+                                   "textFormat": {"foregroundColor": AMBER_FG, "bold": True}},
+                    },
+                },
+                "index": 1,
+            }})
+
+        # Tab colour — match game tabs
+        reqs.append({"updateSheetProperties": {
+            "properties": {"sheetId": sid,
+                           "tabColorStyle": {"rgbColor": _rgb(23, 37, 63)}},
+            "fields": "tabColorStyle",
+        }})
+
+        sh.batch_update({"requests": reqs})
+
+        # Autofit all columns
+        sh.batch_update({"requests": [{
+            "autoResizeDimensions": {
+                "dimensions": {"sheetId": sid, "dimension": "COLUMNS",
+                               "startIndex": 0, "endIndex": 10},
+            }
+        }]})
+
+        logger.info("Dashboard updated on Sheet1")
+    except Exception as e:
+        logger.warning("Dashboard update failed (non-fatal): %s", e)
 
 
 def list_saved_games() -> List[Dict]:
