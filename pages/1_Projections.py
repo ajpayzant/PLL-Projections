@@ -289,17 +289,13 @@ with st.sidebar:
 
     if st.button("Reset all adjustments", key="reset_adj"):
         st.session_state.team_rating_overrides = {}
-        # Explicitly set every tr_num_* widget to the current model value
-        # so the inputs visually show the reset value on the next render.
-        # Deleting keys is not enough — Streamlit may reuse stale widget state
-        # from the current execution. Writing the model value directly ensures
-        # the number input shows the correct value after rerun.
-        for tid, ratings in [(home_id, hf_current), (away_id, af_current)]:
-            for k, meta in TEAM_RATING_DEFS.items():
-                model_val = float(ratings.get(k, 0.0))
-                if model_val != 0.0:
-                    wkey = f"tr_num_{tid}_{k}"
-                    st.session_state[wkey] = model_val
+        # DELETE widget keys rather than writing to them — Streamlit raises
+        # StreamlitAPIException if you set a key that is already bound to a
+        # rendered widget in the current execution. Deleting forces the widget
+        # to reseed from the model value on the next render, which is correct.
+        stale = [k for k in st.session_state if k.startswith("tr_num_")]
+        for k in stale:
+            del st.session_state[k]
         from _engine_state import _autosave
         _autosave()
         st.rerun()
