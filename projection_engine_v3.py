@@ -3536,18 +3536,37 @@ class ProjectionEngine:
 
         # Blend simulation win probability with quality-model win probability.
         # The simulation captures current-game scoring projections; the quality
-        # model captures longer-run team strength signals (goal/shot differential,
-        # FO%, turnover differential). Blending the two lifts winner accuracy by
-        # anchoring the probability to team quality, not just this game's projection.
-        # Fix 6: increased blend to 50/50 — quality model now has stronger
-        # coefficients (C=0.3) so it deserves more weight in the blend.
+        # model captures longer-run team strength signals.
+        #
+        # Blend weight logic:
+        # - Base: 50% simulation / 50% quality model (default, no overrides)
+        # - When user has overridden team ratings: shift toward simulation because
+        #   the user's explicit judgment should dominate the historical baseline.
+        #   Each team with active overrides adds 15% weight to simulation (max 30%).
+        # - Additionally scale by projected score margin: a large projected margin
+        #   means the simulation has a strong signal; give it more weight.
+        #   At 0 margin: no extra boost. At 3+ goals margin: +15% sim weight.
         if self.team_model is not None:
             q_home = self.team_model.quality_win_prob(hf, af)
             if q_home is not None:
+                # Override penalty: how many teams have active user overrides?
+                n_overridden = sum([
+                    1 if (team_rating_overrides or {}).get(home_team_id) else 0,
+                    1 if (team_rating_overrides or {}).get(away_team_id) else 0,
+                ])
+                override_sim_boost = n_overridden * 0.15   # 0, 0.15, or 0.30
+
+                # Margin boost: projected score difference → sim carries more signal
+                proj_margin = abs(h_proj.proj_scores - a_proj.proj_scores)
+                margin_sim_boost = min(proj_margin / 3.0, 1.0) * 0.15
+
+                # Final sim weight: base 0.50, boosted by overrides and margin
+                sim_w = min(0.50 + override_sim_boost + margin_sim_boost, 0.90)
+                qm_w  = 1.0 - sim_w
+
                 q_away = 1.0 - q_home
-                blended_h = 0.50 * game_sim.home_win_prob + 0.50 * q_home
-                blended_a = 0.50 * game_sim.away_win_prob + 0.50 * q_away
-                # Normalise to sum to 1.0
+                blended_h = sim_w * game_sim.home_win_prob + qm_w * q_home
+                blended_a = sim_w * game_sim.away_win_prob + qm_w * q_away
                 total = blended_h + blended_a
                 game_sim.home_win_prob = float(blended_h / total)
                 game_sim.away_win_prob = float(blended_a / total)
