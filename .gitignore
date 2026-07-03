@@ -40,3 +40,9 @@ Thumbs.db
 # Env files
 .env
 .env.local
+
+# Internal dev / Claude session files (never commit)
+CLAUDE_PLL_APP_REVISION_PROMPT.md
+
+# Backtest and test outputs (run locally, not needed on Streamlit Cloud)
+scripts/test_format.py
