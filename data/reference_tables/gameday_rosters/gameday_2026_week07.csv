@@ -1,46 +1,46 @@
 player_id,player_name,first_name,last_name,team_id,team_name,team_code,position,position_group,jersey_number,status,is_active,game_id,game_slug,game_number,home_team_id,away_team_id,year,week,scraped_at
-000216,Marcus Holman,Marcus,Holman,EAST,EAST East,EAST,A,Attack,1,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003076,Connor Shellenberger,Connor,Shellenberger,EAST,EAST East,EAST,A,Attack,1,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003164,Matt Traynor,Matt,Traynor,EAST,EAST East,EAST,M,Midfield,2,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-002028,Jack Hannah,Jack,Hannah,EAST,EAST East,EAST,M,Midfield,3,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-000414,Rob Pannell,Rob,Pannell,EAST,EAST East,EAST,A,Attack,3,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-000254,Trevor Baptiste,Trevor,Baptiste,EAST,EAST East,EAST,FO,Faceoff,9,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003165,Aidan Carroll,Aidan,Carroll,EAST,EAST East,EAST,M,Midfield,12,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003159,CJ Kirst,CJ,Kirst,EAST,EAST East,EAST,A,Attack,15,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003176,Emmet Carroll,Emmet,Carroll,EAST,EAST East,EAST,G,Goalie,19,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003013,Matt Campbell,Matt,Campbell,EAST,EAST East,EAST,M,Midfield,20,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-001810,Michael Sowers,Michael,Sowers,EAST,EAST East,EAST,A,Attack,22,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003277,Joey Spallina,Joey,Spallina,EAST,EAST East,EAST,A,Attack,22,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-000395,Bryan Costabile,Bryan,Costabile,EAST,EAST East,EAST,M,Midfield,26,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-000355,Matthew Dunn,Matthew,Dunn,EAST,EAST East,EAST,D,Defense,33,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003041,Ethan Rall,Ethan,Rall,EAST,EAST East,EAST,LSM,Long Stick Midfield,35,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003077,Ajax Zappitello,Ajax,Zappitello,EAST,EAST East,EAST,D,Defense,36,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-000366,Connor Farrell,Connor,Farrell,EAST,EAST East,EAST,FO,Faceoff,41,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003009,Brett Makar,Brett,Makar,EAST,EAST East,EAST,D,Defense,43,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003079,Liam Entenmann,Liam,Entenmann,EAST,EAST East,EAST,G,Goalie,44,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-000409,Zach Currier,Zach,Currier,EAST,EAST East,EAST,SSDM,Short Stick Defensive Midfield,77,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003162,Coulter Mackesy,Coulter,Mackesy,EAST,EAST East,EAST,A,Attack,91,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003008,Gavin Adler,Gavin,Adler,EAST,EAST East,EAST,D,Defense,97,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-000258,Blaze Riorden,Blaze,Riorden,WEST,WEST West,WEST,G,Goalie,,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-001811,JT Giles-Harris,JT,Giles-Harris,WEST,WEST West,WEST,D,Defense,1,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003160,Andrew McAdorey,Andrew,McAdorey,WEST,WEST West,WEST,M,Midfield,2,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-001001,Dylan Molloy,Dylan,Molloy,WEST,WEST West,WEST,A,Attack,4,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-001812,TD Ierlan,TD,Ierlan,WEST,WEST West,WEST,FO,Faceoff,6,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003174,Sam King,Sam,King,WEST,WEST West,WEST,M,Midfield,9,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-001827,Jared Bernhardt,Jared,Bernhardt,WEST,WEST West,WEST,M,Midfield,10,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-000281,Troy Reh,Troy,Reh,WEST,WEST West,WEST,LSM,Long Stick Midfield,10,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003280,Chad Palumbo,Chad,Palumbo,WEST,WEST West,WEST,M,Midfield,11,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-002015,Logan Wisnauskas,Logan,Wisnauskas,WEST,WEST West,WEST,A,Attack,12,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003093,Ross Scott,Ross,Scott,WEST,WEST West,WEST,M,Midfield,15,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003177,Mitchell Dunham,Mitchell,Dunham,WEST,WEST West,WEST,D,Defense,17,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003078,Shane Knobloch,Shane,Knobloch,WEST,WEST West,WEST,M,Midfield,27,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003075,Brennan O'Neill,Brennan,O'Neill,WEST,WEST West,WEST,A,Attack,42,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-002026,Brett Dobson,Brett,Dobson,WEST,WEST West,WEST,G,Goalie,45,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003163,Brendan Lavelle,Brendan,Lavelle,WEST,WEST West,WEST,D,Defense,46,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003080,Pat Kavanagh,Pat,Kavanagh,WEST,WEST West,WEST,A,Attack,51,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003006,Piper Bond,Piper,Bond,WEST,WEST West,WEST,SSDM,Short Stick Defensive Midfield,54,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003082,Mason Woodward,Mason,Woodward,WEST,WEST West,WEST,D,Defense,77,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003083,Jake Piseno,Jake,Piseno,WEST,WEST West,WEST,LSM,Long Stick Midfield,88,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003087,Beau Pederson,Beau,Pederson,WEST,WEST West,WEST,SSDM,Short Stick Defensive Midfield,89,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-003168,Chris Kavanagh,Chris,Kavanagh,WEST,WEST West,WEST,A,Attack,96,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
-000365,Jack Rowlett,Jack,Rowlett,WEST,WEST West,WEST,D,Defense,99,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-03T21:56:37.302061+00:00
+000216,Marcus Holman,Marcus,Holman,EAST,EAST East,EAST,A,Attack,1,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003076,Connor Shellenberger,Connor,Shellenberger,EAST,EAST East,EAST,A,Attack,1,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003164,Matt Traynor,Matt,Traynor,EAST,EAST East,EAST,M,Midfield,2,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+002028,Jack Hannah,Jack,Hannah,EAST,EAST East,EAST,M,Midfield,3,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+000414,Rob Pannell,Rob,Pannell,EAST,EAST East,EAST,A,Attack,3,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+000254,Trevor Baptiste,Trevor,Baptiste,EAST,EAST East,EAST,FO,Faceoff,9,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003165,Aidan Carroll,Aidan,Carroll,EAST,EAST East,EAST,M,Midfield,12,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003159,CJ Kirst,CJ,Kirst,EAST,EAST East,EAST,A,Attack,15,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003176,Emmet Carroll,Emmet,Carroll,EAST,EAST East,EAST,G,Goalie,19,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003013,Matt Campbell,Matt,Campbell,EAST,EAST East,EAST,M,Midfield,20,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+001810,Michael Sowers,Michael,Sowers,EAST,EAST East,EAST,A,Attack,22,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003277,Joey Spallina,Joey,Spallina,EAST,EAST East,EAST,A,Attack,22,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+000395,Bryan Costabile,Bryan,Costabile,EAST,EAST East,EAST,M,Midfield,26,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+000355,Matthew Dunn,Matthew,Dunn,EAST,EAST East,EAST,D,Defense,33,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003041,Ethan Rall,Ethan,Rall,EAST,EAST East,EAST,LSM,Long Stick Midfield,35,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003077,Ajax Zappitello,Ajax,Zappitello,EAST,EAST East,EAST,D,Defense,36,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+000366,Connor Farrell,Connor,Farrell,EAST,EAST East,EAST,FO,Faceoff,41,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003009,Brett Makar,Brett,Makar,EAST,EAST East,EAST,D,Defense,43,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003079,Liam Entenmann,Liam,Entenmann,EAST,EAST East,EAST,G,Goalie,44,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+000409,Zach Currier,Zach,Currier,EAST,EAST East,EAST,SSDM,Short Stick Defensive Midfield,77,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003162,Coulter Mackesy,Coulter,Mackesy,EAST,EAST East,EAST,A,Attack,91,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003008,Gavin Adler,Gavin,Adler,EAST,EAST East,EAST,D,Defense,97,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+000258,Blaze Riorden,Blaze,Riorden,WEST,WEST West,WEST,G,Goalie,,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+001811,JT Giles-Harris,JT,Giles-Harris,WEST,WEST West,WEST,D,Defense,1,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003160,Andrew McAdorey,Andrew,McAdorey,WEST,WEST West,WEST,M,Midfield,2,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+001001,Dylan Molloy,Dylan,Molloy,WEST,WEST West,WEST,A,Attack,4,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+001812,TD Ierlan,TD,Ierlan,WEST,WEST West,WEST,FO,Faceoff,6,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003174,Sam King,Sam,King,WEST,WEST West,WEST,M,Midfield,9,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+001827,Jared Bernhardt,Jared,Bernhardt,WEST,WEST West,WEST,M,Midfield,10,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+000281,Troy Reh,Troy,Reh,WEST,WEST West,WEST,LSM,Long Stick Midfield,10,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003280,Chad Palumbo,Chad,Palumbo,WEST,WEST West,WEST,M,Midfield,11,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+002015,Logan Wisnauskas,Logan,Wisnauskas,WEST,WEST West,WEST,A,Attack,12,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003093,Ross Scott,Ross,Scott,WEST,WEST West,WEST,M,Midfield,15,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003177,Mitchell Dunham,Mitchell,Dunham,WEST,WEST West,WEST,D,Defense,17,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003078,Shane Knobloch,Shane,Knobloch,WEST,WEST West,WEST,M,Midfield,27,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003075,Brennan O'Neill,Brennan,O'Neill,WEST,WEST West,WEST,A,Attack,42,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+002026,Brett Dobson,Brett,Dobson,WEST,WEST West,WEST,G,Goalie,45,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003163,Brendan Lavelle,Brendan,Lavelle,WEST,WEST West,WEST,D,Defense,46,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003080,Pat Kavanagh,Pat,Kavanagh,WEST,WEST West,WEST,A,Attack,51,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003006,Piper Bond,Piper,Bond,WEST,WEST West,WEST,SSDM,Short Stick Defensive Midfield,54,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003082,Mason Woodward,Mason,Woodward,WEST,WEST West,WEST,D,Defense,77,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003083,Jake Piseno,Jake,Piseno,WEST,WEST West,WEST,LSM,Long Stick Midfield,88,starter,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003087,Beau Pederson,Beau,Pederson,WEST,WEST West,WEST,SSDM,Short Stick Defensive Midfield,89,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+003168,Chris Kavanagh,Chris,Kavanagh,WEST,WEST West,WEST,A,Attack,96,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
+000365,Jack Rowlett,Jack,Rowlett,WEST,WEST West,WEST,D,Defense,99,active,True,2026_all_star_game,2026-all-star-game,7,EAST,WEST,2026,7,2026-07-04T14:23:02.714180+00:00
