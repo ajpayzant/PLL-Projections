@@ -65,6 +65,18 @@ LG_SHOT_PCT: float = 0.274          # goals / shots
 LG_SAVES: float = 13.1
 LG_SHOTS_FACED: float = 24.5        # saves + goals_against per team per game
 LG_SAVE_PCT: float = 0.537          # saves / shots_faced
+# Opponent offensive SOG (proj_sog) overstates the shots a goalie is credited
+# with facing. Two distinct conversion factors, both measured 2023-2025:
+#   TEAM total shots_faced (saves+GA) / opp offensive SOG = 24.5/26 = 0.942.
+#     This is the purely definitional gap between "shots on goal" (offensive
+#     stat) and the goalie save denominator.
+#   STARTER shots_faced / opp offensive SOG = 0.915 (per-game mean 0.918).
+#     A starter loses the definitional gap AND the backup-goalie share.
+# Offensive proj_sog itself is unchanged (it correctly feeds goal projections);
+# these factors only convert it into shots-faced for the save projection,
+# removing the systematic +1-save over-projection.
+LG_TEAM_SF_PER_OPP_SOG: float = 0.942
+LG_STARTER_SF_PER_OPP_SOG: float = 0.915
 LG_FO_PCT: float = 0.500
 LG_FOS_PER_GAME: int = 26
 LG_TO: float = 17.5
@@ -151,7 +163,10 @@ PHI_PLAYER: Dict[str, float] = {
     "sog":      6.0,
     "2pt":     30.0,   # var/mean ~ 1.01 — Poisson-like
     "gb":       4.0,   # var/mean ~ 1.2-1.7
-    "saves":   20.0,   # goalies are consistent
+    "saves":  120.0,   # actual saves are near-Poisson: empirical var/mean~1.0
+                       # over 2024-26 backtest. At mu~13.3, phi=120 -> var/mean
+                       # ~1.11. Old phi=20 (var/mean~1.66) made sim tails ~60%
+                       # too wide, mispricing over/unders at the extremes.
     "fo_wins": 20.0,   # FO specialists are consistent
     "default":  5.0,
 }
@@ -2866,10 +2881,11 @@ class GameSimulator:
         for pp in goalies:
             pid = pp.player_id
             # Consistent goalies (high clean_save_rate) get tighter variance.
-            # phi=20 is baseline; clean rate above lg_avg tightens toward phi=40,
-            # below average loosens toward phi=10. Range is [10, 40].
+            # phi=120 is baseline (empirical var/mean of saves ~1.0, near-Poisson);
+            # clean rate above lg_avg tightens further, below average loosens.
+            # Range [70, 220] keeps var/mean within ~[1.06, 1.19] at typical mu.
             csr_ratio = pp.clean_save_rate / max(LG_CLEAN_SAVE_RATE, 0.01)
-            goalie_phi = float(np.clip(PHI_PLAYER["saves"] * csr_ratio, 10.0, 40.0))
+            goalie_phi = float(np.clip(PHI_PLAYER["saves"] * csr_ratio, 70.0, 220.0))
             nb_n_sv, nb_p_sv = _negbinom_params(max(pp.proj_saves, 0.01), goalie_phi)
             sv = rng.negative_binomial(nb_n_sv, nb_p_sv, n).astype(float)
             shots_faced = max(pp.proj_saves / max(pp.proj_save_pct, 0.01), 1.0)
@@ -3752,11 +3768,13 @@ def _assign_goalie_saves_team(team_proj: TeamProjection, opp_proj: TeamProjectio
     """Set team-level save projection using opponent's projected SOG.
     Uses team's Bayesian save_pct; falls back to league average if missing.
     """
-    opp_sog = max(float(opp_proj.proj_sog), 1.0)
+    # Convert opponent OFFENSIVE SOG into the TEAM's total shots faced
+    # (definitional SOG→save-denominator gap; see LG_TEAM_SF_PER_OPP_SOG).
+    shots_faced = max(float(opp_proj.proj_sog) * LG_TEAM_SF_PER_OPP_SOG, 1.0)
     sv_pct = float(team_proj.proj_save_pct) if team_proj.proj_save_pct > 0.20 else LG_SAVE_PCT
     sv_pct = min(max(sv_pct, 0.35), 0.72)
-    team_proj.proj_shots_faced = opp_sog
-    team_proj.proj_saves = opp_sog * sv_pct
+    team_proj.proj_shots_faced = shots_faced
+    team_proj.proj_saves = shots_faced * sv_pct
     team_proj.proj_save_pct = sv_pct
 
 
@@ -3793,7 +3811,9 @@ def _assign_player_goalie_saves(
 
     sv_pct = max(starter.proj_save_pct, 0.35)
     sv_pct = min(sv_pct, 0.72)
-    starter.proj_saves = opp_sog * sv_pct
+    # Starter faces ~91.5% of opponent offensive SOG (see LG_STARTER_SF_PER_OPP_SOG).
+    shots_faced = max(opp_sog * LG_STARTER_SF_PER_OPP_SOG, 1.0)
+    starter.proj_saves = shots_faced * sv_pct
     starter.is_starter = True
 
     for g in pool:
