@@ -22,6 +22,7 @@ from _engine_state import (
     render_update_projection_btn,
 )
 from projection_engine_v3 import PricingEngine
+import boss_export
 
 st.set_page_config(page_title="Player Props · PLL", page_icon="🥍", layout="wide")
 init_session()
@@ -41,11 +42,38 @@ hold_pct = st.session_state.get("hold_pct", 0.075)
 pricing  = PricingEngine(hold_pct=hold_pct)
 
 st.title("👤 Player Prop Markets")
-st.markdown(
-    f"**{away_nm} @ {home_nm}** · "
-    f"Game {game.get('game_number','--')} · "
-    f"{str(game.get('game_date',''))[:10]}"
-)
+_title_col, _boss_col = st.columns([3, 1])
+with _title_col:
+    st.markdown(
+        f"**{away_nm} @ {home_nm}** · "
+        f"Game {game.get('game_number','--')} · "
+        f"{str(game.get('game_date',''))[:10]}"
+    )
+with _boss_col:
+    # Export the full model price sheet (all stats: O/U + X+ ladders + fair
+    # probability ladders) for upload to the PLL BOSS Tool. Built at the
+    # current market-margin %. See boss_export.py.
+    try:
+        _game_meta = {
+            "game_number": game.get("game_number"),
+            "game_date": str(game.get("game_date", ""))[:10],
+            "home_team_name": home_nm,
+            "away_team_name": away_nm,
+        }
+        _boss_json = boss_export.export_json(
+            result, hold_pct=st.session_state.get("hold_pct", 0.075),
+            game_meta=_game_meta,
+        )
+        st.download_button(
+            "⬇️ Download BOSS file",
+            data=_boss_json,
+            file_name=boss_export.suggest_filename(result, _game_meta),
+            mime="application/json",
+            use_container_width=True,
+            help="Model prices for all stats (O/U + X+). Upload to the PLL BOSS Tool to release markets.",
+        )
+    except Exception as _e:
+        st.caption(f"BOSS export unavailable: {_e}")
 
 STAT_LABELS = {
     "goals": "Goals", "assists": "Assists", "points": "Points",
