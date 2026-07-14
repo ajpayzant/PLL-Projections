@@ -79,6 +79,18 @@ LG_TEAM_SF_PER_OPP_SOG: float = 0.942
 LG_STARTER_SF_PER_OPP_SOG: float = 0.915
 LG_FO_PCT: float = 0.500
 LG_FOS_PER_GAME: int = 26
+# Weight on the log5 opponent-matchup rate vs the specialist's own rate when
+# projecting a FO specialist's win %. Faceoffs are head-to-head; a pure own-rate
+# projection ignores the opponent and is biased +0.02. Backtest of the primary
+# specialist's next-game FO% (base = fo_pct_ewm): own-only corr 0.31 MAE 0.110;
+# 0.5 log5 blend corr 0.42 MAE 0.104 bias 0.00 (optimum). Full log5 (1.0) over-
+# corrects mid-tier specialists, so 0.5 is used.
+FO_MATCHUP_LOG5_WEIGHT: float = 0.50
+# A primary FO specialist personally contests ~24 of a game's ~26 faceoffs
+# (the rest go to backups / positional rotation). Measured 2022-2025: primary
+# specialist denom = 24.0/game. Used as the pool for the player-driven faceoff
+# win projection (see _assign_faceoff_from_specialist).
+LG_SPECIALIST_FOS_PER_GAME: float = 24.0
 LG_TO: float = 17.5
 LG_GB: float = 31.8
 LG_TOUCHES: float = 263.0
@@ -167,7 +179,9 @@ PHI_PLAYER: Dict[str, float] = {
                        # over 2024-26 backtest. At mu~13.3, phi=120 -> var/mean
                        # ~1.11. Old phi=20 (var/mean~1.66) made sim tails ~60%
                        # too wide, mispricing over/unders at the extremes.
-    "fo_wins": 20.0,   # FO specialists are consistent
+    "fo_wins": 30.0,   # empirical FO-win var/mean ~1.42 (2024-26 backtest, mu~12.5).
+                       # phi=30 -> var/mean 1.42 (matches); old phi=20 gave 1.63,
+                       # tails ~15% too wide (coverage 65/87 vs target 50/80).
     "default":  5.0,
 }
 
@@ -1596,6 +1610,12 @@ class RatingBuilder:
         # Filled with LG_FOS_PER_GAME * 0.5 as prior for sparse players so
         # _project_player always has a non-NaN value to work with.
         df["fo_wins_ewm"] = _ewm_shift(fo_wins_series, HL_FO).fillna(LG_FOS_PER_GAME * 0.5)
+        # fo_pct_ewm: leakage-safe EWM of the player's per-game FO win RATE.
+        # Backtest showed EWM(hl=8) of fo_pct predicts next-game FO% better than
+        # the career Bayesian rate (MAE 0.114 vs 0.116, more responsive). Used as
+        # the base rate in _project_player (blended with a log5 opponent term).
+        fo_pct_series = (fo_wins_series / df["fo_denom_p"].replace(0, np.nan))
+        df["fo_pct_ewm"] = _ewm_shift(fo_pct_series, HL_FO)
 
         sv_n = df.get("saves", pd.Series(0, index=df.index)).fillna(0).shift(1).cumsum().fillna(0)
         sv_d = df.get("shots_faced_p", pd.Series(0, index=df.index)).fillna(0).shift(1).cumsum().fillna(0)
@@ -1907,10 +1927,14 @@ class TeamModel:
         # Blend EWM (recent form) 60% + career mean 40% for stability
         blended_shots_base = 0.60 * team_shots_ewm + 0.40 * team_shots_mean
 
-        # FO drives possession which drives shot volume: FO 0.30 autocorr
-        # A team at 60% FO (vs 50% avg) gets ~10% more possession, ~5-7% more shots
-        fo_shots_adj = 1.0 + (fo_pct - LG_FO_PCT) * 0.50
-        fo_shots_adj = min(max(fo_shots_adj, 0.85), 1.15)
+        # FO drives possession, which drives shot volume — but only modestly.
+        # Measured within-team (removing team-quality confound): a team's shots
+        # rise ~0.84 per +10pp FO% above its own average = ~2.1% of ~41 shots per
+        # +10pp (cross-sectional 1.8%). The prior coefficient 0.50 implied ~5% per
+        # +10pp — ~2.5x too strong — over-propagating faceoffs into shots/goals.
+        # 0.20 matches the empirical ~2% per +10pp.
+        fo_shots_adj = 1.0 + (fo_pct - LG_FO_PCT) * 0.20
+        fo_shots_adj = min(max(fo_shots_adj, 0.90), 1.10)
         proj_shots = max(blended_shots_base * fo_shots_adj * off_mult, 5.0)
 
         # SOG from shots × team's SOG rate (quality of shot selection)
@@ -2422,29 +2446,27 @@ class PlayerModel:
                 # for this player so the override is fully preserved.
                 proj_fo = max(fo_pct * LG_FOS_PER_GAME * usage, 0.0)
             else:
-                # Use the career Bayesian FO rate built leakage-safe by _player_chunk.
-                # bayes_fo_pct uses shift(1).cumsum() so it reflects all games up to
-                # but NOT including the last row — correct and stable.
-                # Never recompute from raw single-game faceoffs_won/fo_denom_p on the
-                # last row, which would make Baptiste look average after one bad game
-                # and Laliberte look elite after one good game.
-                fo_pct = _nan(float(f.get("bayes_fo_pct", LG_FO_PCT)), LG_FO_PCT)
-                fo_pct = min(max(fo_pct, 0.25), 0.75)
-
-                # fo_wins_ewm is the leakage-safe EWM of per-game faceoff wins,
-                # built in _player_chunk. Falls back gracefully for single-game
-                # players via the prior fill in _player_chunk.
-                raw_fo_ewm = f.get("fo_wins_ewm")
+                # Player-driven FO rate. The specialist takes ~92% of the team's
+                # faceoffs, so faceoffs are really a player stat. Backtest of what
+                # predicts a specialist's next-game FO%:
+                #   EWM(hl=8) of fo_pct  — MAE 0.114, corr 0.31 (best single base)
+                #   career bayes_fo_pct  — MAE 0.116, corr 0.25 (staler)
+                # so use fo_pct_ewm as the base, falling back to bayes then league.
+                # The opponent (log5) matchup adjustment is applied post-reconcile
+                # in _assign_faceoff_from_specialist, where both specialists are
+                # known — it lifts corr 0.31 -> 0.42 and removes the +0.02 bias.
+                base_fo = f.get("fo_pct_ewm")
                 try:
-                    fo_ewm_val = float(raw_fo_ewm)
+                    base_fo = float(base_fo)
+                    if np.isnan(base_fo) or base_fo <= 0:
+                        raise ValueError
                 except (TypeError, ValueError):
-                    fo_ewm_val = float("nan")
-                import math
-                if math.isnan(fo_ewm_val) or fo_ewm_val <= 0:
-                    # Genuine fallback: no EWM available, use fo_pct * league total
-                    proj_fo = max(fo_pct * LG_FOS_PER_GAME * usage, 0.0)
-                else:
-                    proj_fo = max(fo_ewm_val * usage, 0.0)
+                    base_fo = _nan(float(f.get("bayes_fo_pct", LG_FO_PCT)), LG_FO_PCT)
+                fo_pct = min(max(base_fo, 0.25), 0.75)
+                # Win count set from rate × specialist pool × usage. The final
+                # wins are (re)computed post-reconcile in _assign_faceoff_from_
+                # specialist so the player rate isn't rescaled to a team aggregate.
+                proj_fo = max(fo_pct * LG_SPECIALIST_FOS_PER_GAME * usage, 0.0)
             proj_fo_pct = fo_pct
         else:
             proj_fo = 0.0
@@ -3548,6 +3570,12 @@ class ProjectionEngine:
         _assign_player_goalie_saves(h_players, a_proj.proj_sog, starters.get(home_team_id))
         _assign_player_goalie_saves(a_players, h_proj.proj_sog, starters.get(away_team_id))
 
+        # Player-driven faceoff wins: the specialist (not the team aggregate)
+        # drives the projection, with a log5 opponent-matchup adjustment. Runs
+        # after _reconcile so it isn't rescaled away.
+        _assign_faceoff_from_specialist(h_players, a_players)
+        _assign_faceoff_from_specialist(a_players, h_players)
+
         game_sim = self.simulator.simulate_game(h_proj, a_proj)
 
         # Blend simulation win probability with quality-model win probability.
@@ -3762,6 +3790,59 @@ def _effective_fo_pct_from_roster(
     # Weighted average: players with more projected wins get more weight
     weighted = sum(p.proj_faceoff_pct * p.proj_faceoff_wins for p in active_fo)
     return float(weighted / total_wins)
+
+
+def _assign_faceoff_from_specialist(
+    player_projs: List[PlayerProjection],
+    opp_player_projs: Optional[List[PlayerProjection]] = None,
+) -> None:
+    """Make faceoff wins player-driven (runs AFTER _reconcile, like goalie saves).
+
+    ~92% of a team's faceoffs are taken by one specialist, so the specialist —
+    not a team aggregate — should drive the faceoff win projection. _reconcile
+    rescales FO players to the possession-chain team total (team_fo_pct × 26),
+    which erases the specialist's own skill signal; this restores it.
+
+    Two steps for the primary specialist (backups keep their _reconcile wins —
+    they don't contest a full ~24-faceoff pool):
+
+    1. Opponent (log5) matchup adjustment. Faceoffs are head-to-head, so the
+       specialist's own rate `a` is blended with the log5 matchup rate vs the
+       opposing primary specialist's rate `b`:
+           log5 = a(1-b) / (a(1-b) + b(1-a))
+           fo_pct = (1-w)·a + w·log5,  w = FO_MATCHUP_LOG5_WEIGHT
+       Backtest: this lifts FO% corr 0.31 -> 0.42 and removes the +0.02 bias.
+    2. Win count = fo_pct × specialist pool (~24) × usage.
+
+    Possession/goals/shots are untouched — only faceoff wins change.
+    """
+    fo_active = [p for p in player_projs
+                 if p.position == "FO" and p.active and p.proj_faceoff_pct > 0]
+    if not fo_active:
+        return
+    # Primary specialist = most projected wins after _reconcile (reflects the
+    # usage/volume the possession model expects this player to see).
+    primary = max(fo_active, key=lambda p: p.proj_faceoff_wins)
+
+    # log5 opponent adjustment using the opposing primary specialist's rate.
+    a = min(max(float(primary.proj_faceoff_pct), 0.01), 0.99)
+    if opp_player_projs:
+        opp_fo = [p for p in opp_player_projs
+                  if p.position == "FO" and p.active and p.proj_faceoff_pct > 0]
+        if opp_fo:
+            opp_primary = max(opp_fo, key=lambda p: p.proj_faceoff_wins)
+            b = min(max(float(opp_primary.proj_faceoff_pct), 0.01), 0.99)
+            log5 = a * (1.0 - b) / (a * (1.0 - b) + b * (1.0 - a))
+            a = (1.0 - FO_MATCHUP_LOG5_WEIGHT) * a + FO_MATCHUP_LOG5_WEIGHT * log5
+            a = min(max(a, 0.25), 0.75)
+            primary.proj_faceoff_pct = a
+
+    usage = getattr(primary, "usage_multiplier", 1.0)
+    try:
+        usage = float(usage)
+    except (TypeError, ValueError):
+        usage = 1.0
+    primary.proj_faceoff_wins = max(a * LG_SPECIALIST_FOS_PER_GAME * usage, 0.0)
 
 
 def _assign_goalie_saves_team(team_proj: TeamProjection, opp_proj: TeamProjection) -> None:

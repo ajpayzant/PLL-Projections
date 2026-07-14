@@ -36,6 +36,7 @@ from projection_engine_v3 import (
     ProjectionEngine, RatingBuilder, TeamModel,
     PlayerModel, PricingEngine,
     _assign_goalie_saves_team, _assign_player_goalie_saves,
+    _assign_faceoff_from_specialist,
     _negbinom_params,
     LG_SAVE_PCT, LG_FO_PCT, LG_FOS_PER_GAME, LG_SAVES, LG_CLEAN_SAVE_RATE,
     PHI_PLAYER,
@@ -193,6 +194,9 @@ for i, grow in enumerate(games):
     try:
         _assign_player_goalie_saves(proj_by_team[home_team], ap.proj_sog, None)
         _assign_player_goalie_saves(proj_by_team[away_team], hp.proj_sog, None)
+        # Player-driven faceoff wins with log5 opponent adj (mirrors ProjectionEngine).
+        _assign_faceoff_from_specialist(proj_by_team[home_team], proj_by_team[away_team])
+        _assign_faceoff_from_specialist(proj_by_team[away_team], proj_by_team[home_team])
     except Exception:
         pass
 
