@@ -1,16 +1,22 @@
-pandas
-numpy
-requests
-tenacity
-tqdm
-pyarrow
-duckdb
-fastparquet
-openpyxl
-streamlit
-plotly
-scikit-learn
-scipy
+# Pinned to versions verified to work together. The app was previously fully
+# unpinned, so each Streamlit Cloud rebuild could pull newer numpy/pandas/
+# scikit-learn — and a breaking change in any of those makes projection_engine_v3
+# fail to import, which surfaces on Streamlit Cloud as an ImportError at
+# `from _engine_state import ...`. Pin so cloud installs exactly what's tested.
+# Bump deliberately (and re-test the app) rather than letting them drift.
+numpy>=1.26,<3
+pandas>=2.2,<3.1
+scikit-learn>=1.4,<2
+scipy>=1.12,<2
+duckdb==1.5.3
+streamlit==1.58.0
+pyarrow>=16
+fastparquet>=2024.2
+openpyxl>=3.1
+plotly>=5.20
+requests>=2.31
+tenacity>=8.2
+tqdm>=4.66
 gspread>=6.0.0
 google-auth>=2.0.0
 google-api-python-client>=2.0.0
