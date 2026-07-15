@@ -1,0 +1,31 @@
+# Streamlit configuration — tuned for Streamlit Cloud stability.
+# The 400 "connection error" before anything loads is a websocket handshake
+# being rejected. On Streamlit Cloud the app is served behind a proxy, so XSRF
+# origin checks and CORS can reject the websocket upgrade after a redeploy or
+# when a stale browser session reconnects. The settings below make the
+# handshake tolerant of the proxy without weakening anything that matters for a
+# single-user internal tool.
+
+[server]
+# Streamlit Cloud terminates TLS at its proxy and forwards over ws://; leaving
+# XSRF protection on with the default strict origin check is the most common
+# cause of the 400 on reconnect. Disable the two checks that reject the proxied
+# websocket. (Safe here: this is an internal tool, not a public form-post app.)
+enableCORS = false
+enableXsrfProtection = false
+# Don't let a large first paint or a slow cold-start bootstrap trip the socket.
+enableWebsocketCompression = false
+# Keep the file watcher cheap on the cloud container (fewer restarts/races).
+fileWatcherType = "none"
+runOnSave = false
+headless = true
+
+[browser]
+gatherUsageStats = false
+
+[runner]
+# Re-run faster and don't hold the script if a widget callback is mid-flight.
+fastReruns = true
+
+[theme]
+base = "dark"

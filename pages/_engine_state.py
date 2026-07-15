@@ -78,14 +78,23 @@ def _db_is_valid() -> bool:
     p = Path(DB_PATH)
     if not p.exists() or p.stat().st_size < 4096:
         return False
+    con = None
     try:
         import duckdb
         con = duckdb.connect(str(p), read_only=True)
         n = con.execute("SELECT COUNT(*) FROM clean.team_game_stats").fetchone()[0]
-        con.close()
         return n > 0
     except Exception:
         return False
+    finally:
+        # Always release the file handle. A leaked read connection on Windows
+        # can block the next bootstrap's --force overwrite, which shows up as an
+        # app that "won't load until you reboot it a second time".
+        if con is not None:
+            try:
+                con.close()
+            except Exception:
+                pass
 
 
 def _ensure_db() -> None:
@@ -102,14 +111,36 @@ def _ensure_db() -> None:
         )
         st.stop()
     with st.spinner("Building database from data files -- first load only, ~10 seconds…"):
-        result = subprocess.run(
-            [sys.executable, str(bootstrap), "--force"],
-            capture_output=True, text=True,
-        )
+        try:
+            result = subprocess.run(
+                [sys.executable, str(bootstrap), "--force"],
+                capture_output=True, text=True,
+                timeout=300,  # never hang the app forever on a stuck build
+            )
+        except subprocess.TimeoutExpired:
+            st.error(
+                "Database build timed out. This is usually a transient Streamlit "
+                "Cloud cold-start issue — click **Rerun** (press R) or reboot the "
+                "app once more. If it persists, re-run the **Update PLL Data "
+                "Warehouse** GitHub Action."
+            )
+            st.stop()
+        except Exception as e:
+            st.error(f"Database build could not start: {e}")
+            st.stop()
     if result.returncode != 0:
         st.error(
             f"Database bootstrap failed.\n\n```\n{result.stderr[-2000:]}\n```\n\n"
             "Run the GitHub Action (Update PLL Data Warehouse) to populate data/."
+        )
+        st.stop()
+    # Verify the rebuild actually produced a valid DB before continuing, so a
+    # silent bad build surfaces as a clear message instead of a downstream crash.
+    if not _db_is_valid():
+        st.error(
+            "Database was rebuilt but still isn't valid. The data files may be "
+            "missing or incomplete — re-run the **Update PLL Data Warehouse** "
+            "GitHub Action, then reboot the app."
         )
         st.stop()
 
