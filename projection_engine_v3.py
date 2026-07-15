@@ -988,8 +988,9 @@ class PlayerProjection:
     clean_save_rate: float = LG_CLEAN_SAVE_RATE  # goalie consistency signal
     _fo_pct_overridden: bool = False
     _goals_overridden: bool = False    # user explicitly set share_goals_ewm or shot_pct_ewm
-    _assists_overridden: bool = False  # user explicitly set share_assists_ewm
-    _shots_overridden: bool = False    # user explicitly set share_shots_ewm
+    _assists_overridden: bool = False  # user explicitly set share_assists_ewm / assist_conv / pass_per_touch
+    _shots_overridden: bool = False    # user explicitly set share_shots_ewm / shots_per_touch
+    _sog_overridden: bool = False      # user explicitly set sog_rate_ewm (pins SOG independently)
 
 
 @dataclass
@@ -2193,6 +2194,13 @@ class PlayerModel:
             feats["_baseline_bayes_fo_pct"] = _nan(
                 float(feats.get("bayes_fo_pct", LG_FO_PCT)), LG_FO_PCT
             )
+            # Capture DB baselines for the other efficiency ratings too, so a user
+            # override scales the projection relative to the player's OWN value
+            # (raising always increases, lowering always decreases) — same robust
+            # pattern as shot_pct. Grabbed before the po loop overwrites them.
+            for _bk in ("sog_rate_ewm", "shots_per_touch_ewm", "assist_conv_ewm",
+                        "pass_per_touch_ewm", "two_pt_rate_ewm", "two_pt_shot_rate_ewm"):
+                feats[f"_baseline_{_bk}"] = _nan(float(feats.get(_bk, 0.0)), 0.0)
             # _override_keys is pre-built by build_overrides() — grab it directly
             # rather than reconstructing from po iteration to avoid double-counting.
             override_keys = list(po.get("_override_keys", []))
@@ -2352,11 +2360,12 @@ class PlayerModel:
             proj_assists = tp.proj_assists * _share("assists", tp.proj_assists) * usage
 
         # Assists — dual touch-efficiency nudge (assist_conv + pass_per_touch)
-        # Both signals only engage when the user has not overridden assist share.
+        # DEFAULT (no override): both signals only engage when the user hasn't
+        # overridden assist share, and apply gentle model nudges — unchanged.
         # assist_conv (assists/assist_opp): feeder quality, 15% blend, ±20% cap.
-        # pass_per_touch: distributor archetype, 10% blend, ±15% cap — stable CV ~0.12.
-        # Combined nudge is multiplicative so both signals contribute independently.
-        if pos != "G" and "share_assists_ewm" not in _user_overrides:
+        # pass_per_touch: distributor archetype, 10% blend, ±15% cap.
+        if pos != "G" and "share_assists_ewm" not in _user_overrides \
+                and "assist_conv_ewm" not in _user_overrides:
             aconv_ewm = _nan(float(f.get("assist_conv_ewm", LG_ASSIST_CONV.get(pos, 0.28))),
                              LG_ASSIST_CONV.get(pos, 0.28))
             lg_aconv  = LG_ASSIST_CONV.get(pos, 0.28)
@@ -2366,6 +2375,8 @@ class PlayerModel:
                 aconv_nudge  = min(max(aconv_nudge, 0.80), 1.20)
                 proj_assists = proj_assists * aconv_nudge
 
+        if pos != "G" and "share_assists_ewm" not in _user_overrides \
+                and "pass_per_touch_ewm" not in _user_overrides:
             ppt_ewm = _nan(float(f.get("pass_per_touch_ewm", LG_PASS_PER_TOUCH.get(pos, 0.75))),
                            LG_PASS_PER_TOUCH.get(pos, 0.75))
             lg_ppt  = LG_PASS_PER_TOUCH.get(pos, 0.75)
@@ -2375,6 +2386,21 @@ class PlayerModel:
                 ppt_nudge  = min(max(ppt_nudge, 0.85), 1.15)
                 proj_assists = proj_assists * ppt_nudge
 
+        # OVERRIDE: user set assist_conv and/or pass_per_touch directly. Scale
+        # assists by the ratio of the override to the player's own DB baseline, so
+        # the change is direct and noticeable (raising always increases assists,
+        # lowering always decreases). Affects ASSISTS ONLY. Marked overridden so
+        # _reconcile redistributes teammates' assists around it (team total held)
+        # rather than rescaling this player's assists away.
+        if pos != "G" and "share_assists_ewm" not in _user_overrides:
+            for _rk in ("assist_conv_ewm", "pass_per_touch_ewm"):
+                if _rk in _user_overrides:
+                    cur  = _nan(float(f.get(_rk, 0.0)), 0.0)
+                    base = _nan(float(f.get(f"_baseline_{_rk}", 0.0)), 0.0)
+                    if base > 1e-6 and cur > 0:
+                        mult = min(max(cur / base, 0.25), 4.0)
+                        proj_assists = proj_assists * mult
+
         # Shots
         if pos == "G":
             proj_shots = max(_nan(float(f.get("shots_ewm", 0.2)), 0.2) * usage, 0.0)
@@ -2382,10 +2408,10 @@ class PlayerModel:
             proj_shots = tp.proj_shots * _share("shots", tp.proj_shots) * usage
 
         # Shots — touch-efficiency nudge
-        # When the user has not overridden shot share directly, nudge proj_shots
-        # by how the player's shots-per-touch compares to the positional league avg.
-        # Most stable touch signal (CV ~0.35). Blend weight 0.20, cap at ±30%.
-        if pos != "G" and "share_shots_ewm" not in _user_overrides:
+        # DEFAULT (no override): nudge proj_shots by how the player's
+        # shots-per-touch compares to the positional league avg. Blend 0.20, ±30%.
+        if pos != "G" and "share_shots_ewm" not in _user_overrides \
+                and "shots_per_touch_ewm" not in _user_overrides:
             spt_ewm  = _nan(float(f.get("shots_per_touch_ewm", LG_SHOTS_PER_TOUCH.get(pos, 0.20))),
                             LG_SHOTS_PER_TOUCH.get(pos, 0.20))
             lg_spt   = LG_SHOTS_PER_TOUCH.get(pos, 0.20)
@@ -2395,6 +2421,18 @@ class PlayerModel:
                 spt_nudge  = min(max(spt_nudge, 0.70), 1.30)
                 proj_shots = proj_shots * spt_nudge
 
+        # OVERRIDE: user set shots_per_touch directly — scale shots by the ratio
+        # to the player's own baseline (SHOTS ONLY; SOG follows since SOG = shots
+        # × sog_rate, which is expected). Reconcile-protected via shots flag below.
+        if pos != "G" and "share_shots_ewm" not in _user_overrides \
+                and "shots_per_touch_ewm" in _user_overrides:
+            cur  = _nan(float(f.get("shots_per_touch_ewm", 0.0)), 0.0)
+            base = _nan(float(f.get("_baseline_shots_per_touch_ewm", 0.0)), 0.0)
+            if base > 1e-6 and cur > 0:
+                proj_shots = proj_shots * min(max(cur / base, 0.25), 4.0)
+
+        # SOG rate — DEFAULT uses the model value. OVERRIDE: user sets the fraction
+        # of shots that are on goal directly (affects SOG ONLY, not shots/goals).
         sog_rate = _nan(float(f.get("sog_rate_ewm", LG_SOG_RATE)), LG_SOG_RATE)
         sog_rate = min(max(sog_rate, 0.20), 1.0)
         proj_sog = proj_shots * sog_rate
@@ -2486,11 +2524,18 @@ class PlayerModel:
         csr = min(max(csr, 0.0), 1.0)
 
         fo_pct_was_overridden  = pos == "FO" and "bayes_fo_pct" in _user_overrides
-        # Per-stat override flags — only pin the stat the user actually touched.
-        # shot_pct_ewm also pins goals because it directly scales proj_goals.
+        # Per-stat override flags — pin the stat the user actually shaped so
+        # _reconcile redistributes the REST of the team around it (team total held)
+        # instead of rescaling the user's change away. Each rating pins only its
+        # own stat: goal levers→goals, assist levers→assists, shot levers→shots.
+        #   shot_pct_ewm also pins goals (it directly scales proj_goals).
+        #   assist_conv / pass_per_touch pin assists (they directly scale assists).
+        #   shots_per_touch pins shots (directly scales shots).
         goals_was_overridden   = any(k in _user_overrides for k in ("share_goals_ewm", "shot_pct_ewm"))
-        assists_was_overridden = "share_assists_ewm" in _user_overrides
-        shots_was_overridden   = "share_shots_ewm"   in _user_overrides
+        assists_was_overridden = any(k in _user_overrides for k in
+                                     ("share_assists_ewm", "assist_conv_ewm", "pass_per_touch_ewm"))
+        shots_was_overridden   = any(k in _user_overrides for k in
+                                     ("share_shots_ewm", "shots_per_touch_ewm"))
 
         # Opponent defensive context — applied after all share/touch nudges and
         # after override flags are known. Suppresses goals and shots when facing a
@@ -2528,6 +2573,7 @@ class PlayerModel:
         capped._goals_overridden   = goals_was_overridden
         capped._assists_overridden = assists_was_overridden
         capped._shots_overridden   = shots_was_overridden
+        capped._sog_overridden     = "sog_rate_ewm" in _user_overrides
         return capped
 
     def _apply_caps(self, p: PlayerProjection) -> PlayerProjection:
@@ -2568,9 +2614,22 @@ class PlayerModel:
             if team_total <= 0:
                 return
             flag = f"_{stat}_overridden"
-            # sog is pinned when shots are pinned (sog = shots × sog_rate)
             if stat == "sog":
-                flag = "_shots_overridden"
+                # SOG is pinned if the user pinned shots (sog = shots × sog_rate)
+                # OR overrode the sog_rate itself. Either way, hold this player's
+                # SOG and redistribute the rest of the team's SOG around it.
+                overridden = [p for p in active
+                              if getattr(p, "_shots_overridden", False)
+                              or getattr(p, "_sog_overridden", False)]
+                free = [p for p in active if p not in overridden]
+                fixed_sum = sum(getattr(p, "proj_sog", 0.0) for p in overridden)
+                free_sum  = sum(getattr(p, "proj_sog", 0.0) for p in free)
+                remaining = max(team_total - fixed_sum, 0.0)
+                if free_sum > 0 and remaining > 0:
+                    scale = remaining / free_sum
+                    for p in free:
+                        p.proj_sog = max(p.proj_sog * scale, 0.0)
+                return
             overridden = [p for p in active if getattr(p, flag, False)]
             free       = [p for p in active if not getattr(p, flag, False)]
             fixed_sum  = sum(getattr(p, f"proj_{stat}", 0.0) for p in overridden)
@@ -2595,6 +2654,12 @@ class PlayerModel:
         # Without this, proj_sog can exceed proj_shots for players whose shots were
         # scaled down, causing the sog NegBin draw in simulate_players to be biased high.
         _rescale("sog", tp.proj_sog)
+        # SOG can never exceed shots (a shot-on-goal is a shot). Enforce after all
+        # rescaling — matters when a sog_rate override + redistribution pushes a
+        # player's SOG above their shot count.
+        for p in active:
+            if p.proj_sog > p.proj_shots:
+                p.proj_sog = p.proj_shots
 
         fo_players = [p for p in active if p.position == "FO"]
         # If any FO player has an explicit bayes_fo_pct override, their individual
