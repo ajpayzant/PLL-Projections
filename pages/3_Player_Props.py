@@ -311,8 +311,12 @@ if view_mode == "Table (all players)":
             proj_val = float(getattr(proj, attr, None) or pv.get(stat, 0))
             if proj_val < 0.02:
                 continue
-            m = ms.get(stat, {})
-            line = m.get("line")
+            # Price LIVE with the current-margin `pricing` object so the table
+            # matches the expander and the BOSS export exactly. (Previously read
+            # the pre-built player_markets, which were priced at the engine's
+            # build-time hold — a different margin than the sidebar slider — so
+            # table and expander odds disagreed.)
+            ml = pricing.price_prop(ps, stat)
             rows.append({
                 "Player":   d["nm"],
                 "Team":     team_name(d["tid"]),
@@ -321,10 +325,10 @@ if view_mode == "Table (all players)":
                 "P10":      round(float(np.percentile(dist, 10)), 1),
                 "Median":   round(float(np.percentile(dist, 50)), 1),
                 "P90":      round(float(np.percentile(dist, 90)), 1),
-                "Line":     f"{line:.1f}" if isinstance(line, (int, float)) else "--",
-                "Over":     m.get("over_odds", "--"),
-                "Under":    m.get("under_odds", "--"),
-                "P(Over)":  f"{m.get('fair_over_prob', 0):.1%}" if m else "--",
+                "Line":     f"{ml.line:.1f}",
+                "Over":     ml.over_odds,
+                "Under":    ml.under_odds,
+                "P(Over)":  f"{ml.fair_over_prob:.1%}",
             })
         if not rows:
             return pd.DataFrame()
