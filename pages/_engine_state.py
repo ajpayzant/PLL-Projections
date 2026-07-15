@@ -148,15 +148,56 @@ def _ensure_db() -> None:
 _ensure_db()
 
 
+# -- Roster freshness token -------------------------------------------------
+# The engine reads current_rosters.csv once, at load(). Because the engine is a
+# cached resource, a running app would otherwise keep the roster snapshot from
+# whenever it was first cached — so roster adds/drops committed by the GitHub
+# Action (e.g. a player added to a team) never appeared until a manual reboot.
+# We key the cache on the roster files' modification times: when the scraper
+# updates current_rosters.csv (or a new gameday roster lands), the token changes
+# and Streamlit rebuilds the engine with the fresh rosters automatically.
+def _roster_fingerprint() -> str:
+    import hashlib
+    parts = []
+    paths = [
+        _ROOT / "data" / "reference_tables" / "current_rosters.csv",
+        _ROOT / "data" / "reference_tables" / "gameday_rosters" / "gameday_latest.csv",
+    ]
+    gd_dir = _ROOT / "data" / "reference_tables" / "gameday_rosters"
+    if gd_dir.exists():
+        paths += sorted(gd_dir.glob("gameday_2026_week*.csv"))
+    for p in paths:
+        try:
+            parts.append(f"{p.name}:{p.stat().st_mtime_ns}:{p.stat().st_size}")
+        except Exception:
+            parts.append(f"{p.name}:missing")
+    return hashlib.md5("|".join(parts).encode()).hexdigest()
+
+
 # -- Engine cache ----------------------------------------------------------
+# `roster_token` is part of the cache key: when it changes (rosters updated on
+# disk), Streamlit builds a fresh engine instead of returning the stale one.
 @st.cache_resource(show_spinner="Loading projection engine…")
-def get_engine() -> ProjectionEngine:
+def _build_engine(roster_token: str) -> ProjectionEngine:
     engine = ProjectionEngine(db_path=DB_PATH)
     engine.load()
     # run_backtest=False keeps startup fast (~2-3s).
     # The calibrator is fitted lazily when the Model Performance page is visited.
     engine.fit(run_backtest=False)
     return engine
+
+
+def get_engine() -> ProjectionEngine:
+    return _build_engine(_roster_fingerprint())
+
+
+def refresh_rosters() -> None:
+    """Force the engine to rebuild from the latest roster files on disk.
+    Clears the cached engine so the next get_engine() re-reads the CSVs."""
+    try:
+        _build_engine.clear()
+    except Exception:
+        st.cache_resource.clear()
 
 
 # -- Autosave / autorestore ------------------------------------------------

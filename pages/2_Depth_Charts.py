@@ -21,6 +21,7 @@ from _engine_state import (
     get_depth_chart, set_player_override,
     set_player_rating,
     render_update_projection_btn,
+    refresh_rosters,
 )
 
 st.set_page_config(page_title="Depth Charts · PLL", page_icon="🥍", layout="wide")
@@ -55,6 +56,30 @@ st.markdown(SHARED_CSS + """
 """, unsafe_allow_html=True)
 
 engine = get_engine()
+
+# -- Roster freshness + manual refresh --------------------------------------
+# The engine auto-rebuilds when roster files change on disk (see _engine_state
+# _roster_fingerprint), but this button forces an immediate reload — useful
+# right after a scrape/commit lands. Manual stat overrides live in session
+# state (depth_charts), so refreshing rosters does NOT wipe them.
+_rc1, _rc2 = st.columns([4, 1])
+with _rc2:
+    if st.button("🔄 Refresh rosters", use_container_width=True,
+                 help="Reload the latest scraped current/gameday rosters. Your manual overrides are kept."):
+        refresh_rosters()
+        st.rerun()
+with _rc1:
+    try:
+        _rstatus = getattr(engine, "current_rosters_status", {}) or {}
+        _src = _rstatus.get("source", "?")
+        _rows = _rstatus.get("rows", "?")
+        _cr_path = _ROOT / "data" / "reference_tables" / "current_rosters.csv"
+        import datetime as _dtmod
+        _mt = _dtmod.datetime.fromtimestamp(_cr_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+        st.caption(f"Rosters: {_rows} players from `{_src}` · current_rosters.csv updated {_mt}")
+    except Exception:
+        pass
+
 result = st.session_state.get("last_result")
 if result is None:
     st.warning("No projection loaded. Go to **Projections** first and run a game.")
