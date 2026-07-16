@@ -933,11 +933,7 @@ def _var_index_to_phi(var_index: float, mu: float) -> float:
     vi = min(max(float(var_index), 1.01), 3.0)
     mu = max(mu, 0.05)
     phi = mu / (vi - 1.0)
-    # Floor at 1.5 so the integer shape n=round(phi) stays >= 2. Below that the
-    # NegBin's discrete rounding at n=1 distorts the mean of the draw, which would
-    # (wrongly) shift the O/U projection. This caps the achievable fatness for
-    # very low-mean players, but keeps the mean stable — the intended contract.
-    return min(max(phi, 1.5), 500.0)
+    return min(max(phi, 0.3), 500.0)
 
 
 def _trunc_normal_sample(rng: np.random.Generator, mu: float, sigma: float, n: int,
@@ -1004,10 +1000,15 @@ class PlayerProjection:
     usage_multiplier: float = 1.0
     is_starter: bool = False
     clean_save_rate: float = LG_CLEAN_SAVE_RATE  # goalie consistency signal
-    # Optional user override of the goals dispersion index (variance/mean). None =
-    # use the model default PHI. Higher index = fatter tails = higher X+ prices;
-    # the O/U/mean projection is unchanged. See _var_index_to_phi.
+    # Optional user overrides of the per-stat dispersion index (variance/mean).
+    # None = use the model default PHI. Higher index = fatter tails = higher X+
+    # prices; the mean/O-U projection is preserved. See _var_index_to_phi.
     var_index_goals: Optional[float] = None
+    var_index_assists: Optional[float] = None
+    var_index_shots: Optional[float] = None
+    var_index_sog: Optional[float] = None
+    var_index_saves: Optional[float] = None
+    var_index_fo_wins: Optional[float] = None
     _fo_pct_overridden: bool = False
     _goals_overridden: bool = False    # user explicitly set share_goals_ewm or shot_pct_ewm
     _assists_overridden: bool = False  # user explicitly set share_assists_ewm / assist_conv / pass_per_touch
@@ -2596,10 +2597,14 @@ class PlayerModel:
         capped._assists_overridden = assists_was_overridden
         capped._shots_overridden   = shots_was_overridden
         capped._sog_overridden     = "sog_rate_ewm" in _user_overrides
-        # Goals variance override (dispersion index) — display/sim only; does not
-        # change the mean projection, just the tail shape used for X+ pricing.
-        if "var_index_goals" in _user_overrides:
-            capped.var_index_goals = _nan(float(f.get("var_index_goals", 0.0)), 0.0) or None
+        # Per-stat volatility overrides (dispersion index) — sim-only; reshape the
+        # tails for X+/milestone pricing, mean projection preserved.
+        for _vk in ("var_index_goals", "var_index_assists", "var_index_shots",
+                    "var_index_sog", "var_index_saves", "var_index_fo_wins"):
+            if _vk in _user_overrides:
+                _vv = _nan(float(f.get(_vk, 0.0)), 0.0)
+                if _vv > 0:
+                    setattr(capped, _vk, _vv)
         return capped
 
     def _apply_caps(self, p: PlayerProjection) -> PlayerProjection:
@@ -2885,10 +2890,38 @@ class GameSimulator:
             counts = rng.negative_binomial(nb_n, nb_p, n).astype(float)
             return np.where(is_zero, 0.0, counts)
 
-        def _nb(mu: float, phi_key: str) -> np.ndarray:
+        def _nb(mu: float, phi_key: str, phi_override: Optional[float] = None) -> np.ndarray:
             mu = max(mu, 0.01)
-            nb_n, nb_p = _negbinom_params(mu, PHI_PLAYER.get(phi_key, 2.0))
+            phi = phi_override if phi_override is not None else PHI_PLAYER.get(phi_key, 2.0)
+            nb_n, nb_p = _negbinom_params(mu, phi)
             return rng.negative_binomial(nb_n, nb_p, n).astype(float)
+
+        def _pin_mean(draw: np.ndarray, target_mu: float) -> np.ndarray:
+            """Rebalance an integer count array so its sample mean == target_mu
+            exactly, by moving a minimal number of counts by ±1. Preserves the
+            fattened upper tail (X+ prices) while keeping the O/U line fixed."""
+            diff = int(round(float(np.sum(draw)) - target_mu * n))
+            if diff > 0:  # too many — decrement random positive draws
+                pos = np.flatnonzero(draw > 0)
+                if pos.size:
+                    pick = rng.choice(pos, size=min(diff, pos.size), replace=False)
+                    draw[pick] -= 1.0
+            elif diff < 0:  # too few — increment random draws
+                pick = rng.choice(n, size=min(-diff, n), replace=False)
+                draw[pick] += 1.0
+            return draw
+
+        def _draw_zinb_var(mu: float, phi_key: str, zero_prob: float,
+                           phi_override: Optional[float]) -> np.ndarray:
+            """ZINB draw; if a volatility override is active, pin the mean so the
+            projection/O-U line is unchanged and only the tails reshape."""
+            d = _zinb(mu, phi_key, zero_prob, phi_override=phi_override)
+            return _pin_mean(d, max(mu, 0.01)) if phi_override is not None else d
+
+        def _draw_nb_var(mu: float, phi_key: str,
+                         phi_override: Optional[float]) -> np.ndarray:
+            d = _nb(mu, phi_key, phi_override=phi_override)
+            return _pin_mean(d, max(mu, 0.01)) if phi_override is not None else d
 
         # Collect raw goal draws for conditioning
         raw_goals: Dict[str, np.ndarray] = {}
@@ -2903,25 +2936,26 @@ class GameSimulator:
             # reflects the specific goalie matchup. Assists and shots are not
             # scaled — only goal-scoring is directly suppressed by the goalie.
             adj_goals = pp.proj_goals * goalie_adj
-            # Per-player goals variance override: convert the dispersion index to
-            # a phi so the tails (X+ prices) widen/tighten. The draw's sample mean
-            # can drift slightly from adj_goals at low phi (discrete NB rounding),
-            # but the O/U projection MUST stay fixed — so when the override is
-            # active we do a mean-preserving correction: draw at the wider phi,
-            # then rebalance so the distribution's mean equals adj_goals exactly
-            # (shifts probability mass between 0 and the low counts without
-            # touching the upper tail that drives X+ prices).
-            # Per-player goals variance override: draw with the widened/narrowed
-            # dispersion (phi from the user's index). The mean is ultimately
-            # pinned by the team-goal conditioning step below (each sim rescales
-            # player goals to the team's sampled total), so the O/U projection is
-            # preserved; the override only reshapes the tails that drive X+ prices.
-            _goal_phi = (_var_index_to_phi(pp.var_index_goals, adj_goals)
-                         if pp.var_index_goals is not None else None)
-            raw_goals[pp.player_id] = _zinb(adj_goals, "goals", pp.zero_prob_goals,
-                                            phi_override=_goal_phi)
-            raw_assists[pp.player_id] = _zinb(pp.proj_assists, "assists", pp.zero_prob_assists)
-            raw_shots[pp.player_id] = _nb(pp.proj_shots, "shots")
+            # Per-player volatility overrides: convert the user's dispersion index
+            # (variance/mean) to a NegBin phi so the tails (X+ prices) widen or
+            # tighten. _draw_with_var keeps the sample MEAN pinned to the target
+            # (the O/U line does not move) via a minimal integer rebalance, so the
+            # override reshapes only the tails.
+            _gphi = (_var_index_to_phi(pp.var_index_goals, adj_goals)
+                     if pp.var_index_goals is not None else None)
+            # Goals are team-conditioned below (per-sim rescale), which itself pins
+            # the mean; don't _pin_mean here (it fights the per-sim scale). Just
+            # draw at the chosen dispersion — stochastic rounding in conditioning
+            # keeps the mean honest.
+            raw_goals[pp.player_id] = _zinb(
+                adj_goals, "goals", pp.zero_prob_goals, phi_override=_gphi)
+            _aphi = (_var_index_to_phi(pp.var_index_assists, pp.proj_assists)
+                     if pp.var_index_assists is not None else None)
+            raw_assists[pp.player_id] = _draw_zinb_var(
+                pp.proj_assists, "assists", pp.zero_prob_assists, _aphi)
+            _shphi = (_var_index_to_phi(pp.var_index_shots, pp.proj_shots)
+                      if pp.var_index_shots is not None else None)
+            raw_shots[pp.player_id] = _draw_nb_var(pp.proj_shots, "shots", _shphi)
 
         # Player correlation adjustment via Cholesky decomposition.
         # Applies to the top-N field players on the team (by proj_goals).
@@ -2973,10 +3007,20 @@ class GameSimulator:
             sum_raw = np.maximum(sum_raw, 0.01)
             team_draw_rounded = np.round(team_goal_draws).clip(min=0)
             scale = team_draw_rounded / sum_raw
+            # Default uses deterministic rounding (unbiased enough for near-Poisson
+            # goal draws). If any field player has a goals-VOLATILITY override, the
+            # draw is right-skewed and plain np.round biases the mean DOWN, which
+            # would move the O/U line. Use stochastic rounding in that case — it's
+            # unbiased in expectation (E[round(x)] = x), so the mean is preserved
+            # while the fattened tail (X+ prices) is kept.
+            _stoch = any(pp.var_index_goals is not None for pp in field)
             for pp in field:
-                raw_goals[pp.player_id] = np.round(
-                    raw_goals[pp.player_id] * scale
-                ).clip(min=0)
+                scaled = raw_goals[pp.player_id] * scale
+                if _stoch:
+                    scaled = np.floor(scaled + rng.random(n))
+                else:
+                    scaled = np.round(scaled)
+                raw_goals[pp.player_id] = scaled.clip(min=0)
 
         # Build simulations
         for pp in field:
@@ -2989,7 +3033,9 @@ class GameSimulator:
             a = raw_assists.get(pid, np.zeros(n))
             sh = raw_shots.get(pid, np.zeros(n))
             sog_rate = pp.proj_sog / max(pp.proj_shots, 0.01)
-            sog = np.minimum(_nb(pp.proj_sog, "sog"), sh)
+            _sogphi = (_var_index_to_phi(pp.var_index_sog, pp.proj_sog)
+                       if pp.var_index_sog is not None else None)
+            sog = np.minimum(_nb(pp.proj_sog, "sog", phi_override=_sogphi), sh)
 
             dists: Dict[str, np.ndarray] = {
                 "goals": g,
@@ -3019,8 +3065,15 @@ class GameSimulator:
             # Range [70, 220] keeps var/mean within ~[1.06, 1.19] at typical mu.
             csr_ratio = pp.clean_save_rate / max(LG_CLEAN_SAVE_RATE, 0.01)
             goalie_phi = float(np.clip(PHI_PLAYER["saves"] * csr_ratio, 70.0, 220.0))
+            # Saves volatility override: user-set dispersion index takes over the
+            # phi (mean pinned so the saves O/U line is unchanged).
+            _pin_sv = pp.var_index_saves is not None
+            if _pin_sv:
+                goalie_phi = _var_index_to_phi(pp.var_index_saves, max(pp.proj_saves, 0.01))
             nb_n_sv, nb_p_sv = _negbinom_params(max(pp.proj_saves, 0.01), goalie_phi)
             sv = rng.negative_binomial(nb_n_sv, nb_p_sv, n).astype(float)
+            if _pin_sv:
+                sv = _pin_mean(sv, max(pp.proj_saves, 0.01))
             shots_faced = max(pp.proj_saves / max(pp.proj_save_pct, 0.01), 1.0)
             dists = {
                 "saves": sv,
@@ -3041,7 +3094,9 @@ class GameSimulator:
             pid = pp.player_id
             existing = next((r for r in results if r.player_id == pid), None)
             if existing is not None:
-                fo_draws = _nb(pp.proj_faceoff_wins, "fo_wins")
+                _fophi = (_var_index_to_phi(pp.var_index_fo_wins, pp.proj_faceoff_wins)
+                          if pp.var_index_fo_wins is not None else None)
+                fo_draws = _draw_nb_var(pp.proj_faceoff_wins, "fo_wins", _fophi)
                 existing.stat_distributions["faceoff_wins"] = fo_draws
                 existing.proj_values["faceoff_wins"] = float(np.mean(fo_draws))
                 existing.prop_lines["faceoff_wins"] = _nearest_half(float(np.median(fo_draws)))

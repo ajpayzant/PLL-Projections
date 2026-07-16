@@ -237,12 +237,22 @@ def _model_val_for(pid: str, key: str, p) -> float:
         LG_2PT_SHOT_RATE, LG_PASS_PER_TOUCH, LG_CLEAN_SAVE_RATE,
     )
 
-    # Goals volatility: model default dispersion index = 1 + mu/PHI_goals.
-    # Showing this as the "model" value means setting the override equal is a no-op.
-    if key == "var_index_goals":
+    # Volatility ratings: model default dispersion index = 1 + mu/PHI_stat, where
+    # mu is the player's projection for that stat. Showing this as the "model"
+    # value means setting the override equal to it is a no-op.
+    _VAR_STAT = {
+        "var_index_goals":   ("goals",   "proj_goals"),
+        "var_index_assists": ("assists", "proj_assists"),
+        "var_index_shots":   ("shots",   "proj_shots"),
+        "var_index_sog":     ("sog",     "proj_sog"),
+        "var_index_saves":   ("saves",   "proj_saves"),
+        "var_index_fo_wins": ("fo_wins", "proj_faceoff_wins"),
+    }
+    if key in _VAR_STAT:
         from projection_engine_v3 import PHI_PLAYER
-        mu  = max(float(getattr(p, "proj_goals", 1.0)) or 1.0, 0.05)
-        phi = PHI_PLAYER.get("goals", 40.0)
+        phi_key, attr = _VAR_STAT[key]
+        mu  = max(float(getattr(p, attr, 1.0)) or 1.0, 0.05)
+        phi = PHI_PLAYER.get(phi_key, 40.0)
         return round(1.0 + mu / phi, 2)
 
     # Share keys: derive from current post-reconcile projection so that setting

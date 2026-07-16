@@ -793,8 +793,8 @@ PLAYER_RATING_DEFS = {
     },
     "var_index_goals": {
         "label": "Goals volatility (var/mean)", "group": "Goal Ratings",
-        "help": "Dispersion of the player's goal distribution: variance ÷ mean. ~1.0 = steady (Poisson); higher = more boom-or-bust, which raises the deep X+ (3+/4+) goal prices. Changes the milestone tail shape, not the O/U line. Use when the balanced line looks right but the model under-prices a player's big-game upside. Effect saturates near 1.5.",
-        "min": 1.00, "max": 1.50, "step": 0.05, "fmt": "{:.2f}",
+        "help": "Dispersion of the player's goal distribution: variance ÷ mean. 1.0 = steady (Poisson); higher = more boom-or-bust, raising the deep X+ (3+/4+) goal prices. Range is tighter for goals than other stats because goals are tied to the team total each simulation — pushing past ~1.3 would start to pull the goal mean/O-U line down.",
+        "min": 1.00, "max": 1.30, "step": 0.05, "fmt": "{:.2f}",
         "positions": ["A", "M", "SSDM", "LSM", "FO", "D"],
     },
     # ── ASSIST RATINGS ────────────────────────────────────────────────────────
@@ -816,6 +816,12 @@ PLAYER_RATING_DEFS = {
         "min": 0.30, "max": 1.00, "step": 0.01, "fmt": "{:.3f}",
         "positions": ["A", "M", "SSDM", "LSM"],
     },
+    "var_index_assists": {
+        "label": "Assists volatility (var/mean)", "group": "Assist Ratings",
+        "help": "Dispersion of the player's assist distribution: variance ÷ mean. 1.0 = steady; higher = more boom-or-bust, raising the deep assist X+ prices. Reshapes the milestone tails only — the mean / O/U line is held fixed.",
+        "min": 1.00, "max": 3.00, "step": 0.05, "fmt": "{:.2f}",
+        "positions": ["A", "M", "D", "FO", "SSDM", "LSM"],
+    },
     # ── SHOT RATINGS ──────────────────────────────────────────────────────────
     "share_shots_ewm": {
         "label": "Shot share", "group": "Shot Ratings",
@@ -834,6 +840,18 @@ PLAYER_RATING_DEFS = {
         "help": "Fraction of shots that are on goal. Affects the player's SOG projection only (not shots or goals); SOG is capped at their shot count. League avg ~0.63.",
         "min": 0.20, "max": 1.00, "step": 0.01, "fmt": "{:.3f}",
         "positions": ["A", "M", "SSDM", "LSM"],
+    },
+    "var_index_shots": {
+        "label": "Shots volatility (var/mean)", "group": "Shot Ratings",
+        "help": "Dispersion of the player's shot distribution: variance ÷ mean. 1.0 = steady; higher = more boom-or-bust, raising the deep shot X+ prices. Mean / O/U line held fixed.",
+        "min": 1.00, "max": 3.00, "step": 0.05, "fmt": "{:.2f}",
+        "positions": ["A", "M", "D", "FO", "SSDM", "LSM"],
+    },
+    "var_index_sog": {
+        "label": "SOG volatility (var/mean)", "group": "Shot Ratings",
+        "help": "Dispersion of the player's shots-on-goal distribution: variance ÷ mean. 1.0 = steady; higher = more boom-or-bust, raising the deep SOG X+ prices. Range capped at 2.0 because SOG is capped at the player's shot count, which limits how far the tail can widen.",
+        "min": 1.00, "max": 2.00, "step": 0.05, "fmt": "{:.2f}",
+        "positions": ["A", "M", "D", "FO", "SSDM", "LSM"],
     },
     # ── 2-POINT RATINGS ───────────────────────────────────────────────────────
     "two_pt_rate_ewm": {
@@ -861,11 +879,23 @@ PLAYER_RATING_DEFS = {
         "min": 0.10, "max": 0.70, "step": 0.01, "fmt": "{:.3f}",
         "positions": ["G"],
     },
+    "var_index_saves": {
+        "label": "Saves volatility (var/mean)", "group": "Goalie Ratings",
+        "help": "Dispersion of the goalie's saves distribution: variance ÷ mean. 1.0 = steady; higher = more boom-or-bust, raising the deep saves X+ prices. Mean / O/U line held fixed.",
+        "min": 1.00, "max": 3.00, "step": 0.05, "fmt": "{:.2f}",
+        "positions": ["G"],
+    },
     # ── FACEOFF RATINGS ───────────────────────────────────────────────────────
     "bayes_fo_pct": {
         "label": "FO win %", "group": "Faceoff Ratings",
         "help": "Faceoff win rate. 0.500 = league avg.",
         "min": 0.25, "max": 0.75, "step": 0.01, "fmt": "{:.3f}",
+        "positions": ["FO"],
+    },
+    "var_index_fo_wins": {
+        "label": "FO wins volatility (var/mean)", "group": "Faceoff Ratings",
+        "help": "Dispersion of the specialist's faceoff-wins distribution: variance ÷ mean. 1.0 = steady; higher = more boom-or-bust, raising the deep FO-win X+ prices. Mean / O/U line held fixed.",
+        "min": 1.00, "max": 3.00, "step": 0.05, "fmt": "{:.2f}",
         "positions": ["FO"],
     },
 }
