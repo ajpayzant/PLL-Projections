@@ -237,6 +237,14 @@ def _model_val_for(pid: str, key: str, p) -> float:
         LG_2PT_SHOT_RATE, LG_PASS_PER_TOUCH, LG_CLEAN_SAVE_RATE,
     )
 
+    # Goals volatility: model default dispersion index = 1 + mu/PHI_goals.
+    # Showing this as the "model" value means setting the override equal is a no-op.
+    if key == "var_index_goals":
+        from projection_engine_v3 import PHI_PLAYER
+        mu  = max(float(getattr(p, "proj_goals", 1.0)) or 1.0, 0.05)
+        phi = PHI_PLAYER.get("goals", 40.0)
+        return round(1.0 + mu / phi, 2)
+
     # Share keys: derive from current post-reconcile projection so that setting
     # the override to the displayed value exactly reproduces the base projection.
     if key in ("share_goals_ewm", "share_assists_ewm", "share_shots_ewm"):
@@ -271,6 +279,53 @@ def _model_val_for(pid: str, key: str, p) -> float:
         "bayes_fo_pct":          LG_FO_PCT,
     }
     return fallback_map.get(key, 0.0)
+
+
+def _season_career_for(pid: str, key: str, p) -> tuple:
+    """
+    Return (season_value, career_value) reference numbers for a rating, to show
+    next to the override input so the user can judge whether the model value is
+    too low/high vs the player's actual production.
+
+      season = recent-form EWM signal (the "_ewm" column)
+      career = all-history mean (the "_mean" column, or career_*_pg for shares)
+
+    Returns (None, None) when a reference isn't available. Display-only — these
+    never feed the projection.
+    """
+    pm = engine.player_model
+    if pm is None or pm.pr.empty:
+        return (None, None)
+    rows = pm.pr[pm.pr["player_id"] == pid]
+    if rows.empty:
+        return (None, None)
+    r = rows.iloc[-1]
+
+    def _col(name):
+        if name in rows.columns:
+            try:
+                v = float(r[name])
+                if v == v:  # not NaN
+                    return v
+            except (TypeError, ValueError):
+                return None
+        return None
+
+    # Shares: season = own EWM share; career = career per-game / team-average.
+    if key in ("share_goals_ewm", "share_assists_ewm", "share_shots_ewm"):
+        stat = key.split("_")[1]  # goals / assists / shots
+        team_proj = result.home_proj if p.team_id == home_id else result.away_proj
+        team_total = getattr(team_proj, f"proj_{stat}", 0.0) or 1.0
+        season = _col(key)  # the raw ewm share
+        career_pg = _col(f"career_{stat}_pg")
+        career = (career_pg / team_total) if career_pg is not None else None
+        return (season, career)
+
+    # Efficiency / rate keys: season = "_ewm", career = "_mean".
+    base = key[:-4] if key.endswith("_ewm") else key  # strip _ewm
+    season = _col(f"{base}_ewm") if key.endswith("_ewm") else _col(key)
+    career = _col(f"{base}_mean")
+    return (season, career)
 
 
 def _effective_pos(p, dc: dict) -> str:
@@ -601,9 +656,21 @@ def _render_team(team_id: str, team_nm: str, players):
                     unsafe_allow_html=True,
                 )
                 ratings_shown = False
+                _last_group = None
                 for key, meta in PLAYER_RATING_DEFS.items():
                     if pos not in meta.get("positions", []):
                         continue
+
+                    # Group header (Goal Ratings / Assist Ratings / …) so it's
+                    # obvious which stat each rating affects.
+                    _grp = meta.get("group", "Other Ratings")
+                    if _grp != _last_group:
+                        _last_group = _grp
+                        st.markdown(
+                            f'<div style="font-size:.68rem;font-weight:700;letter-spacing:.06em;'
+                            f'text-transform:uppercase;color:#94a3b8;margin:8px 0 2px;">{_grp}</div>',
+                            unsafe_allow_html=True,
+                        )
 
                     model_val = _model_val_for(pid, key, p)
                     wgt_key   = f"pr_num_{team_id}_{pid}_{key}"
@@ -672,6 +739,23 @@ def _render_team(team_id: str, team_nm: str, players):
                             f'</div>',
                             unsafe_allow_html=True,
                         )
+
+                    # Reference line: Season / Career / Model so the user can judge
+                    # whether the model value looks too low/high vs the player's
+                    # actual production before deciding to override. Display-only.
+                    _season, _career = _season_career_for(pid, key, p)
+                    _fmt = meta["fmt"]
+                    _s = _fmt.format(_season) if _season is not None else "—"
+                    _c = _fmt.format(_career) if _career is not None else "—"
+                    _m = _fmt.format(model_val)
+                    st.markdown(
+                        f'<div style="margin:-6px 0 8px;padding-left:2px;">'
+                        f'<span style="font-size:.68rem;color:#64748b;">'
+                        f'Season <b style="color:#cbd5e1;">{_s}</b> &nbsp;·&nbsp; '
+                        f'Career <b style="color:#cbd5e1;">{_c}</b> &nbsp;·&nbsp; '
+                        f'Model <b style="color:#7dd3fc;">{_m}</b></span></div>',
+                        unsafe_allow_html=True,
+                    )
 
                     ratings_shown = True
 

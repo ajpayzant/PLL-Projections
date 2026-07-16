@@ -922,6 +922,24 @@ def _negbinom_params(mu: float, phi: float) -> Tuple[int, float]:
     return n, min(max(p, 1e-6), 1 - 1e-6)
 
 
+def _var_index_to_phi(var_index: float, mu: float) -> float:
+    """Convert a user 'dispersion index' (variance/mean ratio) to a NegBin phi.
+
+    var/mean = 1 + mu/phi  ⇒  phi = mu / (var_index - 1). A var_index of 1.0 is
+    Poisson (steadiest); higher = fatter tails (more boom/bust) = higher X+
+    prices, with the MEAN unchanged. Clamped to a sane band so extreme values
+    can't destabilise the sim.
+    """
+    vi = min(max(float(var_index), 1.01), 3.0)
+    mu = max(mu, 0.05)
+    phi = mu / (vi - 1.0)
+    # Floor at 1.5 so the integer shape n=round(phi) stays >= 2. Below that the
+    # NegBin's discrete rounding at n=1 distorts the mean of the draw, which would
+    # (wrongly) shift the O/U projection. This caps the achievable fatness for
+    # very low-mean players, but keeps the mean stable — the intended contract.
+    return min(max(phi, 1.5), 500.0)
+
+
 def _trunc_normal_sample(rng: np.random.Generator, mu: float, sigma: float, n: int,
                           lo: float = 0.0) -> np.ndarray:
     """Sample from Normal(mu, sigma) truncated below at lo."""
@@ -986,6 +1004,10 @@ class PlayerProjection:
     usage_multiplier: float = 1.0
     is_starter: bool = False
     clean_save_rate: float = LG_CLEAN_SAVE_RATE  # goalie consistency signal
+    # Optional user override of the goals dispersion index (variance/mean). None =
+    # use the model default PHI. Higher index = fatter tails = higher X+ prices;
+    # the O/U/mean projection is unchanged. See _var_index_to_phi.
+    var_index_goals: Optional[float] = None
     _fo_pct_overridden: bool = False
     _goals_overridden: bool = False    # user explicitly set share_goals_ewm or shot_pct_ewm
     _assists_overridden: bool = False  # user explicitly set share_assists_ewm / assist_conv / pass_per_touch
@@ -2574,6 +2596,10 @@ class PlayerModel:
         capped._assists_overridden = assists_was_overridden
         capped._shots_overridden   = shots_was_overridden
         capped._sog_overridden     = "sog_rate_ewm" in _user_overrides
+        # Goals variance override (dispersion index) — display/sim only; does not
+        # change the mean projection, just the tail shape used for X+ pricing.
+        if "var_index_goals" in _user_overrides:
+            capped.var_index_goals = _nan(float(f.get("var_index_goals", 0.0)), 0.0) or None
         return capped
 
     def _apply_caps(self, p: PlayerProjection) -> PlayerProjection:
@@ -2847,10 +2873,14 @@ class GameSimulator:
         opp_sv = min(max(float(opp_save_pct), 0.30), 0.75)
         goalie_adj = min(max((1.0 - opp_sv) / max(1.0 - LG_SAVE_PCT, 0.01), 0.80), 1.20)
 
-        def _zinb(mu: float, phi_key: str, zero_prob: float) -> np.ndarray:
-            """Zero-inflated NegBin draw."""
+        def _zinb(mu: float, phi_key: str, zero_prob: float,
+                  phi_override: Optional[float] = None) -> np.ndarray:
+            """Zero-inflated NegBin draw. phi_override lets a caller set the
+            dispersion directly (used by the per-player goals variance override);
+            it changes tail fatness / X+ prices while the mean stays = mu."""
             mu = max(mu, 0.01)
-            nb_n, nb_p = _negbinom_params(mu / max(1.0 - zero_prob, 0.01), PHI_PLAYER.get(phi_key, 2.0))
+            phi = phi_override if phi_override is not None else PHI_PLAYER.get(phi_key, 2.0)
+            nb_n, nb_p = _negbinom_params(mu / max(1.0 - zero_prob, 0.01), phi)
             is_zero = rng.random(n) < zero_prob
             counts = rng.negative_binomial(nb_n, nb_p, n).astype(float)
             return np.where(is_zero, 0.0, counts)
@@ -2873,7 +2903,23 @@ class GameSimulator:
             # reflects the specific goalie matchup. Assists and shots are not
             # scaled — only goal-scoring is directly suppressed by the goalie.
             adj_goals = pp.proj_goals * goalie_adj
-            raw_goals[pp.player_id] = _zinb(adj_goals, "goals", pp.zero_prob_goals)
+            # Per-player goals variance override: convert the dispersion index to
+            # a phi so the tails (X+ prices) widen/tighten. The draw's sample mean
+            # can drift slightly from adj_goals at low phi (discrete NB rounding),
+            # but the O/U projection MUST stay fixed — so when the override is
+            # active we do a mean-preserving correction: draw at the wider phi,
+            # then rebalance so the distribution's mean equals adj_goals exactly
+            # (shifts probability mass between 0 and the low counts without
+            # touching the upper tail that drives X+ prices).
+            # Per-player goals variance override: draw with the widened/narrowed
+            # dispersion (phi from the user's index). The mean is ultimately
+            # pinned by the team-goal conditioning step below (each sim rescales
+            # player goals to the team's sampled total), so the O/U projection is
+            # preserved; the override only reshapes the tails that drive X+ prices.
+            _goal_phi = (_var_index_to_phi(pp.var_index_goals, adj_goals)
+                         if pp.var_index_goals is not None else None)
+            raw_goals[pp.player_id] = _zinb(adj_goals, "goals", pp.zero_prob_goals,
+                                            phi_override=_goal_phi)
             raw_assists[pp.player_id] = _zinb(pp.proj_assists, "assists", pp.zero_prob_assists)
             raw_shots[pp.player_id] = _nb(pp.proj_shots, "shots")
 

@@ -774,84 +774,96 @@ TEAM_RATING_DEFS = {
     },
 }
 
+# Each rating carries a "group" so the depth-chart edit panel can organise the
+# ratings under stat-category headers (Goal Ratings, Assist Ratings, …) so it's
+# obvious which lever affects which projection.
 PLAYER_RATING_DEFS = {
-    # ── Volume shares — what fraction of team totals does this player produce ──
+    # ── GOAL RATINGS ──────────────────────────────────────────────────────────
     "share_goals_ewm": {
-        "label": "Goal share",
-        "help": "Player's share of team goals (0.20 = 20% of all team goals). Overriding this pins the player to the exact fraction you set, bypassing the credibility blend.",
+        "label": "Goal share", "group": "Goal Ratings",
+        "help": "Player's share of team goals (0.20 = 20% of all team goals). Overriding pins the player to the fraction you set; teammates' goals adjust so the team total holds.",
         "min": 0.0, "max": 0.50, "step": 0.01, "fmt": "{:.3f}",
         "positions": ["A", "M", "D", "FO", "SSDM", "LSM"],
     },
-    "share_assists_ewm": {
-        "label": "Assist share",
-        "help": "Player's share of team assists. Overriding disables the assist-conv nudge for this player.",
-        "min": 0.0, "max": 0.50, "step": 0.01, "fmt": "{:.3f}",
-        "positions": ["A", "M", "D", "FO", "SSDM", "LSM"],
-    },
-    "share_shots_ewm": {
-        "label": "Shot share",
-        "help": "Player's share of team shots (0.18 = 18% of all team shots). Overriding disables the shots-per-touch nudge for this player.",
-        "min": 0.0, "max": 0.50, "step": 0.01, "fmt": "{:.3f}",
-        "positions": ["A", "M", "D", "FO", "SSDM", "LSM"],
-    },
-    # ── Efficiency ratings — quality of production per opportunity ──────────
     "shot_pct_ewm": {
-        "label": "Shooting %",
-        "help": "Goals per shot. League avg ~0.27. Raising this scales up proj goals relative to the baseline.",
+        "label": "Shooting %", "group": "Goal Ratings",
+        "help": "Goals per shot. League avg ~0.27. Raising it scales the player's goal projection up (relative to their own baseline); teammates absorb the difference.",
         "min": 0.05, "max": 0.60, "step": 0.01, "fmt": "{:.3f}",
         "positions": ["A", "M", "SSDM", "LSM"],
     },
-    "sog_rate_ewm": {
-        "label": "Shots on goal %",
-        "help": "Fraction of shots that are on goal. League avg ~0.63. Affects proj SOG without changing goal projection.",
-        "min": 0.20, "max": 1.00, "step": 0.01, "fmt": "{:.3f}",
-        "positions": ["A", "M", "SSDM", "LSM"],
+    "var_index_goals": {
+        "label": "Goals volatility (var/mean)", "group": "Goal Ratings",
+        "help": "Dispersion of the player's goal distribution: variance ÷ mean. ~1.0 = steady (Poisson); higher = more boom-or-bust, which raises the deep X+ (3+/4+) goal prices. Changes the milestone tail shape, not the O/U line. Use when the balanced line looks right but the model under-prices a player's big-game upside. Effect saturates near 1.5.",
+        "min": 1.00, "max": 1.50, "step": 0.05, "fmt": "{:.2f}",
+        "positions": ["A", "M", "SSDM", "LSM", "FO", "D"],
     },
-    "shots_per_touch_ewm": {
-        "label": "Shots per touch",
-        "help": "How often a player generates a shot from each touch. League avg ~0.21 (A/M). Nudges shot projection up/down vs position average (20% blend, ±30% cap).",
-        "min": 0.02, "max": 0.60, "step": 0.01, "fmt": "{:.3f}",
-        "positions": ["A", "M", "SSDM", "LSM"],
+    # ── ASSIST RATINGS ────────────────────────────────────────────────────────
+    "share_assists_ewm": {
+        "label": "Assist share", "group": "Assist Ratings",
+        "help": "Player's share of team assists. Overriding pins the player to the fraction you set; teammates' assists adjust so the team total holds.",
+        "min": 0.0, "max": 0.50, "step": 0.01, "fmt": "{:.3f}",
+        "positions": ["A", "M", "D", "FO", "SSDM", "LSM"],
     },
     "assist_conv_ewm": {
-        "label": "Assist conversion",
-        "help": "Assists per assist opportunity — how often a pass in a scoring situation becomes a real assist. League avg ~0.31 (A), 0.25 (M). Nudges assist projection up/down (15% blend, ±20% cap).",
+        "label": "Assist conversion", "group": "Assist Ratings",
+        "help": "Assists per assist opportunity. Raising it scales the player's assist projection up (vs their own baseline); teammates absorb the difference. League avg ~0.31 (A), 0.25 (M).",
         "min": 0.00, "max": 1.00, "step": 0.01, "fmt": "{:.3f}",
         "positions": ["A", "M", "SSDM", "LSM"],
     },
+    "pass_per_touch_ewm": {
+        "label": "Pass per touch", "group": "Assist Ratings",
+        "help": "Passes per possession touch — distributor signal. Raising it scales the player's assist projection up (vs their own baseline); teammates absorb the difference. League avg ~0.73.",
+        "min": 0.30, "max": 1.00, "step": 0.01, "fmt": "{:.3f}",
+        "positions": ["A", "M", "SSDM", "LSM"],
+    },
+    # ── SHOT RATINGS ──────────────────────────────────────────────────────────
+    "share_shots_ewm": {
+        "label": "Shot share", "group": "Shot Ratings",
+        "help": "Player's share of team shots (0.18 = 18%). Overriding pins the player to the fraction you set; teammates' shots adjust so the team total holds.",
+        "min": 0.0, "max": 0.50, "step": 0.01, "fmt": "{:.3f}",
+        "positions": ["A", "M", "D", "FO", "SSDM", "LSM"],
+    },
+    "shots_per_touch_ewm": {
+        "label": "Shots per touch", "group": "Shot Ratings",
+        "help": "Shots generated per touch. Raising it scales the player's shot projection up (vs their own baseline); teammates absorb the difference. League avg ~0.21 (A/M).",
+        "min": 0.02, "max": 0.60, "step": 0.01, "fmt": "{:.3f}",
+        "positions": ["A", "M", "SSDM", "LSM"],
+    },
+    "sog_rate_ewm": {
+        "label": "Shots on goal %", "group": "Shot Ratings",
+        "help": "Fraction of shots that are on goal. Affects the player's SOG projection only (not shots or goals); SOG is capped at their shot count. League avg ~0.63.",
+        "min": 0.20, "max": 1.00, "step": 0.01, "fmt": "{:.3f}",
+        "positions": ["A", "M", "SSDM", "LSM"],
+    },
+    # ── 2-POINT RATINGS ───────────────────────────────────────────────────────
     "two_pt_rate_ewm": {
-        "label": "2PT goal rate",
-        "help": "Fraction of goals that are 2-pointers (outcome). Blended 40% with intent rate. League avg ~7%.",
+        "label": "2PT goal rate", "group": "2-Point Ratings",
+        "help": "Fraction of the player's goals that are 2-pointers (outcome). Shifts the 1pt/2pt split of their goals. League avg ~7%.",
         "min": 0.0, "max": 0.65, "step": 0.01, "fmt": "{:.3f}",
         "positions": ["A", "M", "SSDM", "LSM"],
     },
     "two_pt_shot_rate_ewm": {
-        "label": "2PT shot rate",
-        "help": "Fraction of shots attempted as 2-pointers (intent). Blended 60% into 2PT projection. League avg ~4% (A), ~12% (M).",
+        "label": "2PT shot rate", "group": "2-Point Ratings",
+        "help": "Fraction of shots attempted as 2-pointers (intent). Blended 60% into the 2PT projection when 2PT goal rate isn't set directly. League avg ~4% (A), ~12% (M).",
         "min": 0.0, "max": 0.80, "step": 0.01, "fmt": "{:.3f}",
         "positions": ["A", "M", "SSDM", "LSM"],
     },
-    "pass_per_touch_ewm": {
-        "label": "Pass per touch",
-        "help": "Passes per possession touch — distributor archetype signal. High = feeder (nudges assists up). League avg ~0.73. Very stable (CV ~0.12).",
-        "min": 0.30, "max": 1.00, "step": 0.01, "fmt": "{:.3f}",
-        "positions": ["A", "M", "SSDM", "LSM"],
-    },
-    # ── Position-specific ratings ────────────────────────────────────────────
+    # ── GOALIE RATINGS ────────────────────────────────────────────────────────
     "bayes_save_pct": {
-        "label": "Save %",
+        "label": "Save %", "group": "Goalie Ratings",
         "help": "Goalie's Bayesian save%. League avg ~0.537.",
         "min": 0.35, "max": 0.75, "step": 0.005, "fmt": "{:.3f}",
         "positions": ["G"],
     },
     "clean_save_rate_ewm": {
-        "label": "Clean save rate",
-        "help": "Fraction of saves that are clean (controlled stops). High = consistent goalie, gets tighter sim variance. League avg ~0.34.",
+        "label": "Clean save rate", "group": "Goalie Ratings",
+        "help": "Fraction of saves that are clean (controlled stops). High = consistent goalie, tighter sim variance. League avg ~0.34.",
         "min": 0.10, "max": 0.70, "step": 0.01, "fmt": "{:.3f}",
         "positions": ["G"],
     },
+    # ── FACEOFF RATINGS ───────────────────────────────────────────────────────
     "bayes_fo_pct": {
-        "label": "FO win %",
+        "label": "FO win %", "group": "Faceoff Ratings",
         "help": "Faceoff win rate. 0.500 = league avg.",
         "min": 0.25, "max": 0.75, "step": 0.01, "fmt": "{:.3f}",
         "positions": ["FO"],
