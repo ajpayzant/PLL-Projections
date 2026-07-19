@@ -1,0 +1,228 @@
+"""
+fast_backtest.py
+----------------
+Fast iteration harness for validating engine changes on the feature branch.
+Mirrors run_backtest.py's leakage-safe methodology but trims runtime so the
+edit->test loop is minutes not tens-of-minutes:
+
+  * team section can be limited to TEST + CURRENT seasons (skip re-evaluating
+    train games we don't score anyway) via --team-seasons
+  * player section runs on TEST 2025 with a configurable sim count
+  * prints the SAME headline metrics as run_backtest.py so numbers are
+    directly comparable to scripts/backtest_baseline.log
+
+This is a DEV tool. Every change that looks good here is CONFIRMED on the full
+run_backtest.py before it's kept.
+
+Usage:
+    python scripts/fast_backtest.py                      # team(test+current)+player, 3000 sims
+    python scripts/fast_backtest.py --sims 2000 --players-only
+    python scripts/fast_backtest.py --team-only
+    python scripts/fast_backtest.py --tag fix1           # label the output block
+"""
+import argparse
+import sys
+import warnings
+
+sys.path.insert(0, ".")
+warnings.filterwarnings("ignore")
+
+import numpy as np
+import pandas as pd
+
+from projection_engine_v3 import (
+    ProjectionEngine, RatingBuilder, TeamModel, GameSimulator,
+    PlayerModel, _assign_goalie_saves_team,
+)
+
+TRAIN_SEASONS = [2022, 2023, 2024]
+TEST_SEASON = 2025
+EARLY_SEASON = 2026
+
+
+def build_project_fn(tg, pg, quality_fitted, tm_train, n_sims):
+    def project_game(gid, gsea, gnum, home_team, away_team, actual_player_ids=None):
+        train = tg[(tg["season"] < gsea) |
+                   ((tg["season"] == gsea) & (tg["game_number"] < gnum))].copy()
+        if len(train) < 30:
+            return None
+        train_p = pg[(pg["season"] < gsea) |
+                     ((pg["season"] == gsea) & (pg["game_number"] < gnum))].copy()
+        rb = RatingBuilder(train, train_p)
+        rb.build_team_ratings()
+        if actual_player_ids is not None:
+            rb.build_player_ratings()
+        tm = TeamModel()
+        tm.fit(rb._tr)
+        if quality_fitted:
+            tm._quality_model = tm_train._quality_model
+            tm._quality_scaler = tm_train._quality_scaler
+        hf = rb.get_team_rating(home_team)
+        af = rb.get_team_rating(away_team)
+        if not hf or not af:
+            return None
+        hp = tm.predict(hf, af)
+        ap = tm.predict(af, hf)
+        _assign_goalie_saves_team(hp, ap)
+        _assign_goalie_saves_team(ap, hp)
+        sim = GameSimulator(n_sims=n_sims, seed=42)
+        gs = sim.simulate_game(hp, ap)
+        if quality_fitted:
+            q_home = tm.quality_win_prob(hf, af)
+            if q_home is not None:
+                bh = 0.65 * gs.home_win_prob + 0.35 * q_home
+                gs.home_win_prob = bh / (bh + (1 - bh))
+                gs.away_win_prob = 1 - gs.home_win_prob
+        res = {"hp": hp, "ap": ap, "gs": gs, "rb": rb, "tm": tm}
+        if actual_player_ids is not None and not rb._pr.empty:
+            player_projs = {}
+            for tid, tp in [(home_team, hp), (away_team, ap)]:
+                opp_tp = ap if tid == home_team else hp
+                _assign_goalie_saves_team(tp, opp_tp)
+                pm = PlayerModel(rb._pr)
+                ids = actual_player_ids.get(str(tid), set())
+                if ids:
+                    pr_team = rb._pr[rb._pr["team_id"] == tid]
+                    allp = set(pr_team["player_id"].astype(str).tolist())
+                    overrides = {p: {"active": False, "usage_multiplier": 0.0}
+                                 for p in allp if p not in ids}
+                    gp = pm.project_roster(tid, tp, overrides=overrides,
+                                           use_current_roster_filter=False)
+                else:
+                    gp = pm.project_roster(tid, tp, use_current_roster_filter=False)
+                player_projs[tid] = [p for p in gp if p.active]
+            res["player_projs"] = player_projs
+        return res
+    return project_game
+
+
+def team_section(tg, project_game, seasons):
+    rows = []
+    for ssn in seasons:
+        sgames = tg[tg["season"] == ssn].drop_duplicates("game_id")
+        for _, grow in sgames.iterrows():
+            gid, gnum = grow["game_id"], int(grow["game_number"])
+            gr = tg[tg["game_id"] == gid]
+            if len(gr) != 2:
+                continue
+            hr = gr[gr["is_home"] == 1]
+            ar = gr[gr["is_home"] == 0]
+            if hr.empty or ar.empty:
+                hr, ar = gr.iloc[[0]], gr.iloc[[1]]
+            ht, at = str(hr.iloc[0]["team_id"]), str(ar.iloc[0]["team_id"])
+            try:
+                res = project_game(gid, ssn, gnum, ht, at)
+                if res is None:
+                    continue
+                hp, ap, gs = res["hp"], res["ap"], res["gs"]
+                rows.append({
+                    "season": ssn,
+                    "pred_total": hp.proj_goals + ap.proj_goals,
+                    "act_total": float(hr.iloc[0]["goals"]) + float(ar.iloc[0]["goals"]),
+                    "pred_h": hp.proj_goals, "act_h": float(hr.iloc[0]["goals"]),
+                    "pred_a": ap.proj_goals, "act_a": float(ar.iloc[0]["goals"]),
+                    "pred_prob": gs.home_win_prob,
+                    "actual_win": 1 if float(hr.iloc[0]["scores"]) > float(ar.iloc[0]["scores"]) else 0,
+                })
+            except Exception:
+                continue
+    df = pd.DataFrame(rows)
+    print("\n== TEAM ==")
+    for ssn, g in df.groupby("season"):
+        mae = np.mean(np.abs(g["pred_total"] - g["act_total"]))
+        bias = np.mean(g["pred_total"] - g["act_total"])
+        acc = np.mean((g["pred_prob"] > 0.5) == g["actual_win"].astype(bool))
+        brier = np.mean((g["pred_prob"] - g["actual_win"]) ** 2)
+        mae_side = np.mean(np.abs(np.r_[g["pred_h"] - g["act_h"], g["pred_a"] - g["act_a"]])) if len(g) else np.nan
+        print(f"  {ssn}: n={len(g):3d}  totMAE={mae:.3f}  bias={bias:+.3f}  sideMAE={mae_side:.3f}  "
+              f"acc={acc*100:.0f}%  Brier={brier:.4f}")
+    return df
+
+
+def player_section(tg, pg, project_game):
+    rows = []
+    test_pg = pg[pg["season"] == TEST_SEASON].copy()
+    for gid in test_pg["game_id"].unique():
+        game_pg = test_pg[test_pg["game_id"] == gid]
+        game_tg = tg[tg["game_id"] == gid]
+        if game_tg.empty or len(game_tg) != 2:
+            continue
+        gnum = int(game_pg["game_number"].iloc[0])
+        actual_ids = {}
+        for tid in game_tg["team_id"].unique():
+            am = game_pg[(game_pg["team_id"] == tid) &
+                         (game_pg["position"].isin(["A", "M", "FO", "G", "SSDM", "LSM", "D"]))]
+            actual_ids[str(tid)] = set(am["player_id"].astype(str).tolist())
+        try:
+            res = project_game(gid, TEST_SEASON, gnum,
+                               str(game_tg.iloc[0]["team_id"]),
+                               str(game_tg.iloc[1]["team_id"]),
+                               actual_player_ids=actual_ids)
+            if res is None or "player_projs" not in res:
+                continue
+            for tid, projs in res["player_projs"].items():
+                actuals = game_pg[(game_pg["team_id"] == tid) &
+                                  (game_pg["position"].isin(["A", "M"]))]
+                for _, arow in actuals.iterrows():
+                    pid = str(arow["player_id"])
+                    proj = next((p for p in projs if p.player_id == pid), None)
+                    if proj is None:
+                        continue
+                    for stat in ["goals", "assists", "shots"]:
+                        av = float(arow.get(stat, 0) or 0)
+                        pv = getattr(proj, f"proj_{stat}", 0.0)
+                        rows.append({"stat": stat, "pred": pv, "actual": av,
+                                     "abs_error": abs(pv - av), "error": pv - av})
+        except Exception:
+            continue
+    pf = pd.DataFrame(rows)
+    print("\n== PLAYER (TEST 2025) ==")
+    if pf.empty:
+        print("  no rows")
+        return pf
+    for stat, g in pf.groupby("stat"):
+        print(f"  {stat:8s}: MAE={g['abs_error'].mean():.3f}  bias={g['error'].mean():+.3f}  "
+              f"corr={g['pred'].corr(g['actual']):.3f}  "
+              f"avg_pred={g['pred'].mean():.2f}  avg_act={g['actual'].mean():.2f}")
+    return pf
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--sims", type=int, default=3000)
+    ap.add_argument("--team-only", action="store_true")
+    ap.add_argument("--players-only", action="store_true")
+    ap.add_argument("--team-seasons", type=int, nargs="*", default=[TEST_SEASON, EARLY_SEASON])
+    ap.add_argument("--tag", type=str, default="")
+    args = ap.parse_args()
+
+    print("=" * 60)
+    print(f"FAST BACKTEST  sims={args.sims}  tag={args.tag or '(none)'}")
+    print("=" * 60)
+
+    eng = ProjectionEngine()
+    eng.load()
+    tg, pg = eng.team_games, eng.player_games
+
+    train_tg = tg[tg["season"].isin(TRAIN_SEASONS)].copy()
+    train_pg = pg[pg["season"].isin(TRAIN_SEASONS)].copy()
+    rb_train = RatingBuilder(train_tg, train_pg)
+    rb_train.build_team_ratings()
+    tm_train = TeamModel()
+    tm_train.fit(rb_train._tr)
+    quality_fitted = tm_train._quality_model is not None
+
+    project_game = build_project_fn(tg, pg, quality_fitted, tm_train, args.sims)
+
+    if not args.players_only:
+        team_section(tg, project_game, args.team_seasons)
+    if not args.team_only:
+        player_section(tg, pg, project_game)
+
+    print("\n" + "=" * 60)
+    print(f"DONE  tag={args.tag or '(none)'}")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    main()
