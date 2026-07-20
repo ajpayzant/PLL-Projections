@@ -65,6 +65,13 @@ LG_SHOT_PCT: float = 0.274          # goals / shots
 LG_SAVES: float = 13.1
 LG_SHOTS_FACED: float = 24.5        # saves + goals_against per team per game
 LG_SAVE_PCT: float = 0.537          # saves / shots_faced
+# Save% Bayesian prior (Fix 3). The old prior (a=3,b=3 ≈ 6 pseudo-shots, centered
+# 0.5) was far too weak: empirical true-skill save SD ≈ 0.026 implies an optimal
+# prior strength of ~150 pseudo-shots centered on the league rate. This shrinks
+# small-sample goalie save% toward league avg far more, curbing early over-fit.
+SAVE_PRIOR_STRENGTH: float = 150.0
+SAVE_PRIOR_A: float = LG_SAVE_PCT * SAVE_PRIOR_STRENGTH          # ≈ 80.6
+SAVE_PRIOR_B: float = (1.0 - LG_SAVE_PCT) * SAVE_PRIOR_STRENGTH  # ≈ 69.4
 # Opponent offensive SOG (proj_sog) overstates the shots a goalie is credited
 # with facing. Two distinct conversion factors, both measured 2023-2025:
 #   TEAM total shots_faced (saves+GA) / opp offensive SOG = 24.5/26 = 0.942.
@@ -116,6 +123,13 @@ LG_SHOTS_PER_TOUCH: Dict[str, float] = {
 LG_ASSIST_CONV: Dict[str, float] = {
     "A": 0.309, "M": 0.254, "FO": 0.210,
     "SSDM": 0.241, "LSM": 0.303, "D": 0.234, "G": 0.185,
+}
+
+# Assist-opportunity volume per game by position (Fix 2 anchor).
+# Measured from clean.player_game_stats assist_opportunities by position.
+LG_ASSIST_OPPS: Dict[str, float] = {
+    "A": 3.34, "M": 1.71, "FO": 0.43,
+    "SSDM": 0.43, "LSM": 0.28, "D": 0.17, "G": 0.16,
 }
 
 # 2PT shot rate: fraction of shots that are attempted as 2-pointers (intent, not outcome)
@@ -1386,7 +1400,7 @@ class RatingBuilder:
 
         sv_n = df["saves"].fillna(0).shift(1).cumsum().fillna(0)
         sv_d = df["shots_faced"].shift(1).cumsum().fillna(0)
-        df["bayes_save_pct"] = [_bayesian_rate(s, n, 3, 3) for s, n in zip(sv_n, sv_d)]
+        df["bayes_save_pct"] = [_bayesian_rate(s, n, SAVE_PRIOR_A, SAVE_PRIOR_B) for s, n in zip(sv_n, sv_d)]
 
         g_n = df["goals"].fillna(0).shift(1).cumsum().fillna(0)
         g_d = df["shots"].fillna(0).shift(1).cumsum().fillna(0)
@@ -1572,6 +1586,14 @@ class RatingBuilder:
         lg_aconv = LG_ASSIST_CONV.get(pos, 0.28)
         blocks.append(_pstat(aconv, lg_aconv, HL_FO, "assist_conv"))
 
+        # assist_opportunities volume (Fix 2): a player's assist-opportunity count
+        # is the single most persistent + predictive assist signal (YoY ~0.9;
+        # next-game corr 0.57 vs 0.43 for the goals-anchored proxy). Built as its
+        # own EWM level so the projector can anchor assists on opportunities×conv
+        # rather than only nudging a goals-derived share.
+        lg_aopp = LG_ASSIST_OPPS.get(pos, 1.2)
+        blocks.append(_pstat(aopp_s, lg_aopp, HL_GOALS, "assist_opps"))
+
         # 2PT shot rate: two_point_shots / shots — intent-based 2PT signal.
         # Better than outcome-based two_pt_rate (2pt_goals/goals) because it
         # captures the player's shooting decision, not just conversion luck.
@@ -1643,7 +1665,7 @@ class RatingBuilder:
 
         sv_n = df.get("saves", pd.Series(0, index=df.index)).fillna(0).shift(1).cumsum().fillna(0)
         sv_d = df.get("shots_faced_p", pd.Series(0, index=df.index)).fillna(0).shift(1).cumsum().fillna(0)
-        df["bayes_save_pct"] = [_bayesian_rate(s, n, 3, 3) for s, n in zip(sv_n, sv_d)]
+        df["bayes_save_pct"] = [_bayesian_rate(s, n, SAVE_PRIOR_A, SAVE_PRIOR_B) for s, n in zip(sv_n, sv_d)]
 
         df["games_played"] = np.arange(len(df))  # career total, not per-season reset
 
@@ -2381,6 +2403,28 @@ class PlayerModel:
             proj_assists = 0.0
         else:
             proj_assists = tp.proj_assists * _share("assists", tp.proj_assists) * usage
+
+            # Fix 2: opportunity-volume anchor. A player's assist_opportunities is
+            # the most persistent/predictive assist signal (next-game corr 0.57 vs
+            # 0.43 for the goals-share proxy). Blend a direct opportunities×conv
+            # projection into the share-based one so assists track a player's
+            # FEEDING VOLUME, not their team's scoring. Skipped when the user has
+            # overridden assist share/conv (their intent takes precedence), and
+            # scaled by games-played credibility so thin samples don't dominate.
+            if "share_assists_ewm" not in _user_overrides \
+                    and "assist_conv_ewm" not in _user_overrides:
+                aopp_ewm = _nan(float(f.get("assist_opps_ewm", LG_ASSIST_OPPS.get(pos, 1.2))),
+                                LG_ASSIST_OPPS.get(pos, 1.2))
+                aconv_ewm = _nan(float(f.get("assist_conv_ewm", LG_ASSIST_CONV.get(pos, 0.28))),
+                                 LG_ASSIST_CONV.get(pos, 0.28))
+                anchor = aopp_ewm * aconv_ewm * usage
+                if anchor > 0:
+                    # Credibility on the anchor: more games -> trust the player's
+                    # own opportunity history more. gp/(gp+6) matches the share
+                    # credibility curve; cap at 0.6 so the team-conserved share
+                    # projection always retains at least 40% (reconcile safety).
+                    cred = min(gp / (gp + 6.0), 0.6) if gp > 0 else 0.0
+                    proj_assists = (1.0 - cred) * proj_assists + cred * anchor
 
         # Assists — dual touch-efficiency nudge (assist_conv + pass_per_touch)
         # DEFAULT (no override): both signals only engage when the user hasn't

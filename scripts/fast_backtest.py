@@ -173,6 +173,26 @@ def player_section(tg, pg, project_game):
                         pv = getattr(proj, f"proj_{stat}", 0.0)
                         rows.append({"stat": stat, "pred": pv, "actual": av,
                                      "abs_error": abs(pv - av), "error": pv - av})
+                # Goalies: evaluate saves (starter only — >=5 shots faced actual)
+                goalie_actuals = game_pg[(game_pg["team_id"] == tid) &
+                                         (game_pg["position"] == "G")]
+                for _, arow in goalie_actuals.iterrows():
+                    pid = str(arow["player_id"])
+                    proj = next((p for p in projs if p.player_id == pid), None)
+                    if proj is None:
+                        continue
+                    act_sv = float(arow.get("saves", 0) or 0)
+                    act_ga = float(arow.get("goals_against", 0) or 0)
+                    if act_sv + act_ga < 5:  # backup / garbage cameo
+                        continue
+                    pv = getattr(proj, "proj_saves", 0.0)
+                    rows.append({"stat": "saves", "pred": pv, "actual": act_sv,
+                                 "abs_error": abs(pv - act_sv), "error": pv - act_sv})
+                    # save% eval
+                    act_svpct = act_sv / max(act_sv + act_ga, 1.0)
+                    pv_svpct = getattr(proj, "proj_save_pct", 0.0)
+                    rows.append({"stat": "save_pct", "pred": pv_svpct, "actual": act_svpct,
+                                 "abs_error": abs(pv_svpct - act_svpct), "error": pv_svpct - act_svpct})
         except Exception:
             continue
     pf = pd.DataFrame(rows)
