@@ -53,6 +53,30 @@ CURRENT_YEAR = 2026
 FIRST_WEEK   = 1
 LAST_WEEK    = 14
 
+# ── Official-week offset for the All-Star break ────────────────────────────
+# PLL's OFFICIAL week numbering (what the gameday-rosters API is keyed on)
+# includes the All-Star week — but the All-Star Game (EAST vs WEST) is NOT in
+# the regular-season schedule parquet. So clustering the schedule into game
+# weekends undercounts by one for every week AFTER All-Star: schedule weekend
+# index 8 == official week 9, weekend 9 == official week 10, etc.
+#
+# ALLSTAR_AFTER_WEEKEND[year] = the schedule-weekend INDEX (1-based, as produced
+# by weekend clustering) immediately BEFORE which the All-Star week falls.
+# Any schedule weekend with index >= this value gets +1 to reach the official
+# PLL week the API expects. Set from observed data: in 2026 the All-Star Game
+# sits at official week 7 (EAST/WEST, gameday_2026_week07.csv), so schedule
+# weekend 7 (Jul 10-12) is official week 8 — i.e. weekends from index 7 on shift.
+ALLSTAR_AFTER_WEEKEND: Dict[int, int] = {2026: 7}
+
+
+def _schedule_weekend_to_official_week(year: int, weekend_index: int) -> int:
+    """Convert a 1-based schedule-weekend index to the official PLL week number
+    (the API's week), accounting for the phantom All-Star week."""
+    shift_from = ALLSTAR_AFTER_WEEKEND.get(year)
+    if shift_from is not None and weekend_index >= shift_from:
+        return weekend_index + 1
+    return weekend_index
+
 # ── Team ID mapping (public API codes → engine warehouse codes) ───────────
 PUBLIC_TO_ENGINE: Dict[str, str] = {
     "BOS": "CAN", "CAL": "RED", "CAR": "CHA", "DEN": "OUT",
@@ -575,7 +599,9 @@ def _build_week_map(year: int = CURRENT_YEAR) -> Dict[int, Dict]:
 
         week_map: Dict[int, Dict] = {}
         for wid, grp in df.groupby("_weekend_id"):
-            pll_week = int(wid) + 1  # 1-indexed
+            # Weekend clustering is 0-indexed; +1 → 1-based weekend index, then
+            # shift past the phantom All-Star week to the official PLL week number.
+            pll_week = _schedule_weekend_to_official_week(year, int(wid) + 1)
             game_dates = sorted(grp["_date"].unique().tolist())
             game_nums  = sorted(grp["game_number"].tolist())
             statuses   = set(str(s).lower() for s in grp["event_status_label"].tolist())

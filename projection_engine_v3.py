@@ -661,10 +661,21 @@ def _gameday_roster_dir() -> Path:
     return Path(__file__).resolve().parent / "data" / "reference_tables" / "gameday_rosters"
 
 
+# PLL's OFFICIAL week numbering (used by the gameday-rosters API and the cached
+# gameday_{year}_week{NN}.csv filenames) INCLUDES the All-Star week, but the
+# All-Star Game is not in the regular-season schedule parquet. So clustering the
+# schedule into weekends undercounts by one for every week after All-Star. The
+# value is the 1-based schedule-weekend index from/at which to add +1 to reach
+# the official week. Kept in sync with pll_gameday_roster_cache.ALLSTAR_AFTER_WEEKEND.
+_ALLSTAR_AFTER_WEEKEND: Dict[int, int] = {2026: 7}
+
+
 def _build_schedule_week_map(year: int = 2026) -> Dict[int, Dict]:
     """
     Build {pll_week: {first_date, last_date}} from the schedule parquet.
-    Groups games into weekends (gap > 4 days = new weekend) then ranks them.
+    Groups games into weekends (gap > 4 days = new weekend) then ranks them,
+    shifting past the phantom All-Star week so the keys match the OFFICIAL PLL
+    week numbers used in the gameday CSV filenames.
     Used by _pll_week_from_date to map a game date to its correct PLL week.
     Cached at module level after first call to avoid repeated parquet reads.
     """
@@ -685,10 +696,15 @@ def _build_schedule_week_map(year: int = 2026) -> Dict[int, Dict]:
                 wid += 1
             ids.append(wid)
         df["_wid"] = ids
+        shift_from = _ALLSTAR_AFTER_WEEKEND.get(year)
         result: Dict[int, Dict] = {}
         for wid, grp in df.groupby("_wid"):
+            weekend_index = int(wid) + 1  # 1-based weekend index
+            official_week = (weekend_index + 1
+                             if shift_from is not None and weekend_index >= shift_from
+                             else weekend_index)
             gdates = sorted(grp["_date"].unique().tolist())
-            result[int(wid) + 1] = {"first_date": gdates[0], "last_date": gdates[-1]}
+            result[official_week] = {"first_date": gdates[0], "last_date": gdates[-1]}
         return result
     except Exception:
         return {}
