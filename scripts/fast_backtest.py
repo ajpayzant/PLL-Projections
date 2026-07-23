@@ -135,6 +135,22 @@ def team_section(tg, project_game, seasons):
                     "pred_prob": gs.home_win_prob,
                     "actual_win": 1 if float(hr.iloc[0]["scores"]) > float(ar.iloc[0]["scores"]) else 0,
                 }
+                # ── Phase 0 instrumentation: points (scoreboard) + 2pt ────────
+                # goal-count totals above are NOT the scoreboard; scores value a
+                # 2pt goal at 2. Capture proj_scores vs actual scores so we can
+                # see whether the 2pt handling introduces total-POINTS error the
+                # goal-count MAE is blind to. Also capture per-team 2pt goals
+                # (offense) and 2pt goals allowed (defense) to test opponent
+                # 2pt signal in the diagnosis phase.
+                if "scores" in hr.iloc[0] and "scores" in ar.iloc[0]:
+                    row["pred_score_total"] = hp.proj_scores + ap.proj_scores
+                    row["act_score_total"] = float(hr.iloc[0]["scores"]) + float(ar.iloc[0]["scores"])
+                for side, pr, act in (("h", hp, hr.iloc[0]), ("a", ap, ar.iloc[0])):
+                    if "two_point_goals" in act:
+                        row[f"pred_2pt_{side}"] = float(getattr(pr, "proj_2pt_goals", 0.0))
+                        row[f"act_2pt_{side}"] = float(act["two_point_goals"] or 0.0)
+                    if "two_point_goals_against" in act:
+                        row[f"act_2pt_allowed_{side}"] = float(act["two_point_goals_against"] or 0.0)
                 # SOG + shots bias (root-cause diagnostic for saves over-projection)
                 for side, pr, act in (("h", hp, hr.iloc[0]), ("a", ap, ar.iloc[0])):
                     if "shots_on_goal" in act:
@@ -156,6 +172,24 @@ def team_section(tg, project_game, seasons):
         mae_side = np.mean(np.abs(np.r_[g["pred_h"] - g["act_h"], g["pred_a"] - g["act_a"]])) if len(g) else np.nan
         print(f"  {ssn}: n={len(g):3d}  totMAE={mae:.3f}  bias={bias:+.3f}  sideMAE={mae_side:.3f}  "
               f"acc={acc*100:.0f}%  Brier={brier:.4f}")
+        # Points (scoreboard) total: goal-count MAE above ignores the 2pt
+        # premium; this shows whether total-POINTS is biased/mis-scaled.
+        if "pred_score_total" in g and g["pred_score_total"].notna().any():
+            gsc = g.dropna(subset=["pred_score_total", "act_score_total"])
+            sc_mae = np.mean(np.abs(gsc["pred_score_total"] - gsc["act_score_total"]))
+            sc_bias = np.mean(gsc["pred_score_total"] - gsc["act_score_total"])
+            print(f"        SCORE(pts): totMAE={sc_mae:.3f} bias={sc_bias:+.3f} "
+                  f"pred={gsc['pred_score_total'].mean():.2f} act={gsc['act_score_total'].mean():.2f}")
+        # 2pt goals per team: offense projection vs actual, and 2pt-ALLOWED
+        # actuals (for the opponent-2pt signal test in diagnosis).
+        if "pred_2pt_h" in g:
+            p2 = np.r_[g["pred_2pt_h"], g["pred_2pt_a"]]
+            a2 = np.r_[g["act_2pt_h"], g["act_2pt_a"]]
+            print(f"        2PT: pred={np.nanmean(p2):.2f} act={np.nanmean(a2):.2f} "
+                  f"bias={np.nanmean(p2-a2):+.2f} MAE={np.nanmean(np.abs(p2-a2)):.2f}")
+        if "act_2pt_allowed_h" in g:
+            aa = np.r_[g["act_2pt_allowed_h"], g["act_2pt_allowed_a"]]
+            print(f"        2PT-ALLOWED(act): mean={np.nanmean(aa):.2f} sd={np.nanstd(aa):.2f}")
         # SOG / shots bias diagnostic (drives goalie shots-faced → saves)
         if "pred_sog_h" in g:
             ps = np.r_[g["pred_sog_h"], g["pred_sog_a"]]

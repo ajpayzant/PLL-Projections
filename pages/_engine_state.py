@@ -791,6 +791,19 @@ TEAM_RATING_DEFS = {
         ),
         "min": 5.0, "max": 20.0, "step": 0.1, "fmt": "{:.1f}",
     },
+    "two_pt_rate_ewm": {
+        "label": "2-point goal rate (share of goals worth 2)",
+        "help": (
+            "The fraction of the team's goals that are 2-pointers. This does NOT "
+            "change how many goals the team scores — it splits the existing goal "
+            "count into 1s and 2s, which changes the scoreboard total (each 2pt "
+            "goal adds an extra point). Example: at 12 goals, a rate of 0.08 = "
+            "~1 two-pointer (~13 pts); 0.20 = ~2.4 two-pointers (~14.4 pts). "
+            "League avg ~0.07. Raise for a heavy 2pt-shooting team; lower for a "
+            "team that rarely takes them."
+        ),
+        "min": 0.0, "max": 0.40, "step": 0.005, "fmt": "{:.3f}",
+    },
     "shot_pct_ewm": {
         "label": "Finishing rate (goals per shot attempt)",
         "help": (
@@ -808,6 +821,18 @@ TEAM_RATING_DEFS = {
             "shots. This is not shots on goal (on-target only). League avg ~41."
         ),
         "min": 25.0, "max": 60.0, "step": 0.5, "fmt": "{:.1f}",
+    },
+    "sog_rate_ewm": {
+        "label": "Shots-on-goal rate (share of shots on target)",
+        "help": (
+            "The fraction of the team's shot attempts that are on goal (on-cage). "
+            "This is shot accuracy, NOT finishing: shots on goal per game = shot "
+            "attempts × this rate. Raising it lifts projected shots on goal, which "
+            "modestly raises projected goals (more on-target shots convert). It "
+            "also raises the opposing goalie's shots faced. League avg ~0.64. "
+            "Engine uses values between 0.40 and 0.85."
+        ),
+        "min": 0.40, "max": 0.85, "step": 0.005, "fmt": "{:.3f}",
     },
     "assists_ewm": {
         "label": "Assists per game",
