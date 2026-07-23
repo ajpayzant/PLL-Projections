@@ -33,6 +33,7 @@ import pandas as pd
 from projection_engine_v3 import (
     ProjectionEngine, RatingBuilder, TeamModel, GameSimulator,
     PlayerModel, _assign_goalie_saves_team,
+    _assign_player_goalie_saves, _assign_faceoff_from_specialist,
 )
 
 TRAIN_SEASONS = [2022, 2023, 2024]
@@ -75,7 +76,7 @@ def build_project_fn(tg, pg, quality_fitted, tm_train, n_sims):
                 gs.away_win_prob = 1 - gs.home_win_prob
         res = {"hp": hp, "ap": ap, "gs": gs, "rb": rb, "tm": tm}
         if actual_player_ids is not None and not rb._pr.empty:
-            player_projs = {}
+            full_projs = {}  # unfiltered lists (needed for cross-team FO/saves steps)
             for tid, tp in [(home_team, hp), (away_team, ap)]:
                 opp_tp = ap if tid == home_team else hp
                 _assign_goalie_saves_team(tp, opp_tp)
@@ -90,8 +91,18 @@ def build_project_fn(tg, pg, quality_fitted, tm_train, n_sims):
                                            use_current_roster_filter=False)
                 else:
                     gp = pm.project_roster(tid, tp, use_current_roster_filter=False)
-                player_projs[tid] = [p for p in gp if p.active]
-            res["player_projs"] = player_projs
+                full_projs[tid] = gp
+            # Mirror production post-reconcile steps (engine.project ~L3762-3769):
+            # goalie saves use opponent SOG + 0.915 factor; faceoffs use the
+            # specialist + log5 matchup. The harness previously skipped these,
+            # scoring PlayerModel placeholder saves (factor 1.0) — a test-rig
+            # artifact that inflated the measured saves bias.
+            _assign_player_goalie_saves(full_projs[home_team], ap.proj_sog)
+            _assign_player_goalie_saves(full_projs[away_team], hp.proj_sog)
+            _assign_faceoff_from_specialist(full_projs[home_team], full_projs[away_team])
+            _assign_faceoff_from_specialist(full_projs[away_team], full_projs[home_team])
+            res["player_projs"] = {tid: [p for p in gp if p.active]
+                                   for tid, gp in full_projs.items()}
         return res
     return project_game
 
@@ -115,7 +126,7 @@ def team_section(tg, project_game, seasons):
                 if res is None:
                     continue
                 hp, ap, gs = res["hp"], res["ap"], res["gs"]
-                rows.append({
+                row = {
                     "season": ssn,
                     "pred_total": hp.proj_goals + ap.proj_goals,
                     "act_total": float(hr.iloc[0]["goals"]) + float(ar.iloc[0]["goals"]),
@@ -123,7 +134,16 @@ def team_section(tg, project_game, seasons):
                     "pred_a": ap.proj_goals, "act_a": float(ar.iloc[0]["goals"]),
                     "pred_prob": gs.home_win_prob,
                     "actual_win": 1 if float(hr.iloc[0]["scores"]) > float(ar.iloc[0]["scores"]) else 0,
-                })
+                }
+                # SOG + shots bias (root-cause diagnostic for saves over-projection)
+                for side, pr, act in (("h", hp, hr.iloc[0]), ("a", ap, ar.iloc[0])):
+                    if "shots_on_goal" in act:
+                        row[f"pred_sog_{side}"] = pr.proj_sog
+                        row[f"act_sog_{side}"] = float(act["shots_on_goal"])
+                    if "shots" in act:
+                        row[f"pred_shots_{side}"] = pr.proj_shots
+                        row[f"act_shots_{side}"] = float(act["shots"])
+                rows.append(row)
             except Exception:
                 continue
     df = pd.DataFrame(rows)
@@ -136,6 +156,16 @@ def team_section(tg, project_game, seasons):
         mae_side = np.mean(np.abs(np.r_[g["pred_h"] - g["act_h"], g["pred_a"] - g["act_a"]])) if len(g) else np.nan
         print(f"  {ssn}: n={len(g):3d}  totMAE={mae:.3f}  bias={bias:+.3f}  sideMAE={mae_side:.3f}  "
               f"acc={acc*100:.0f}%  Brier={brier:.4f}")
+        # SOG / shots bias diagnostic (drives goalie shots-faced → saves)
+        if "pred_sog_h" in g:
+            ps = np.r_[g["pred_sog_h"], g["pred_sog_a"]]
+            as_ = np.r_[g["act_sog_h"], g["act_sog_a"]]
+            psh = np.r_[g["pred_shots_h"], g["pred_shots_a"]]
+            ash = np.r_[g["act_shots_h"], g["act_shots_a"]]
+            print(f"        SOG: pred={np.nanmean(ps):.2f} act={np.nanmean(as_):.2f} "
+                  f"bias={np.nanmean(ps-as_):+.2f} MAE={np.nanmean(np.abs(ps-as_)):.2f}   "
+                  f"SHOTS: pred={np.nanmean(psh):.2f} act={np.nanmean(ash):.2f} "
+                  f"bias={np.nanmean(psh-ash):+.2f}")
     return df
 
 
@@ -173,6 +203,25 @@ def player_section(tg, pg, project_game):
                         pv = getattr(proj, f"proj_{stat}", 0.0)
                         rows.append({"stat": stat, "pred": pv, "actual": av,
                                      "abs_error": abs(pv - av), "error": pv - av})
+                # Faceoff specialists: evaluate FO wins + FO%
+                fo_actuals = game_pg[(game_pg["team_id"] == tid) &
+                                     (game_pg["position"] == "FO")]
+                for _, arow in fo_actuals.iterrows():
+                    pid = str(arow["player_id"])
+                    proj = next((p for p in projs if p.player_id == pid), None)
+                    if proj is None:
+                        continue
+                    act_fw = float(arow.get("faceoffs_won", 0) or 0)
+                    act_fl = float(arow.get("faceoffs_lost", 0) or 0)
+                    if act_fw + act_fl < 5:  # not the primary specialist this game
+                        continue
+                    pv = getattr(proj, "proj_faceoff_wins", 0.0)
+                    rows.append({"stat": "fo_wins", "pred": pv, "actual": act_fw,
+                                 "abs_error": abs(pv - act_fw), "error": pv - act_fw})
+                    act_fpct = act_fw / max(act_fw + act_fl, 1.0)
+                    pv_fpct = getattr(proj, "proj_faceoff_pct", 0.0)
+                    rows.append({"stat": "fo_pct", "pred": pv_fpct, "actual": act_fpct,
+                                 "abs_error": abs(pv_fpct - act_fpct), "error": pv_fpct - act_fpct})
                 # Goalies: evaluate saves (starter only — >=5 shots faced actual)
                 goalie_actuals = game_pg[(game_pg["team_id"] == tid) &
                                          (game_pg["position"] == "G")]
@@ -188,6 +237,12 @@ def player_section(tg, pg, project_game):
                     pv = getattr(proj, "proj_saves", 0.0)
                     rows.append({"stat": "saves", "pred": pv, "actual": act_sv,
                                  "abs_error": abs(pv - act_sv), "error": pv - act_sv})
+                    # implied shots-faced diagnostic: pred vs actual (saves+GA)
+                    pv_svp = getattr(proj, "proj_save_pct", 0.0) or 0.01
+                    impl_sf = pv / pv_svp
+                    act_sf = act_sv + act_ga
+                    rows.append({"stat": "sf_implied", "pred": impl_sf, "actual": act_sf,
+                                 "abs_error": abs(impl_sf - act_sf), "error": impl_sf - act_sf})
                     # save% eval
                     act_svpct = act_sv / max(act_sv + act_ga, 1.0)
                     pv_svpct = getattr(proj, "proj_save_pct", 0.0)

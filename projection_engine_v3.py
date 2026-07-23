@@ -30,7 +30,7 @@ import re
 import unicodedata
 import warnings
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -80,12 +80,16 @@ SAVE_PRIOR_B: float = (1.0 - LG_SAVE_PCT) * SAVE_PRIOR_STRENGTH  # ≈ 69.4
 #   STARTER shots_faced / opp offensive SOG = 0.915 (per-game mean 0.918).
 #     A starter loses the definitional gap AND the backup-goalie share.
 # Offensive proj_sog itself is unchanged (it correctly feeds goal projections);
-# these factors only convert it into shots-faced for the save projection,
-# removing the systematic +1-save over-projection.
+# these factors only convert it into shots-faced for the save projection.
 LG_TEAM_SF_PER_OPP_SOG: float = 0.942
 LG_STARTER_SF_PER_OPP_SOG: float = 0.915
 LG_FO_PCT: float = 0.500
 LG_FOS_PER_GAME: int = 26
+# How many days after a game date the engine still treats it as a "current"
+# game for roster purposes (uses gameday/current rosters, not historical maps).
+# Covers the Fri–Sun PLL game weekend plus a buffer so just-played games keep
+# using the gameday roster the scraper produced for that weekend.
+CURRENT_ROSTER_LOOKBACK_DAYS: int = 7
 # Weight on the log5 opponent-matchup rate vs the specialist's own rate when
 # projecting a FO specialist's win %. Faceoffs are head-to-head; a pure own-rate
 # projection ignores the opponent and is biased +0.02. Backtest of the primary
@@ -119,6 +123,12 @@ HL_POSS: int = 4
 LG_SHOTS_PER_TOUCH: Dict[str, float] = {
     "A": 0.207, "M": 0.207, "FO": 0.142,
     "SSDM": 0.084, "LSM": 0.117, "D": 0.042, "G": 0.008,
+}
+# Average touches per game by position (from clean.player_game_stats). Used as
+# the fill/prior for the touches_ewm volume rating (usage proxy).
+LG_TOUCHES: Dict[str, float] = {
+    "A": 28.9, "M": 19.4, "FO": 8.1,
+    "SSDM": 7.3, "LSM": 5.4, "D": 6.6, "G": 13.8,
 }
 LG_ASSIST_CONV: Dict[str, float] = {
     "A": 0.309, "M": 0.254, "FO": 0.210,
@@ -981,8 +991,6 @@ class TeamProjection:
     proj_assists: float
     proj_2pt_goals: float
     proj_1pt_goals: float
-    proj_osp: float
-    proj_top_sec: float
     confidence: float
     model_used: str = "v3"
 
@@ -1028,6 +1036,11 @@ class PlayerProjection:
     _assists_overridden: bool = False  # user explicitly set share_assists_ewm / assist_conv / pass_per_touch
     _shots_overridden: bool = False    # user explicitly set share_shots_ewm / shots_per_touch
     _sog_overridden: bool = False      # user explicitly set sog_rate_ewm (pins SOG independently)
+    # Pure bottom-up anchor estimates (player's OWN volume×rate, pre-reconcile),
+    # used by two-way reconciliation to let the team total flex slightly toward
+    # collective player evidence. 0.0 = no independent anchor for this stat.
+    _goal_anchor: float = 0.0
+    _assist_anchor: float = 0.0
 
 
 @dataclass
@@ -1578,6 +1591,15 @@ class RatingBuilder:
         lg_spt = LG_SHOTS_PER_TOUCH.get(pos, 0.20)
         blocks.append(_pstat(spt, lg_spt, HL_SHOTS, "shots_per_touch"))
 
+        # touches VOLUME EWM: the feature study found touches is a genuinely
+        # additive usage proxy for goals/assists/points/shots/SOG (out-of-sample
+        # delta-R2 +0.007..+0.025, 99% coverage). It measures opportunity — how
+        # often a player handles the ball — which is more concrete and stable
+        # than the abstract usage_multiplier. Built here so downstream projection
+        # can anchor/adjust offensive volume on it. Additive rating only; no
+        # behavior change until it is wired into a projection stage.
+        blocks.append(_pstat(touches_s, LG_TOUCHES.get(pos, 25.0), HL_SHOTS, "touches"))
+
         # assist_conv: assists / assist_opportunities — feeder quality signal.
         # Noisier game-to-game (CV ~1.3) so uses a longer half-life (HL_FO=8)
         # to smooth toward the player's true conversion rate.
@@ -1950,21 +1972,7 @@ class TeamModel:
         fo_pct = min(max(fo_pct, 0.25), 0.75)
         proj_fo_wins = fo_pct * LG_FOS_PER_GAME
 
-        # ── Stage 2: Possession chain ────────────────────────────────────
-        # Possession time driven by FO% (r_fo_top=0.504) + team possession style
-        team_top_base = _nan(float(team_r.get("top_sec_ewm", LG_TOP_SEC)), LG_TOP_SEC)
-        # FO effect on possession: modest — r=0.504 means strong but not total driver
-        fo_possession_delta = (fo_pct - LG_FO_PCT) * LG_TOP_SEC * 0.40
-        proj_top = max(team_top_base + fo_possession_delta, 500.0)
-
-        # OSP: use team's EWM directly (more reliable than deriving from TOP)
-        # TOP just adds context to OSP via the FO adjustment
-        team_osp_ewm = _nan(float(team_r.get("osp_ewm", LG_OSP)), LG_OSP)
-        osp_top_adj = (proj_top / max(team_top_base, 500.0))  # ratio of projected vs historical TOP
-        osp_top_adj = min(max(osp_top_adj, 0.85), 1.15)       # cap at ±15%
-        proj_osp = team_osp_ewm * osp_top_adj
-
-        # ── Stage 3: Shots ────────────────────────────────────────────────
+        # ── Stage 2: Shots ────────────────────────────────────────────────
         # Use team's shots EWM directly, adjusted by FO-driven possession edge.
         # Chaining through OSP introduced noise; shots EWM (autocorr 0.124) is
         # a more reliable direct signal than deriving shots from OSP.
@@ -1987,6 +1995,10 @@ class TeamModel:
         sog_rate = _nan(float(team_r.get("sog_rate_ewm", LG_SOG_RATE)), LG_SOG_RATE)
         sog_rate = min(max(sog_rate, 0.40), 0.85)
         proj_sog = proj_shots * sog_rate
+        # NOTE: Step D (opponent-allowed SOG adjustment) was tested and REJECTED —
+        # team SOG was already well-calibrated (bias −0.53) and the opp adjustment
+        # pushed it worse (bias −1.04, team goal MAE 3.670→3.690). The team layer
+        # is calibrated; don't layer opponent adjustments onto already-good stats.
 
         # ── Stage 4: Goals — two paths that should agree ──────────────────
         #
@@ -2089,8 +2101,6 @@ class TeamModel:
             proj_assists=round(proj_assists, 3),
             proj_2pt_goals=round(proj_2pt, 3),
             proj_1pt_goals=round(proj_1pt, 3),
-            proj_osp=round(proj_osp, 3),
-            proj_top_sec=round(proj_top, 1),
             confidence=confidence,
             model_used="v3_chain" + ("+ridge" if self._fitted else ""),
         )
@@ -2277,6 +2287,28 @@ class PlayerModel:
 
         # Keys the user explicitly overrode — these bypass credibility blending.
         _user_overrides: set = set(f.get("_override_keys", []))
+
+        # Touches-based usage signal (offensive skaters only). The feature study
+        # found touches — how often a player handles the ball — is a genuinely
+        # additive opportunity proxy for offensive volume (goals/assists/shots).
+        # We fold it into `usage` as a gentle, credibility-weighted nudge: a
+        # player who touches the ball more than his position average gets a small
+        # volume bump, and vice versa. This makes usage CONCRETE (grounded in a
+        # real quantity) rather than purely the abstract multiplier. Scoped to
+        # A/M (touches is not the workload story for FO/G/defenders), skipped
+        # when the user set an explicit usage override, and clamped ±20% so it
+        # complements rather than overrides the existing usage control.
+        if pos in {"A", "M"} and "usage_multiplier" not in _user_overrides:
+            touches_ewm = _nan(float(f.get("touches_ewm", LG_TOUCHES.get(pos, 20.0))),
+                                LG_TOUCHES.get(pos, 20.0))
+            pos_touches = LG_TOUCHES.get(pos, 20.0)
+            if pos_touches > 0 and touches_ewm > 0:
+                t_ratio = touches_ewm / pos_touches
+                # Credibility: thin samples stay near 1.0 (no nudge).
+                t_cred = min(gp / (gp + 8.0), 0.6) if gp > 0 else 0.0
+                t_nudge = 1.0 + t_cred * 0.5 * (t_ratio - 1.0)
+                t_nudge = min(max(t_nudge, 0.80), 1.20)
+                usage = usage * t_nudge
         # Opponent defensive multiplier — suppresses/boosts player projections based
         # on how tough the opposing defense is vs league average. Only applied when
         # no share overrides are active (user overrides take precedence over model).
@@ -2380,6 +2412,8 @@ class PlayerModel:
             return max(blend, 0.0)
 
         # Goals
+        _goal_anchor_val = 0.0
+        _assist_anchor_val = 0.0
         if pos == "G":
             proj_goals = 0.0
         else:
@@ -2397,6 +2431,37 @@ class PlayerModel:
                 # relative to the team or league average.
                 sp_mult = min(max(player_sp / baseline_sp, 0.25), 4.0)
                 proj_goals = proj_goals * sp_mult
+
+            # Volume anchor. Player goals are otherwise pure top-down allocation
+            # (team_goals × share), which carries little player-specific signal —
+            # next-game goal autocorr is only ~0.16, the weakest metric. The
+            # feature study's prescription: anchor on VOLUME (prior shots), with
+            # the conversion rate SHRUNK toward a stable per-player/position mean.
+            # A first naive attempt using the player's own raw shot%_ewm made
+            # goals WORSE (MAE 0.983→0.997, corr 0.164→0.146) because raw shot% is
+            # noise at player grain — exactly what the study warned. Here shot% is
+            # a credibility blend: w·(player career shot%) + (1-w)·(position mean),
+            # w = gp/(gp+K_sp) with a LARGE K so the rate regresses hard (elite
+            # finishers still keep an edge via their career rate, but a hot EWM
+            # streak can't drive the projection). Volume stays fully personalized.
+            if "share_goals_ewm" not in _user_overrides \
+                    and "shot_pct_ewm" not in _user_overrides:
+                shots_ewm = _nan(float(f.get("shots_ewm", 0.0)), 0.0)
+                # Personalized volume, shrunk rate:
+                pos_sp    = LG_SHOT_PCT  # position-level stable mean
+                career_sp = _nan(float(f.get("shot_pct_mean", pos_sp)), pos_sp)
+                career_sp = min(max(career_sp, 0.05), 0.55)
+                K_sp = 20.0  # large -> rate regresses hard toward the stable mean
+                w_sp = gp / (gp + K_sp) if gp > 0 else 0.0
+                shrunk_sp = w_sp * career_sp + (1.0 - w_sp) * pos_sp
+                anchor = shots_ewm * shrunk_sp * usage
+                if anchor > 0:
+                    # Credibility on the anchor vs the share projection: cap 0.5 so
+                    # the team-conserved share always retains >=50% (reconcile-safe;
+                    # goals are low-autocorr so we lean conservative here).
+                    cred = min(gp / (gp + 8.0), 0.5) if gp > 0 else 0.0
+                    proj_goals = (1.0 - cred) * proj_goals + cred * anchor
+                    _goal_anchor_val = anchor  # pure bottom-up estimate for two-way reconcile
 
         # Assists
         if pos == "G":
@@ -2425,6 +2490,7 @@ class PlayerModel:
                     # projection always retains at least 40% (reconcile safety).
                     cred = min(gp / (gp + 6.0), 0.6) if gp > 0 else 0.0
                     proj_assists = (1.0 - cred) * proj_assists + cred * anchor
+                    _assist_anchor_val = anchor  # pure bottom-up estimate for two-way reconcile
 
         # Assists — dual touch-efficiency nudge (assist_conv + pass_per_touch)
         # DEFAULT (no override): both signals only engage when the user hasn't
@@ -2641,6 +2707,9 @@ class PlayerModel:
         capped._assists_overridden = assists_was_overridden
         capped._shots_overridden   = shots_was_overridden
         capped._sog_overridden     = "sog_rate_ewm" in _user_overrides
+        # Pure bottom-up anchor estimates for two-way reconciliation (0 if none).
+        capped._goal_anchor   = _goal_anchor_val
+        capped._assist_anchor = _assist_anchor_val
         # Per-stat volatility overrides (dispersion index) — sim-only; reshape the
         # tails for X+/milestone pricing, mean projection preserved.
         for _vk in ("var_index_goals", "var_index_assists", "var_index_shots",
@@ -2677,6 +2746,47 @@ class PlayerModel:
         active = [p for p in projs if p.active]
         if not active:
             return projs
+
+        # ── Two-way reconciliation (keystone) ─────────────────────────────
+        # The default reconcile is ONE-WAY: it force-rescales players so their
+        # sum equals the team total exactly, treating the team total as gospel.
+        # That erases the LEVEL of player-specific signal (ranking survives, but
+        # a player the model believes in can't lift the team total at all).
+        #
+        # Two-way: where players have a genuine BOTTOM-UP anchor (their own
+        # volume×rate — goals & assists, set in _project_player), let the active
+        # players' summed anchors nudge the team total a SMALL amount before we
+        # rescale. The team model stays dominant (it's well-calibrated — team
+        # goal MAE 3.67, and every attempt to move it directly made it worse),
+        # so the blend weight is deliberately small and the result is clamped to
+        # within ±8% of the original team total. This gives collective player
+        # evidence a voice without letting noisy sums drag the team projection.
+        def _two_way_total(stat: str, team_total: float, anchor_attr: str) -> float:
+            if team_total <= 0:
+                return team_total
+            # Sum pure bottom-up anchors over active players that HAVE one.
+            anchors = [getattr(p, anchor_attr, 0.0) for p in active]
+            anchored = [a for a in anchors if a and a > 0]
+            if len(anchored) < 3:
+                return team_total  # too little bottom-up evidence — trust team
+            bottom_up = sum(anchored)
+            # Coverage: how much of the team total do anchored players explain?
+            # Low coverage (few anchored players) -> trust team total more.
+            coverage = min(bottom_up / team_total, 1.0)
+            LAMBDA = 0.20  # max pull toward bottom-up; small by design
+            w = LAMBDA * coverage
+            blended = (1.0 - w) * team_total + w * bottom_up
+            # Clamp: never move the team total more than ±8%.
+            lo, hi = team_total * 0.92, team_total * 1.08
+            return min(max(blended, lo), hi)
+
+        tw_goals   = _two_way_total("goals", tp.proj_goals, "_goal_anchor")
+        tw_assists = _two_way_total("assists", tp.proj_assists, "_assist_anchor")
+        # Sync the team projection to the two-way totals so team-level output
+        # (score, totals, win prob) and player props stay consistent — the whole
+        # point is that player evidence gets a (small) voice in the team total.
+        tp.proj_goals   = tw_goals
+        tp.proj_assists = tw_assists
 
         def _rescale(stat: str, team_total: float):
             """
@@ -2720,8 +2830,8 @@ class PlayerModel:
                 for p in free:
                     setattr(p, f"proj_{stat}", 0.0)
 
-        _rescale("goals", tp.proj_goals)
-        _rescale("assists", tp.proj_assists)
+        _rescale("goals", tw_goals)
+        _rescale("assists", tw_assists)
         _rescale("shots", tp.proj_shots)
         _rescale("ground_balls", tp.proj_ground_balls)
         _rescale("turnovers", tp.proj_turnovers)
@@ -3585,14 +3695,23 @@ class ProjectionEngine:
 
     @staticmethod
     def _should_use_current_rosters(game_date: Optional[str]) -> bool:
-        """Use official current roster cache only for current/future game projections."""
+        """Use official current roster cache for current/future game projections.
+
+        A game counts as "current" if it is in the future OR within the last
+        CURRENT_ROSTER_LOOKBACK_DAYS. The lookback is essential: PLL games are
+        played across a Fri–Sun weekend, and the gameday roster scrape for that
+        weekend must keep driving projections for the whole current window (and
+        just-completed same-weekend games) instead of the engine flipping to a
+        historical team-map the instant the game date ticks into the past. Only
+        genuinely old games (backtests) fall through to historical rosters.
+        """
         if not game_date:
             return True
         try:
             gd = pd.to_datetime(game_date, utc=True, errors="coerce")
             if pd.isna(gd):
                 return True
-            return gd.date() >= date.today()
+            return gd.date() >= date.today() - timedelta(days=CURRENT_ROSTER_LOOKBACK_DAYS)
         except Exception:
             return True
 

@@ -1,0 +1,188 @@
+============================================================
+FAST BACKTEST  sims=1500  tag=STEP-A2-shrunk
+============================================================
+14:55:44 [INFO] pll.v3: DataLoader: C:\Users\a.payzant\OneDrive - DK Crown Holdings Inc\Desktop\PLL_App_Deploy\data\analytics_database\pll_warehouse.duckdb
+14:55:44 [INFO] pll.v3: Loading warehouse data...
+14:55:44 [INFO] pll.v3: Loaded 352 team-game rows
+14:55:44 [INFO] pll.v3: Loaded 6350 player-game rows
+14:55:44 [INFO] pll.v3: Loaded 32 schedule rows
+14:55:45 [INFO] pll.v3: Loaded 40 team-defense rows
+14:55:45 [INFO] pll.v3: Loaded: 352 team-game rows | 6350 player-game rows | 32 upcoming games
+14:55:45 [INFO] pll.v3: Current roster cache: {'available': True, 'source': 'current_rosters_csv', 'path': 'C:\\Users\\a.payzant\\OneDrive - DK Crown Holdings Inc\\Desktop\\PLL_App_Deploy\\data\\reference_tables\\current_rosters.csv', 'rows': 221, 'reason': 'loaded'}
+14:55:45 [INFO] pll.v3: Built team ratings: 240 rows x 219 cols
+14:55:46 [INFO] pll.v3: TeamModel quality model fitted on 240 rows
+14:55:46 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+14:55:47 [INFO] pll.v3: Built team ratings: 240 rows x 219 cols
+14:56:08 [INFO] pll.v3: Built player ratings: 4343 rows x 155 cols
+14:56:08 [INFO] pll.v3: TeamModel quality model fitted on 240 rows
+14:56:08 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+14:56:09 [INFO] pll.v3: Built team ratings: 242 rows x 219 cols
+14:56:28 [INFO] pll.v3: Built player ratings: 4378 rows x 155 cols
+14:56:29 [INFO] pll.v3: TeamModel quality model fitted on 242 rows
+14:56:29 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+14:56:29 [INFO] pll.v3: Built team ratings: 244 rows x 219 cols
+14:56:48 [INFO] pll.v3: Built player ratings: 4413 rows x 155 cols
+14:56:48 [INFO] pll.v3: TeamModel quality model fitted on 244 rows
+14:56:48 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+14:56:48 [INFO] pll.v3: Built team ratings: 246 rows x 219 cols
+14:57:08 [INFO] pll.v3: Built player ratings: 4448 rows x 155 cols
+14:57:08 [INFO] pll.v3: TeamModel quality model fitted on 246 rows
+14:57:08 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+14:57:10 [INFO] pll.v3: Built team ratings: 248 rows x 219 cols
+14:57:34 [INFO] pll.v3: Built player ratings: 4485 rows x 155 cols
+14:57:35 [INFO] pll.v3: TeamModel quality model fitted on 248 rows
+14:57:35 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+14:57:37 [INFO] pll.v3: Built team ratings: 250 rows x 219 cols
+14:58:09 [INFO] pll.v3: Built player ratings: 4521 rows x 155 cols
+14:58:10 [INFO] pll.v3: TeamModel quality model fitted on 250 rows
+14:58:10 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+14:58:11 [INFO] pll.v3: Built team ratings: 252 rows x 219 cols
+14:58:36 [INFO] pll.v3: Built player ratings: 4556 rows x 155 cols
+14:58:36 [INFO] pll.v3: TeamModel quality model fitted on 252 rows
+14:58:36 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+14:58:37 [INFO] pll.v3: Built team ratings: 254 rows x 219 cols
+14:59:02 [INFO] pll.v3: Built player ratings: 4591 rows x 155 cols
+14:59:03 [INFO] pll.v3: TeamModel quality model fitted on 254 rows
+14:59:03 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+14:59:03 [INFO] pll.v3: Built team ratings: 256 rows x 219 cols
+14:59:27 [INFO] pll.v3: Built player ratings: 4627 rows x 155 cols
+14:59:27 [INFO] pll.v3: TeamModel quality model fitted on 256 rows
+14:59:27 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+14:59:27 [INFO] pll.v3: Built team ratings: 258 rows x 219 cols
+14:59:52 [INFO] pll.v3: Built player ratings: 4663 rows x 155 cols
+14:59:53 [INFO] pll.v3: TeamModel quality model fitted on 258 rows
+14:59:53 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+14:59:53 [INFO] pll.v3: Built team ratings: 260 rows x 219 cols
+15:00:19 [INFO] pll.v3: Built player ratings: 4699 rows x 155 cols
+15:00:19 [INFO] pll.v3: TeamModel quality model fitted on 260 rows
+15:00:19 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:00:20 [INFO] pll.v3: Built team ratings: 262 rows x 219 cols
+15:00:37 [INFO] pll.v3: Built player ratings: 4735 rows x 155 cols
+15:00:37 [INFO] pll.v3: TeamModel quality model fitted on 262 rows
+15:00:37 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:00:38 [INFO] pll.v3: Built team ratings: 264 rows x 219 cols
+15:00:54 [INFO] pll.v3: Built player ratings: 4771 rows x 155 cols
+15:00:54 [INFO] pll.v3: TeamModel quality model fitted on 264 rows
+15:00:54 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:00:55 [INFO] pll.v3: Built team ratings: 266 rows x 219 cols
+15:01:13 [INFO] pll.v3: Built player ratings: 4807 rows x 155 cols
+15:01:13 [INFO] pll.v3: TeamModel quality model fitted on 266 rows
+15:01:13 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:01:14 [INFO] pll.v3: Built team ratings: 268 rows x 219 cols
+15:01:30 [INFO] pll.v3: Built player ratings: 4843 rows x 155 cols
+15:01:30 [INFO] pll.v3: TeamModel quality model fitted on 268 rows
+15:01:30 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:01:30 [INFO] pll.v3: Built team ratings: 270 rows x 219 cols
+15:01:47 [INFO] pll.v3: Built player ratings: 4879 rows x 155 cols
+15:01:47 [INFO] pll.v3: TeamModel quality model fitted on 270 rows
+15:01:47 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:01:48 [INFO] pll.v3: Built team ratings: 272 rows x 219 cols
+15:02:03 [INFO] pll.v3: Built player ratings: 4917 rows x 155 cols
+15:02:04 [INFO] pll.v3: TeamModel quality model fitted on 272 rows
+15:02:04 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:02:04 [INFO] pll.v3: Built team ratings: 274 rows x 219 cols
+15:02:20 [INFO] pll.v3: Built player ratings: 4953 rows x 155 cols
+15:02:20 [INFO] pll.v3: TeamModel quality model fitted on 274 rows
+15:02:20 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:02:21 [INFO] pll.v3: Built team ratings: 276 rows x 219 cols
+15:02:47 [INFO] pll.v3: Built player ratings: 4989 rows x 155 cols
+15:02:47 [INFO] pll.v3: TeamModel quality model fitted on 276 rows
+15:02:47 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:02:48 [INFO] pll.v3: Built team ratings: 278 rows x 219 cols
+15:03:13 [INFO] pll.v3: Built player ratings: 5025 rows x 155 cols
+15:03:13 [INFO] pll.v3: TeamModel quality model fitted on 278 rows
+15:03:13 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:03:14 [INFO] pll.v3: Built team ratings: 280 rows x 219 cols
+15:03:39 [INFO] pll.v3: Built player ratings: 5061 rows x 155 cols
+15:03:39 [INFO] pll.v3: TeamModel quality model fitted on 280 rows
+15:03:39 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:03:41 [INFO] pll.v3: Built team ratings: 282 rows x 219 cols
+15:04:06 [INFO] pll.v3: Built player ratings: 5097 rows x 155 cols
+15:04:07 [INFO] pll.v3: TeamModel quality model fitted on 282 rows
+15:04:07 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:04:08 [INFO] pll.v3: Built team ratings: 284 rows x 219 cols
+15:04:34 [INFO] pll.v3: Built player ratings: 5133 rows x 155 cols
+15:04:34 [INFO] pll.v3: TeamModel quality model fitted on 284 rows
+15:04:34 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:04:35 [INFO] pll.v3: Built team ratings: 286 rows x 219 cols
+15:05:00 [INFO] pll.v3: Built player ratings: 5169 rows x 155 cols
+15:05:01 [INFO] pll.v3: TeamModel quality model fitted on 286 rows
+15:05:01 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:05:02 [INFO] pll.v3: Built team ratings: 288 rows x 219 cols
+15:05:25 [INFO] pll.v3: Built player ratings: 5205 rows x 155 cols
+15:05:26 [INFO] pll.v3: TeamModel quality model fitted on 288 rows
+15:05:26 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:05:27 [INFO] pll.v3: Built team ratings: 290 rows x 219 cols
+15:05:52 [INFO] pll.v3: Built player ratings: 5241 rows x 155 cols
+15:05:52 [INFO] pll.v3: TeamModel quality model fitted on 290 rows
+15:05:52 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:05:53 [INFO] pll.v3: Built team ratings: 292 rows x 219 cols
+15:06:19 [INFO] pll.v3: Built player ratings: 5277 rows x 155 cols
+15:06:19 [INFO] pll.v3: TeamModel quality model fitted on 292 rows
+15:06:19 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:06:21 [INFO] pll.v3: Built team ratings: 294 rows x 219 cols
+15:06:45 [INFO] pll.v3: Built player ratings: 5313 rows x 155 cols
+15:06:46 [INFO] pll.v3: TeamModel quality model fitted on 294 rows
+15:06:46 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:06:47 [INFO] pll.v3: Built team ratings: 296 rows x 219 cols
+15:07:13 [INFO] pll.v3: Built player ratings: 5349 rows x 155 cols
+15:07:14 [INFO] pll.v3: TeamModel quality model fitted on 296 rows
+15:07:14 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:07:15 [INFO] pll.v3: Built team ratings: 298 rows x 219 cols
+15:07:42 [INFO] pll.v3: Built player ratings: 5385 rows x 155 cols
+15:07:42 [INFO] pll.v3: TeamModel quality model fitted on 298 rows
+15:07:42 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:07:43 [INFO] pll.v3: Built team ratings: 300 rows x 219 cols
+15:08:08 [INFO] pll.v3: Built player ratings: 5422 rows x 155 cols
+15:08:09 [INFO] pll.v3: TeamModel quality model fitted on 300 rows
+15:08:09 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:08:10 [INFO] pll.v3: Built team ratings: 302 rows x 219 cols
+15:08:35 [INFO] pll.v3: Built player ratings: 5459 rows x 155 cols
+15:08:36 [INFO] pll.v3: TeamModel quality model fitted on 302 rows
+15:08:36 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:08:37 [INFO] pll.v3: Built team ratings: 304 rows x 219 cols
+15:09:03 [INFO] pll.v3: Built player ratings: 5496 rows x 155 cols
+15:09:03 [INFO] pll.v3: TeamModel quality model fitted on 304 rows
+15:09:03 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:09:04 [INFO] pll.v3: Built team ratings: 306 rows x 219 cols
+15:09:27 [INFO] pll.v3: Built player ratings: 5532 rows x 155 cols
+15:09:27 [INFO] pll.v3: TeamModel quality model fitted on 306 rows
+15:09:27 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:09:28 [INFO] pll.v3: Built team ratings: 308 rows x 219 cols
+15:09:52 [INFO] pll.v3: Built player ratings: 5569 rows x 155 cols
+15:09:52 [INFO] pll.v3: TeamModel quality model fitted on 308 rows
+15:09:52 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:09:53 [INFO] pll.v3: Built team ratings: 310 rows x 219 cols
+15:10:20 [INFO] pll.v3: Built player ratings: 5605 rows x 155 cols
+15:10:20 [INFO] pll.v3: TeamModel quality model fitted on 310 rows
+15:10:20 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:10:21 [INFO] pll.v3: Built team ratings: 312 rows x 219 cols
+15:10:47 [INFO] pll.v3: Built player ratings: 5642 rows x 155 cols
+15:10:47 [INFO] pll.v3: TeamModel quality model fitted on 312 rows
+15:10:47 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:10:48 [INFO] pll.v3: Built team ratings: 314 rows x 219 cols
+15:11:18 [INFO] pll.v3: Built player ratings: 5678 rows x 155 cols
+15:11:18 [INFO] pll.v3: TeamModel quality model fitted on 314 rows
+15:11:18 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:11:20 [INFO] pll.v3: Built team ratings: 316 rows x 219 cols
+15:11:48 [INFO] pll.v3: Built player ratings: 5714 rows x 155 cols
+15:11:49 [INFO] pll.v3: TeamModel quality model fitted on 316 rows
+15:11:49 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+15:11:50 [INFO] pll.v3: Built team ratings: 318 rows x 219 cols
+15:12:18 [INFO] pll.v3: Built player ratings: 5750 rows x 155 cols
+15:12:18 [INFO] pll.v3: TeamModel quality model fitted on 318 rows
+15:12:18 [INFO] pll.v3: TeamModel fitted: ['assists', 'gb', 'goals', 'shots', 'sog', 'turnovers']
+
+== PLAYER (TEST 2025) ==
+  assists : MAE=0.676  bias=+0.043  corr=0.439  avg_pred=0.69  avg_act=0.65
+  fo_pct  : MAE=0.120  bias=-0.005  corr=0.421  avg_pred=0.53  avg_act=0.53
+  fo_wins : MAE=3.239  bias=-0.281  corr=0.377  avg_pred=12.67  avg_act=12.95
+  goals   : MAE=0.981  bias=+0.060  corr=0.168  avg_pred=1.33  avg_act=1.27
+  save_pct: MAE=0.085  bias=+0.007  corr=0.185  avg_pred=0.55  avg_act=0.54
+  saves   : MAE=3.315  bias=-0.563  corr=0.186  avg_pred=12.46  avg_act=13.03
+  sf_implied: MAE=4.095  bias=-1.289  corr=0.393  avg_pred=22.75  avg_act=24.04
+  shots   : MAE=2.009  bias=+0.193  corr=0.306  avg_pred=4.77  avg_act=4.58
+
+============================================================
+DONE  tag=STEP-A2-shrunk
+============================================================
