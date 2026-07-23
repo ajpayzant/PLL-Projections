@@ -22,6 +22,8 @@ from _engine_state import (
     set_player_rating,
     render_update_projection_btn,
     refresh_rosters,
+    maybe_refresh_on_roster_change,
+    run_projection_for_game,
 )
 
 st.set_page_config(page_title="Depth Charts · PLL", page_icon="🥍", layout="wide")
@@ -56,6 +58,17 @@ st.markdown(SHARED_CSS + """
 """, unsafe_allow_html=True)
 
 engine = get_engine()
+
+# If a roster file changed since last render (e.g. an unattended gameday scrape
+# landed), re-project the selected game so this page shows fresh rosters rather
+# than a stale (or missing) result.
+if maybe_refresh_on_roster_change():
+    _game = st.session_state.get("selected_game") or {}
+    if _game.get("home_team_id") and _game.get("away_team_id"):
+        try:
+            run_projection_for_game(engine, _game)
+        except Exception:
+            pass
 
 # -- Roster freshness + manual refresh --------------------------------------
 # The engine auto-rebuilds when roster files change on disk (see _engine_state

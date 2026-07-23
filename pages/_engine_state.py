@@ -192,12 +192,59 @@ def get_engine() -> ProjectionEngine:
 
 
 def refresh_rosters() -> None:
-    """Force the engine to rebuild from the latest roster files on disk.
-    Clears the cached engine so the next get_engine() re-reads the CSVs."""
+    """Force the engine to rebuild from the latest roster files on disk AND
+    re-run the projection so the fresh rosters actually reach the UI.
+
+    Clearing the engine cache alone is not enough: the depth chart and
+    projection pages render from st.session_state["last_result"], a projection
+    computed by a *prior* engine.project() call. That result is only recomputed
+    when it is None (see 1_Projections.py re-projection guard). So we must also
+    invalidate last_result and the baseline caches, and request a re-run, or the
+    rebuilt engine is never queried and the display stays stale."""
     try:
         _build_engine.clear()
     except Exception:
         st.cache_resource.clear()
+    # Invalidate the baseline cache and remember the new fingerprint so the
+    # auto-detect path doesn't immediately re-trigger.
+    for k in ("_baseline_result", "_baseline_result_key"):
+        st.session_state.pop(k, None)
+    st.session_state["_roster_fingerprint_seen"] = _roster_fingerprint()
+    # Re-project the currently selected game NOW against the freshly rebuilt
+    # engine, so both the Projections and Depth Charts pages show fresh rosters
+    # immediately. If no game is selected yet, just null the result and let the
+    # Projections page's auto-run handle it.
+    game = st.session_state.get("selected_game") or {}
+    if game.get("home_team_id") and game.get("away_team_id"):
+        try:
+            run_projection_for_game(_build_engine(_roster_fingerprint()), game)
+            return
+        except Exception:
+            pass
+    st.session_state.pop("last_result", None)
+    st.session_state["_run_after_load"] = True
+
+
+def maybe_refresh_on_roster_change() -> bool:
+    """Auto-detect a roster file change (e.g. an unattended gameday scrape that
+    landed while the app was open) and invalidate the cached projection so it
+    re-runs against fresh rosters — no manual button press needed.
+
+    Returns True if a change was detected and caches were invalidated. Call this
+    early in each page render, before reading st.session_state["last_result"]."""
+    current = _roster_fingerprint()
+    seen = st.session_state.get("_roster_fingerprint_seen")
+    if seen is None:
+        # First render this session: record the baseline, don't force a re-run.
+        st.session_state["_roster_fingerprint_seen"] = current
+        return False
+    if current != seen:
+        st.session_state["_roster_fingerprint_seen"] = current
+        for k in ("last_result", "_baseline_result", "_baseline_result_key"):
+            st.session_state.pop(k, None)
+        st.session_state["_run_after_load"] = True
+        return True
+    return False
 
 
 # -- Autosave / autorestore ------------------------------------------------

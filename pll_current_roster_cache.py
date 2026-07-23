@@ -1,10 +1,14 @@
 """
 PLL Current Roster Cache
 ========================
-Repo-friendly version of the working Google Sheets roster scraper.
+Repo-friendly official roster scraper for the Streamlit projection app.
 
 Purpose:
-- Scrape official current PLL roster pages with Playwright/Chromium.
+- Fetch official current PLL roster pages over plain HTTP (no browser) and
+  parse the Next.js RSC JSON payload (`self.__next_f.push([1, "..."])`) for the
+  structured `roster` array. Keys on JSON field names, not hashed CSS classes,
+  so it survives site reskins (the old Playwright + div.css-fps5zs scrape broke
+  when the site regenerated its style hashes).
 - Write data/reference_tables/current_rosters.csv.
 - Avoid Google Sheets/gspread dependencies inside the Streamlit projection app.
 
@@ -12,28 +16,24 @@ Usage:
     python pll_current_roster_cache.py
 
 Deploy notes:
-    pip install playwright pandas
-    python -m playwright install chromium
+    pip install pandas   # no Playwright/Chromium required
 """
 
 from __future__ import annotations
 
 import argparse
-import asyncio
+import json
 import os
 import re
-import threading
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Tuple
 
 import pandas as pd
 
-HEADLESS = str(os.getenv("PLL_ROSTER_HEADLESS", "1")).strip().lower() not in {"0", "false", "no", "off"}
+# HTTP fetch timeout (ms kept for back-compat with existing env var name).
 PAGE_TIMEOUT_MS = int(os.getenv("PLL_ROSTER_PAGE_TIMEOUT_MS", "60000"))
-CARD_WAIT_TIMEOUT_MS = int(os.getenv("PLL_ROSTER_CARD_WAIT_TIMEOUT_MS", "30000"))
-SCROLL_PASSES = int(os.getenv("PLL_ROSTER_SCROLL_PASSES", "8"))
-SCROLL_PAUSE_MS = int(os.getenv("PLL_ROSTER_SCROLL_PAUSE_MS", "600"))
 
 REPO_ROOT = Path(__file__).resolve().parent
 DEFAULT_OUTPUT_PATH = REPO_ROOT / "data" / "reference_tables" / "current_rosters.csv"
@@ -200,109 +200,119 @@ def clean_height(value) -> str:
     return clean_text(value).replace("`", "").replace('"', "")
 
 
-ROSTER_EXTRACTOR_JS = """
-(teamInfo) => {
-  function cleanText(x) {
-    return (x || "").replace(/\s+/g, " ").trim();
-  }
+# ---------------------------------------------------------------------------
+# RSC JSON extraction
+# ---------------------------------------------------------------------------
+# The PLL site is a Next.js App Router (React Server Components) app. Player
+# data is streamed in `self.__next_f.push([1, "<json-chunk>"])` calls and is
+# NOT reliably present as hashed CSS classes (the old div.css-fps5zs / .points
+# selectors churn on every rebuild). We fetch the server-rendered HTML with
+# plain HTTP (no browser), reassemble the RSC payload, and parse the
+# `"roster":[...]` array of structured player objects. This survives CSS
+# reskins because it keys on JSON field names, not style classes.
 
-  function normalizePosition(pos) {
-    pos = cleanText(pos).toUpperCase();
+RSC_PUSH_RE = re.compile(r'self\.__next_f\.push\(\[1,(".*?")\]\)', re.DOTALL)
 
-    const aliases = {
-      "ATTACK": "A",
-      "MIDFIELD": "M",
-      "DEFENSE": "D",
-      "FACEOFF": "FO",
-      "FACE-OFF": "FO",
-      "GOALIE": "G",
-      "GOALTENDER": "G",
-      "LONG STICK MIDFIELD": "LSM",
-      "SHORT STICK DEFENSIVE MIDFIELD": "SSDM"
-    };
 
-    return aliases[pos] || pos || "UNK";
-  }
+def _http_get(url: str, timeout: int = 30) -> str:
+    req = urllib.request.Request(url, headers={
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml",
+    })
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read().decode("utf-8", "ignore")
 
-  function extractDetails(card) {
-    const details = {};
 
-    card.querySelectorAll("div").forEach(div => {
-      const spans = Array.from(div.children || []).filter(el => el.tagName === "SPAN");
+def _decode_rsc_blob(html: str) -> str:
+    """Reassemble the RSC streaming payload from the __next_f push chunks."""
+    blob = []
+    for chunk in RSC_PUSH_RE.findall(html):
+        try:
+            blob.append(json.loads(chunk))  # each chunk is a JSON-encoded string
+        except Exception:
+            continue
+    return "".join(blob)
 
-      if (spans.length >= 2) {
-        const label = cleanText(spans[0].innerText);
-        const value = cleanText(spans[1].innerText);
 
-        if (label && value) {
-          details[label] = value;
-        }
-      }
-    });
+def _extract_roster_array(blob: str) -> List[dict]:
+    """Bracket-match the `"roster":[ ... ]` array and json.loads it.
 
-    return details;
-  }
+    The roster objects carry positionName/officialId/jerseyNum/firstName/
+    lastName/position/height/age/college/country/handedness/injuryStatus/
+    profileUrl. We take the first well-formed `"roster"` array on the page.
+    """
+    key = '"roster":'
+    search_from = 0
+    while True:
+        i = blob.find(key, search_from)
+        if i < 0:
+            return []
+        j = blob.find("[", i)
+        if j < 0:
+            return []
+        depth = 0
+        end = -1
+        for k in range(j, len(blob)):
+            c = blob[k]
+            if c == "[":
+                depth += 1
+            elif c == "]":
+                depth -= 1
+                if depth == 0:
+                    end = k
+                    break
+        if end < 0:
+            search_from = i + len(key)
+            continue
+        try:
+            arr = json.loads(blob[j:end + 1])
+        except Exception:
+            search_from = i + len(key)
+            continue
+        # A real roster array is a list of dicts with player fields.
+        if isinstance(arr, list) and arr and isinstance(arr[0], dict) and "officialId" in arr[0]:
+            return arr
+        search_from = end + 1
 
-  const cards = Array.from(document.querySelectorAll("div.css-fps5zs"));
-  const rows = [];
 
-  cards.forEach(card => {
-    const firstName = cleanText(card.querySelector("p.firstName")?.innerText);
-    const lastName = cleanText(card.querySelector("p.lastName")?.innerText);
-    const player = cleanText(`${firstName} ${lastName}`);
+def _image_slug_from_url(url: str) -> str:
+    """Derive a stable player slug from the profile image URL."""
+    m = re.search(r"/Players/\d+/([a-z0-9\-]+)\.(?:webp|png|jpg)", str(url), re.IGNORECASE)
+    return m.group(1) if m else ""
 
-    const jersey = cleanText(card.querySelector(".points")?.innerText);
 
-    const playerImg = card.querySelector(".playerImg img");
-    const imageSlug = cleanText(playerImg?.getAttribute("alt"));
-    const imageURL = cleanText(playerImg?.getAttribute("src"));
-
-    let country = "";
-
-    card.querySelectorAll("img").forEach(img => {
-      const alt = cleanText(img.getAttribute("alt"));
-
-      if (alt.toLowerCase().startsWith("country")) {
-        country = cleanText(alt.replace(/^Country:\s*/i, ""));
-      }
-    });
-
-    const details = extractDetails(card);
-
-    const row = {
-      Player: player,
-      First_Name: firstName,
-      Last_Name: lastName,
-      Team: teamInfo.Team,
-      Team_ID: teamInfo.Team_ID,
-      Team_Code: teamInfo.Team_Code,
-      Division: teamInfo.Division,
-      Position: normalizePosition(details["Position"]),
-      Jersey: jersey,
-      Handedness: cleanText(details["Hand"]),
-      Height: cleanText(details["Height"]),
-      Age: cleanText(details["Age"]),
-      College: cleanText(details["College"]),
-      Country: country,
-      Image_Slug: imageSlug,
-      Image_URL: imageURL,
-      Page_URL: window.location.href,
-      Page_Title: document.title,
-      Extracted_At: new Date().toISOString()
-    };
-
-    if (row.Player && row.Position && row.Position !== "UNK") {
-      rows.push(row);
+def _roster_obj_to_row(obj: dict, team: Dict[str, object]) -> dict:
+    """Map one RSC roster object to the SCRAPE_COLUMNS schema."""
+    first = clean_text(obj.get("firstName"))
+    last = clean_text(obj.get("lastName"))
+    suffix = clean_text(obj.get("lastNameSuffix"))
+    if suffix:
+        last = f"{last} {suffix}".strip()
+    image_url = clean_text(obj.get("profileUrl"))
+    return {
+        "Player": clean_text(f"{first} {last}"),
+        "First_Name": first,
+        "Last_Name": last,
+        "Team": team["Team"],
+        "Team_ID": team["Team_ID"],
+        "Team_Code": team["Team_Code"],
+        "Division": team["Division"],
+        "Position": normalize_position(obj.get("position") or obj.get("positionName")),
+        "Jersey": clean_text(obj.get("jerseyNum")),
+        "Handedness": clean_text(obj.get("handedness")),
+        "Height": clean_height(obj.get("height")),
+        "Age": clean_age(obj.get("age")),
+        "College": clean_text(obj.get("college")),
+        "Country": clean_text(obj.get("country")),
+        "Image_Slug": _image_slug_from_url(image_url) or clean_text(obj.get("slug")),
+        "Image_URL": image_url,
+        "Page_URL": "",
+        "Page_Title": "",
+        "Extracted_At": datetime.now(timezone.utc).isoformat(),
     }
-  });
-
-  return {
-    raw_card_count: cards.length,
-    raw_valid_rows: rows.length,
-    rows: rows
-  };
-}
-"""
 
 
 def dedupe_team_rows(rows: List[dict]) -> List[dict]:
@@ -323,68 +333,39 @@ def dedupe_team_rows(rows: List[dict]) -> List[dict]:
     return [x[1] for x in best.values()]
 
 
-async def launch_browser(playwright):
-    args = [
-        "--no-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--disable-setuid-sandbox",
-        "--disable-software-rasterizer",
-    ]
-    return await playwright.chromium.launch(headless=HEADLESS, args=args)
+def scrape_team_roster(team: Dict[str, object]) -> Tuple[List[dict], List[dict]]:
+    """Fetch one team's roster page and parse the RSC `roster` JSON array.
 
-
-async def scrape_team_roster(page, team: Dict[str, object]) -> Tuple[List[dict], List[dict]]:
+    Tries each candidate URL until one yields a well-formed roster array.
+    Returns (rows, diagnostics). No browser required.
+    """
     print(f"\nSCRAPING {team['Team_Code']} / {team['Team_ID']} — {team['Team']}")
-
     diagnostics: List[dict] = []
     best_rows: List[dict] = []
 
     for url in team["URLs"]:  # type: ignore[index]
         print(f"Trying URL: {url}")
-
         try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT_MS)
-
-            try:
-                await page.wait_for_selector("p.firstName", timeout=CARD_WAIT_TIMEOUT_MS)
-            except Exception:
-                print("  Warning: p.firstName selector did not appear before timeout.")
-
-            for _ in range(SCROLL_PASSES):
-                await page.mouse.wheel(0, 2500)
-                await page.wait_for_timeout(SCROLL_PAUSE_MS)
-
-            await page.mouse.wheel(0, -10000)
-            await page.wait_for_timeout(1000)
-
-            result = await page.evaluate(
-                ROSTER_EXTRACTOR_JS,
-                {
-                    "Team": team["Team"],
-                    "Team_ID": team["Team_ID"],
-                    "Team_Code": team["Team_Code"],
-                    "Division": team["Division"],
-                },
-            )
-
-            raw_card_count = result.get("raw_card_count", 0)
-            raw_valid_rows = result.get("raw_valid_rows", 0)
-            rows = result.get("rows", [])
+            html = _http_get(url, timeout=PAGE_TIMEOUT_MS // 1000)
+            blob = _decode_rsc_blob(html)
+            roster = _extract_roster_array(blob)
+            rows = [_roster_obj_to_row(o, team) for o in roster
+                    if clean_text(o.get("firstName")) or clean_text(o.get("lastName"))]
+            rows = [r for r in rows if r["Player"] and r["Position"] != "UNK"]
             deduped_rows = dedupe_team_rows(rows)
 
-            print(f"  Raw card containers: {raw_card_count}")
-            print(f"  Raw valid rows: {raw_valid_rows}")
-            print(f"  Deduped players: {len(deduped_rows)}")
+            print(f"  RSC chunks decoded: {len(RSC_PUSH_RE.findall(html))}")
+            print(f"  Roster objects: {len(roster)}")
+            print(f"  Valid players: {len(deduped_rows)}")
 
             diagnostics.append({
                 "Team_ID": team["Team_ID"],
                 "Team_Code": team["Team_Code"],
                 "Team": team["Team"],
                 "URL_Tried": url,
-                "Final_URL": page.url,
-                "Raw_Card_Containers": raw_card_count,
-                "Raw_Valid_Rows": raw_valid_rows,
+                "Final_URL": url,
+                "Raw_Card_Containers": len(roster),
+                "Raw_Valid_Rows": len(rows),
                 "Deduped_Players": len(deduped_rows),
                 "Status": "OK" if len(deduped_rows) else "NO_PLAYERS",
                 "Error": "",
@@ -392,10 +373,8 @@ async def scrape_team_roster(page, team: Dict[str, object]) -> Tuple[List[dict],
 
             if len(deduped_rows) > len(best_rows):
                 best_rows = deduped_rows
-
             if len(deduped_rows) >= 15:
                 break
-
         except Exception as e:
             print(f"  ERROR: {e}")
             diagnostics.append({
@@ -433,37 +412,14 @@ def sort_master_roster(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-async def scrape_all_pll_rosters_async() -> Tuple[pd.DataFrame, pd.DataFrame]:
-    try:
-        from playwright.async_api import async_playwright
-    except ImportError as exc:
-        raise RuntimeError(
-            "Playwright is not installed. Run: pip install playwright && python -m playwright install chromium"
-        ) from exc
-
+def scrape_all_pll_rosters() -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Scrape every PLL team roster via HTTP + RSC JSON (no browser)."""
     all_rows: List[dict] = []
     all_diagnostics: List[dict] = []
-
-    async with async_playwright() as p:
-        browser = await launch_browser(p)
-        context = await browser.new_context(
-            viewport={"width": 1600, "height": 2400},
-            user_agent=(
-                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-            ),
-        )
-        page = await context.new_page()
-
-        try:
-            for team in PLL_TEAMS:
-                rows, diagnostics = await scrape_team_roster(page, team)
-                all_rows.extend(rows)
-                all_diagnostics.extend(diagnostics)
-                await page.wait_for_timeout(1000)
-        finally:
-            await context.close()
-            await browser.close()
+    for team in PLL_TEAMS:
+        rows, diagnostics = scrape_team_roster(team)
+        all_rows.extend(rows)
+        all_diagnostics.extend(diagnostics)
 
     roster_df = pd.DataFrame(all_rows)
     if roster_df.empty:
@@ -472,11 +428,9 @@ async def scrape_all_pll_rosters_async() -> Tuple[pd.DataFrame, pd.DataFrame]:
         for col in SCRAPE_COLUMNS:
             if col not in roster_df.columns:
                 roster_df[col] = ""
-
         roster_df = roster_df[SCRAPE_COLUMNS].copy()
         for col in roster_df.columns:
             roster_df[col] = roster_df[col].map(clean_text)
-
         roster_df["Position"] = roster_df["Position"].map(normalize_position)
         roster_df["Position_Group"] = roster_df["Position"].map(lambda x: POSITION_GROUP.get(x, "Unknown"))
         roster_df["Height"] = roster_df["Height"].map(clean_height)
@@ -489,32 +443,11 @@ async def scrape_all_pll_rosters_async() -> Tuple[pd.DataFrame, pd.DataFrame]:
     return roster_df, diagnostics_df
 
 
+# Back-compat alias: the scraper no longer needs a browser or an event loop,
+# but callers (write_current_rosters_csv, any Streamlit refresh path) still
+# import scrape_all_pll_rosters_sync. Keep the name pointing at the HTTP path.
 def scrape_all_pll_rosters_sync() -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Run the async scraper from normal sync code, including Streamlit contexts."""
-    try:
-        loop = asyncio.get_running_loop()
-        running = loop.is_running()
-    except RuntimeError:
-        running = False
-
-    if not running:
-        return asyncio.run(scrape_all_pll_rosters_async())
-
-    result: dict = {}
-
-    def _runner():
-        try:
-            result["value"] = asyncio.run(scrape_all_pll_rosters_async())
-        except BaseException as exc:  # pass exception to caller thread
-            result["error"] = exc
-
-    thread = threading.Thread(target=_runner, daemon=True)
-    thread.start()
-    thread.join()
-
-    if "error" in result:
-        raise result["error"]
-    return result["value"]
+    return scrape_all_pll_rosters()
 
 
 def validate_scrape(roster_df: pd.DataFrame, min_total_players: int = 120, min_teams: int = 8, min_players_per_team: int = 15) -> List[str]:
@@ -542,19 +475,35 @@ def validate_scrape(roster_df: pd.DataFrame, min_total_players: int = 120, min_t
 def write_current_rosters_csv(output_path: Path = DEFAULT_OUTPUT_PATH, diagnostics_path: Path = DEFAULT_DIAGNOSTICS_PATH) -> Tuple[pd.DataFrame, pd.DataFrame]:
     roster_df, diagnostics_df = scrape_all_pll_rosters_sync()
     issues = validate_scrape(roster_df)
-    if issues:
-        raise RuntimeError("Roster scrape validation failed: " + ", ".join(issues))
 
     output_path = Path(output_path)
     diagnostics_path = Path(diagnostics_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     diagnostics_path.parent.mkdir(parents=True, exist_ok=True)
 
-    roster_df.to_csv(output_path, index=False)
+    # Always write diagnostics first, even on failure, so a broken CI run is
+    # diagnosable (which team/URL failed) instead of exiting with no artifact.
     diagnostics_df.to_csv(diagnostics_path, index=False)
-
-    print(f"Wrote {len(roster_df)} roster rows to {output_path}")
     print(f"Wrote diagnostics to {diagnostics_path}")
+
+    # Hard-fail only on a genuinely broken scrape (nothing scraped, or multiple
+    # teams missing entirely). A single team coming up short (e.g. the site was
+    # slow for one roster page) should NOT discard the other 7 teams' fresh data
+    # and leave every projection on a stale roster — write what we have and warn.
+    teams_scraped = int(roster_df["Team_ID"].nunique()) if not roster_df.empty else 0
+    fatal = roster_df.empty or teams_scraped < 7 or len(roster_df) < 120
+    if fatal:
+        raise RuntimeError(
+            "Roster scrape validation FAILED (not writing rosters): "
+            + ", ".join(issues)
+            + f" | teams={teams_scraped} players={len(roster_df)}"
+        )
+    if issues:
+        print("WARNING: roster scrape completed with issues (writing anyway): "
+              + ", ".join(issues))
+
+    roster_df.to_csv(output_path, index=False)
+    print(f"Wrote {len(roster_df)} roster rows to {output_path}")
     print(roster_df.groupby(["Team_ID", "Team_Code", "Team"]).size().reset_index(name="Roster_Count").to_string(index=False))
 
     return roster_df, diagnostics_df

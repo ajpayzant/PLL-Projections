@@ -27,6 +27,7 @@ from _engine_state import (
     render_update_projection_btn,
     session_to_json, session_from_json,
     _AUTOSAVE_PATH, get_data_freshness,
+    maybe_refresh_on_roster_change,
 )
 
 st.set_page_config(page_title="Projections · PLL", page_icon="🥍", layout="wide")
@@ -34,6 +35,9 @@ init_session()
 st.markdown(SHARED_CSS, unsafe_allow_html=True)
 
 engine   = get_engine()
+# If a roster file changed since last render (e.g. an unattended gameday scrape
+# landed), drop the cached projection so it re-runs against fresh rosters.
+maybe_refresh_on_roster_change()
 raw_games = engine.upcoming_games()
 
 # -- Attach season to each game dict (for sorting) -------------------------
