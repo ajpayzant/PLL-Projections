@@ -845,46 +845,44 @@ def sync_actuals(tab_name: str, db_path: str, sh=None) -> Dict[str, int]:
     ws = sh.worksheet(tab_name)
     all_vals = ws.get_all_values()
 
-    # Parse game date and team names from tab name to find the game_id
+    # Parse season, game number and team names from the tab name.
+    # Tab format: "AWAY@HOME_G{game_number}_{YYYY-MM-DD}".
     try:
         matchup, rest = tab_name.split("_G", 1)
-        _, date_str = rest.split("_", 1)
+        gn_str, date_str = rest.split("_", 1)
         away_name, home_name = matchup.split("@", 1)
+        game_number = int(gn_str)
+        season = int(date_str[:4])
     except Exception as e:
         raise ValueError(f"Cannot parse tab name '{tab_name}': {e}")
 
     con = duckdb.connect(db_path, read_only=True)
     try:
-        # Find the game_id from the schedule
-        game_row = con.execute("""
-            SELECT game_id, home_team_id, away_team_id
-            FROM clean.game_schedule_all
-            WHERE CAST(game_date AS VARCHAR) LIKE ?
-              AND LOWER(COALESCE(event_status_label,'')) IN ('final','completed')
-            LIMIT 1
-        """, [f"{date_str}%"]).fetchone()
-
-        if not game_row:
-            raise ValueError(f"No completed game found for date {date_str}. "
-                             "Run the data pipeline first to ingest actuals.")
-
-        game_id = game_row[0]
-
-        # Pull player actuals
+        # A game's stat rows only exist once it has been played and ingested, so
+        # querying the stats tables directly by (season, game_number) both
+        # identifies the game and doubles as the "has it happened?" check —
+        # empty result → not played / not yet ingested → skip.
         player_actuals = con.execute("""
             SELECT full_name, position,
                    goals, assists, goals+assists AS points,
                    shots_on_goal, saves, faceoffs_won
             FROM clean.player_game_stats
-            WHERE game_id = ?
-        """, [game_id]).df()
+            WHERE season = ? AND game_number = ?
+        """, [season, game_number]).df()
+
+        if player_actuals.empty:
+            raise ValueError(
+                f"No actuals found for {season} game {game_number}. "
+                "The game may not have been played yet, or the data pipeline "
+                "has not ingested it."
+            )
 
         # Pull team actuals
         team_actuals = con.execute("""
             SELECT team_id, goals, scores
             FROM clean.team_game_stats
-            WHERE game_id = ?
-        """, [game_id]).df()
+            WHERE season = ? AND game_number = ?
+        """, [season, game_number]).df()
 
     finally:
         con.close()
