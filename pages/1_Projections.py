@@ -184,14 +184,25 @@ with st.sidebar:
 
             current_override = overrides.get(key, model_val)
 
+            # Drive the widget purely by session_state (seed once) instead of
+            # passing value= every rerun. Passing both value= and key= makes the
+            # +/- stepper buttons fight the value= param and revert, so they
+            # appeared to do nothing. Seeding once lets the buttons persist.
+            wkey = f"tr_num_{team_id}_{key}"
+            if wkey not in st.session_state:
+                st.session_state[wkey] = float(current_override)
+            # printf-style format from the def's "{:.2f}" so display precision
+            # matches the data (no rounding to the step's precision).
+            nfmt = meta["fmt"].replace("{:", "%").replace("}", "")
+
             new_val = st.number_input(
                 meta["label"],
                 min_value=meta["min"],
                 max_value=meta["max"],
-                value=float(current_override),
                 step=meta["step"],
+                format=nfmt,
                 help=meta["help"],
-                key=f"tr_num_{team_id}_{key}",
+                key=wkey,
             )
 
             # Show model value as reference

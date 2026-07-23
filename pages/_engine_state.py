@@ -789,7 +789,7 @@ TEAM_RATING_DEFS = {
             "≈ ~11.8 scoreboard points. Raise if the offense is hot; lower if a "
             "key scorer is out."
         ),
-        "min": 5.0, "max": 20.0, "step": 0.1, "fmt": "{:.1f}",
+        "min": 5.0, "max": 20.0, "step": 0.01, "fmt": "{:.2f}",
     },
     "two_pt_rate_ewm": {
         "label": "2-point goal rate (share of goals worth 2)",
@@ -820,7 +820,7 @@ TEAM_RATING_DEFS = {
             "Total shot attempts per game, counting both on-cage and off-cage "
             "shots. This is not shots on goal (on-target only). League avg ~41."
         ),
-        "min": 25.0, "max": 60.0, "step": 0.5, "fmt": "{:.1f}",
+        "min": 25.0, "max": 60.0, "step": 0.01, "fmt": "{:.2f}",
     },
     "sog_rate_ewm": {
         "label": "Shots-on-goal rate (share of shots on target)",
@@ -842,7 +842,7 @@ TEAM_RATING_DEFS = {
             "Raise to boost all player assist projections proportionally; lower to reduce them. "
             "Affects proj_assists for every active player via team-level scaling."
         ),
-        "min": 2.0, "max": 14.0, "step": 0.1, "fmt": "{:.1f}",
+        "min": 2.0, "max": 14.0, "step": 0.01, "fmt": "{:.2f}",
     },
     # bayes_fo_pct removed from team-level adjustments.
     # FO win rate is now driven entirely by active FO players' individual ratings
@@ -867,7 +867,7 @@ TEAM_RATING_DEFS = {
             "better defense. This does not distinguish whether goals allowed were "
             "1s or 2s, so it is not the same as points allowed. League avg ~11.2."
         ),
-        "min": 5.0, "max": 20.0, "step": 0.1, "fmt": "{:.1f}",
+        "min": 5.0, "max": 20.0, "step": 0.01, "fmt": "{:.2f}",
     },
 }
 
