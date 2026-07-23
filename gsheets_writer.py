@@ -825,18 +825,23 @@ def read_game_tab(tab_name: str) -> Dict[str, pd.DataFrame]:
     return result
 
 
-def sync_actuals(tab_name: str, db_path: str) -> Dict[str, int]:
+def sync_actuals(tab_name: str, db_path: str, sh=None) -> Dict[str, int]:
     """
     For a completed game, pull actual stats from the warehouse and
     write them into the Actual Result column of the Player Props section.
     Also fills Actual Goals / Actual Score for team rows.
 
+    sh: optional pre-opened gspread Spreadsheet handle. When supplied (e.g. by
+        sync_all_actuals) the shared handle is reused instead of reopening the
+        spreadsheet per tab — much faster and avoids extra API quota use.
+
     Returns {"players_updated": N, "teams_updated": N}
     """
     import duckdb
 
-    gc = _get_client()
-    sh = gc.open_by_key(_get_sheet_id())
+    if sh is None:
+        gc = _get_client()
+        sh = gc.open_by_key(_get_sheet_id())
     ws = sh.worksheet(tab_name)
     all_vals = ws.get_all_values()
 
@@ -954,14 +959,19 @@ def sync_actuals(tab_name: str, db_path: str) -> Dict[str, int]:
             actuals_for_player = player_lookup.get(player_name, {})
             actual = actuals_for_player.get(stat_label)
             if actual is not None:
-                updates.append((i + 1, actual_col, actual))
+                # Skip if the sheet already holds this actual (idempotent re-runs).
+                existing_actual = row[actual_col - 1].strip() if len(row) >= actual_col else ""
+                if not _same_number(existing_actual, actual):
+                    updates.append((i + 1, actual_col, actual))
                 # Hit/Miss: actual >= line
                 try:
                     line_f = float(line_val)
                     hit = "Hit" if actual >= line_f else "Miss"
                 except (ValueError, TypeError):
                     hit = ""
-                updates.append((i + 1, hit_col, hit))
+                existing_hit = row[hit_col - 1].strip() if len(row) >= hit_col else ""
+                if existing_hit != hit:
+                    updates.append((i + 1, hit_col, hit))
                 players_updated += 1
 
         if in_teams_section:
@@ -976,20 +986,94 @@ def sync_actuals(tab_name: str, db_path: str) -> Dict[str, int]:
             for _, trow in team_actuals.iterrows():
                 from pages._engine_state import team_name as _tn
                 if _tn(str(trow["team_id"])).lower() == team_name_cell.lower():
-                    updates.append((i + 1, actual_g_col, float(trow.get("goals", 0) or 0)))
-                    updates.append((i + 1, actual_s_col, float(trow.get("scores", 0) or 0)))
+                    g_val = float(trow.get("goals", 0) or 0)
+                    s_val = float(trow.get("scores", 0) or 0)
+                    existing_g = row[actual_g_col - 1].strip() if len(row) >= actual_g_col else ""
+                    existing_s = row[actual_s_col - 1].strip() if len(row) >= actual_s_col else ""
+                    if not _same_number(existing_g, g_val):
+                        updates.append((i + 1, actual_g_col, g_val))
+                    if not _same_number(existing_s, s_val):
+                        updates.append((i + 1, actual_s_col, s_val))
                     teams_updated += 1
                     break
 
-    # Batch write all updates
+    # Batch write all updates. Build Cell objects locally (no per-cell API read)
+    # and only write when there is something new — so a re-run of an already
+    # synced tab performs zero writes.
     if updates:
-        cell_list = []
-        for r, c, v in updates:
-            cell = ws.cell(r, c)
-            cell.value = v
-            cell_list.append(cell)
+        import gspread
+        cell_list = [gspread.Cell(row=r, col=c, value=v) for r, c, v in updates]
         ws.update_cells(cell_list)
 
-    logger.info("Synced actuals for %s: %d player rows, %d team rows",
-                tab_name, players_updated, teams_updated)
-    return {"players_updated": players_updated, "teams_updated": teams_updated}
+    logger.info("Synced actuals for %s: %d player rows, %d team rows (%d cells written)",
+                tab_name, players_updated, teams_updated, len(updates))
+    return {
+        "players_updated": players_updated,
+        "teams_updated":   teams_updated,
+        "cells_written":   len(updates),
+    }
+
+
+def _same_number(existing: str, value: float, tol: float = 1e-6) -> bool:
+    """True if the cell's current string already equals the numeric value."""
+    if existing is None or str(existing).strip() == "":
+        return False
+    try:
+        return abs(float(str(existing).strip()) - float(value)) <= tol
+    except (ValueError, TypeError):
+        return False
+
+
+def sync_all_actuals(db_path: str) -> Dict[str, Any]:
+    """
+    Scan every game tab in the sheet and sync actuals for any game that is
+    Final/completed in the warehouse. Idempotent: tabs already fully synced
+    perform no writes and are reported as "skipped". One click fills in every
+    result that has data and isn't already present.
+
+    Returns:
+      {
+        "synced":  [{"tab","players_updated","teams_updated","cells_written"}...],
+        "skipped": [{"tab","reason"}...],   # already synced / not final / no data
+        "errored": [{"tab","error"}...],
+        "totals":  {"tabs","synced","skipped","errored","cells_written"},
+      }
+    """
+    gc = _get_client()
+    sh = gc.open_by_key(_get_sheet_id())
+
+    games = list_saved_games()
+    synced, skipped, errored = [], [], []
+    total_cells = 0
+
+    for g in games:
+        tab = g["tab_name"]
+        try:
+            counts = sync_actuals(tab, db_path, sh=sh)
+        except ValueError as e:
+            # Raised when the game isn't final / not yet in the warehouse.
+            skipped.append({"tab": tab, "reason": str(e)})
+            continue
+        except Exception as e:
+            errored.append({"tab": tab, "error": str(e)})
+            continue
+
+        cells = counts.get("cells_written", 0)
+        total_cells += cells
+        if cells == 0:
+            skipped.append({"tab": tab, "reason": "already synced (no new actuals)"})
+        else:
+            synced.append({"tab": tab, **counts})
+
+    return {
+        "synced":  synced,
+        "skipped": skipped,
+        "errored": errored,
+        "totals": {
+            "tabs":          len(games),
+            "synced":        len(synced),
+            "skipped":       len(skipped),
+            "errored":       len(errored),
+            "cells_written": total_cells,
+        },
+    }

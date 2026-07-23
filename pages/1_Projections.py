@@ -733,7 +733,7 @@ game_date_str = str(game.get("game_date", ""))[:10].replace("-", "")
 fname = (f"PLL_{team_name(away_id)}_{team_name(home_id)}_"
          f"Game{game.get('game_number','?')}_{game_date_str}.xlsx")
 
-btn_dl, btn_save, btn_sync = st.columns([1, 1, 1], gap="small")
+btn_dl, btn_save, btn_sync, btn_sync_all = st.columns([1, 1, 1, 1], gap="small")
 
 with btn_dl:
     if st.button("📥 Download Projection Package (Excel)", type="secondary",
@@ -786,6 +786,45 @@ with btn_sync:
                 st.warning(str(e))
             except Exception as e:
                 st.error(f"Sync failed: {e}")
+
+with btn_sync_all:
+    if st.button("🔁 Sync All Actuals", type="secondary", width="stretch",
+                 help="Scan every game tab in the sheet and fill in actuals for "
+                      "all completed games that aren't already synced."):
+        with st.spinner("Syncing actuals for all completed games..."):
+            try:
+                import sys
+                sys.path.insert(0, str(_ROOT))
+                from gsheets_writer import sync_all_actuals
+                import os
+                db_path = os.getenv(
+                    "PLL_DB_PATH",
+                    str(_ROOT / "data" / "analytics_database" / "pll_warehouse.duckdb"),
+                )
+                report = sync_all_actuals(db_path)
+                t = report["totals"]
+                st.success(
+                    f"Done — {t['synced']} game(s) synced "
+                    f"({t['cells_written']} cells), {t['skipped']} skipped, "
+                    f"{t['errored']} errored across {t['tabs']} tab(s)."
+                )
+                if report["synced"]:
+                    with st.expander(f"Synced ({t['synced']})", expanded=True):
+                        for s in report["synced"]:
+                            st.write(
+                                f"✓ {s['tab']} — {s['players_updated']} player rows, "
+                                f"{s['teams_updated']} team rows"
+                            )
+                if report["skipped"]:
+                    with st.expander(f"Skipped ({t['skipped']})", expanded=False):
+                        for s in report["skipped"]:
+                            st.write(f"• {s['tab']} — {s['reason']}")
+                if report["errored"]:
+                    with st.expander(f"Errored ({t['errored']})", expanded=True):
+                        for s in report["errored"]:
+                            st.write(f"⚠ {s['tab']} — {s['error']}")
+            except Exception as e:
+                st.error(f"Sync all failed: {e}")
 
 st.markdown(
     '<span class="note-text">Export includes: Game Lines · Player Props · '

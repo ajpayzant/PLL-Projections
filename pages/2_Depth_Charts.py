@@ -379,11 +379,48 @@ def _native_pos(eng, pid: str, fallback: str) -> str:
     return fallback
 
 
+# Per-position stat layouts for the history panel. Each entry is
+# (display_label, source_column). GP and Opp are handled specially. The same
+# ordered stat list drives BOTH the Season Averages table (GP + per-game means)
+# and the Last 5 log (Opp + per-game values).
+_HISTORY_LAYOUTS = {
+    "A":    [("Pts","points"), ("G","goals"), ("A","assists"),
+             ("1G","one_point_goals"), ("2G","two_point_goals"),
+             ("S","shots"), ("SOG","shots_on_goal"), ("TO","turnovers")],
+    "M":    [("Pts","points"), ("G","goals"), ("A","assists"),
+             ("1G","one_point_goals"), ("2G","two_point_goals"),
+             ("S","shots"), ("SOG","shots_on_goal"), ("TO","turnovers")],
+    "D":    [("GB","ground_balls"), ("CTO","caused_turnovers"),
+             ("Pts","points"), ("G","goals"), ("A","assists")],
+    "SSDM": [("GB","ground_balls"), ("CTO","caused_turnovers"),
+             ("Pts","points"), ("G","goals"), ("A","assists")],
+    "LSM":  [("GB","ground_balls"), ("CTO","caused_turnovers"),
+             ("Pts","points"), ("G","goals"), ("A","assists")],
+    "FO":   [("FO Wins","faceoffs_won"), ("FO Losses","faceoffs_lost"),
+             ("FO %","faceoff_pct"), ("GB","ground_balls"),
+             ("CTO","caused_turnovers"), ("Pts","points"),
+             ("G","goals"), ("A","assists")],
+    # SAA = Scores Against Average (a 2-point goal counts as one score), which
+    # is `scores_against_average`, NOT `saa` (raw goals/points against).
+    "G":    [("Sv","saves"), ("SV%","save_pct"), ("SAA","scores_against_average"),
+             ("CSv","clean_saves")],
+}
+# Columns shown as percentages (0-1 in the data → 3-decimal display) and
+# aggregated as a ratio of sums across a season rather than a mean of per-game
+# rates, so a season FO%/SV% is weighted by volume.
+_HISTORY_PCT = {
+    "faceoff_pct": ("faceoffs_won", "faceoffs"),
+    "save_pct":    ("saves",        "shots_faced_p"),
+}
+
+
 def _player_history(pid: str, pos: str) -> None:
     """
-    Render a compact history panel for one player inside the Edit section.
-    Pulls from engine.player_model.pr (already loaded, no extra DB call).
-    Shows: season averages table + last-5 game log.
+    Render a compact, position-tailored history panel for one player inside the
+    Edit section. Pulls from engine.player_model.pr (already loaded, no extra DB
+    call). Shows a Season Averages table (per game, with GP) and a Last-5 game
+    log (identical columns, but Opp instead of GP), with the stat set chosen for
+    the player's position (offense / defense / faceoff / goalie).
     """
     pm = engine.player_model
     if pm is None or pm.pr.empty:
@@ -401,55 +438,54 @@ def _player_history(pid: str, pos: str) -> None:
     if sort_cols:
         rows = rows.sort_values(sort_cols)
 
-    # ── Season averages ──────────────────────────────────────────────────
-    stat_cols = [c for c in ("goals","assists","shots","shots_on_goal",
-                             "ground_balls","turnovers","caused_turnovers",
-                             "saves","faceoff_wins_x","faceoffs_won")
-                 if c in rows.columns]
-    # normalise FO wins column name
-    fo_col = "faceoffs_won" if "faceoffs_won" in rows.columns else (
-             "faceoff_wins_x" if "faceoff_wins_x" in rows.columns else None)
+    layout = _HISTORY_LAYOUTS.get(pos, _HISTORY_LAYOUTS["M"])
+    layout = [(lbl, col) for lbl, col in layout if col in rows.columns]
 
-    display_cols = {"goals":"G","assists":"A","shots":"Sh",
-                    "shots_on_goal":"SOG","ground_balls":"GB",
-                    "turnovers":"TO","caused_turnovers":"CTO",
-                    "saves":"SV","faceoffs_won":"FOW","faceoff_wins_x":"FOW"}
+    def _fmt_cell(col: str, val: float) -> float:
+        if col in _HISTORY_PCT:
+            return round(float(val), 3)
+        return round(float(val), 2)
 
-    if "season" in rows.columns:
-        grp_cols = [c for c in stat_cols if c in rows.columns]
-        if grp_cols:
-            seas_avg = (
-                rows.groupby("season")[grp_cols]
-                .mean()
-                .round(2)
-                .reset_index()
-                .rename(columns=display_cols)
-                .rename(columns={"season": "Season"})
-            )
-            seas_avg["Season"] = seas_avg["Season"].astype(int)
-            # Drop columns that are all-zero (e.g. saves for a field player)
-            seas_avg = seas_avg.loc[:, (seas_avg != 0).any(axis=0)]
-            st.markdown(
-                '<span style="font-size:.72rem;color:#64748b;font-weight:700;'
-                'text-transform:uppercase;letter-spacing:.05em;">Season Averages (per game)</span>',
-                unsafe_allow_html=True,
-            )
-            st.dataframe(seas_avg, width="stretch", hide_index=True)
+    # ── Season averages (GP + per-game stats) ────────────────────────────
+    if "season" in rows.columns and layout:
+        seas_records = []
+        for season, grp in rows.groupby("season"):
+            rec = {"Season": int(season), "GP": int(len(grp))}
+            for lbl, col in layout:
+                if col in _HISTORY_PCT:
+                    num_col, den_col = _HISTORY_PCT[col]
+                    den = grp[den_col].sum() if den_col in grp.columns else 0
+                    num = grp[num_col].sum() if num_col in grp.columns else 0
+                    rec[lbl] = round(float(num) / float(den), 3) if den else 0.0
+                else:
+                    rec[lbl] = _fmt_cell(col, grp[col].mean())
+            seas_records.append(rec)
+        seas_avg = pd.DataFrame(seas_records)
+        st.markdown(
+            '<span style="font-size:.72rem;color:#64748b;font-weight:700;'
+            'text-transform:uppercase;letter-spacing:.05em;">Season Averages (per game)</span>',
+            unsafe_allow_html=True,
+        )
+        st.dataframe(seas_avg, width="stretch", hide_index=True)
 
-    # ── Last 5 game log ──────────────────────────────────────────────────
+    # ── Last 5 game log (Opp + per-game values) ──────────────────────────
     last5 = rows.tail(5).copy()
-    log_cols = [c for c in ("season","game_number","goals","assists",
-                             "shots","shots_on_goal","ground_balls",
-                             "turnovers","saves","faceoffs_won","faceoff_wins_x")
-                if c in last5.columns]
-    if log_cols:
-        log_df = last5[log_cols].copy()
-        log_df = log_df.rename(columns={**display_cols,
-                                         "season":"Ssn","game_number":"Gm"})
-        log_df = log_df.loc[:, (log_df != 0).any(axis=0)]
-        # Round numeric columns
-        num_cols = log_df.select_dtypes(include=[np.number]).columns
-        log_df[num_cols] = log_df[num_cols].round(1)
+    if layout and not last5.empty:
+        opp_col = ("opponent_team_name" if "opponent_team_name" in last5.columns
+                   else ("opponent_team_id" if "opponent_team_id" in last5.columns else None))
+        log_records = []
+        for _, r in last5.iterrows():
+            rec = {}
+            rec["Opp"] = str(r[opp_col]) if opp_col else "—"
+            for lbl, col in layout:
+                val = r[col]
+                if col in _HISTORY_PCT:
+                    rec[lbl] = round(float(val), 3)
+                else:
+                    # Whole-number stats stay clean; rates keep a decimal.
+                    rec[lbl] = round(float(val), 1)
+            log_records.append(rec)
+        log_df = pd.DataFrame(log_records)
         st.markdown(
             '<span style="font-size:.72rem;color:#64748b;font-weight:700;'
             'text-transform:uppercase;letter-spacing:.05em;">Last 5 Games</span>',
