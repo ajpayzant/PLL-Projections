@@ -192,10 +192,10 @@ with st.sidebar:
             for p in (result.away_players if bulk_team == away_nm else result.home_players):
                 set_player_override(bulk_tid, p.player_id, "active", True)
             st.rerun()
-        if st.button("Reset usage", key="bulk_use", width="stretch"):
+        if st.button("Reset touches", key="bulk_use", width="stretch"):
             for p in (result.away_players if bulk_team == away_nm else result.home_players):
                 set_player_override(bulk_tid, p.player_id, "usage_multiplier", 1.0)
-                # Clear widget state so the spinner immediately shows 1.0
+                # Clear widget state so the spinner reseeds to baseline touches
                 wk = f"use_{bulk_tid}_{p.player_id}"
                 if wk in st.session_state:
                     del st.session_state[wk]
@@ -487,7 +487,7 @@ def _render_team(team_id: str, team_nm: str, players):
 
     # -- Column header row ---------------------------------------------------
     h = st.columns([3.5, 0.8, 0.7, 0.7, 1.2, 1.0, 1.0, 1.0, 0.8])
-    for col, lbl in zip(h, ["Player", "Pos", "Active", "Start", "Usage ×",
+    for col, lbl in zip(h, ["Player", "Pos", "Active", "Start", "Proj touches",
                               "Proj G", "Proj A", "Proj Pts", ""]):
         col.markdown(f"<span style='font-size:.75rem;font-weight:700;color:#64748b;'>{lbl}</span>",
                      unsafe_allow_html=True)
@@ -503,6 +503,13 @@ def _render_team(team_id: str, team_nm: str, players):
         existing  = dc.get(pid, {})
         is_active = existing.get("active", True)
         usage_val = float(existing.get("usage_multiplier", 1.0))
+        # Touches reframe: the depth-chart control is entered as concrete projected
+        # touches. baseline_touches is the player's touches_ewm (touch count at
+        # usage 1.0); displayed touches = baseline × usage, and an edit maps back
+        # via usage = entered / baseline. Falls back to proj_touches if baseline
+        # is unavailable (0), so the control still seeds sensibly.
+        base_touch = float(getattr(p, "baseline_touches", 0.0) or 0.0)
+        touch_val  = base_touch * usage_val
         eff_pos   = _effective_pos(p, dc)
         is_goalie = eff_pos == "G"
         has_ov    = bool(existing.get("rating_overrides") or "position_override" in existing)
@@ -567,9 +574,9 @@ def _render_team(team_id: str, team_nm: str, players):
                 set_player_override(team_id, pid, "active", new_active)
                 new_usage_val = 0.0 if not new_active else 1.0
                 set_player_override(team_id, pid, "usage_multiplier", new_usage_val)
-                # Force the number_input widget to show the new value immediately
-                # by writing directly to its session state key
-                st.session_state[f"use_{team_id}_{pid}"] = new_usage_val
+                # Force the touches widget to show the new value immediately by
+                # writing directly to its session state key (in touch units).
+                st.session_state[f"use_{team_id}_{pid}"] = base_touch * new_usage_val
 
         # Starter checkbox (goalies only)
         with c4:
@@ -586,23 +593,32 @@ def _render_team(team_id: str, team_nm: str, players):
                     set_player_override(team_id, pid, "is_starter", True)
                     current_starter = pid
 
-        # Usage multiplier
+        # Projected touches (a concrete reframe of the usage multiplier).
         with c5:
             wk = f"use_{team_id}_{pid}"
-            # Seed widget from saved override value only when not yet in session state
-            # (e.g. first render, or after active toggle reset it). Once the key exists,
-            # let Streamlit own it so incremental +/- clicks accumulate correctly.
+            # Divisor that maps entered touches back to the internal usage multiplier
+            # (usage = entered / base). Guard against a missing baseline so the
+            # control never divides by zero — a 0 baseline degrades to usage units.
+            base_for_map = base_touch if base_touch > 0 else 1.0
+            # Seed widget from the saved override only when not yet in session state
+            # (first render, or after the active toggle reset it). Once present, let
+            # Streamlit own it so +/- stepper clicks accumulate correctly.
             if wk not in st.session_state:
-                st.session_state[wk] = usage_val
-            new_usage = st.number_input(
-                "", min_value=0.0, max_value=2.5, step=0.05,
+                st.session_state[wk] = round(touch_val, 1)
+            new_touch = st.number_input(
+                "", min_value=0.0, max_value=max(base_touch * 2.5, 5.0), step=0.5,
+                format="%.1f",
                 key=wk,
                 label_visibility="collapsed",
                 disabled=not is_active,
-                help="1.0=normal · 1.3=elevated · 0.7=limited · 0.0=inactive",
+                help=(f"Projected touches per game (baseline {base_touch:.1f}). "
+                      "Higher = more volume/opportunity; 0 = inactive."),
             )
-            if abs(new_usage - usage_val) > 0.001:
-                set_player_override(team_id, pid, "usage_multiplier", new_usage)
+            # Compare in touch units against the displayed value so seed rounding
+            # (round to 0.1) never drifts into a spurious override. Only a real
+            # edit (≥ half a step) recomputes and writes the usage multiplier.
+            if abs(new_touch - touch_val) > 0.25:
+                set_player_override(team_id, pid, "usage_multiplier", new_touch / base_for_map)
 
         # Projected stats (compact) with optional baseline delta
         color_g = "#34d399" if p.proj_goals > 1.0 else "#94a3b8"

@@ -1041,6 +1041,13 @@ class PlayerProjection:
     # collective player evidence. 0.0 = no independent anchor for this stat.
     _goal_anchor: float = 0.0
     _assist_anchor: float = 0.0
+    # Touches: proj_touches = baseline_touches × usage_multiplier. baseline_touches
+    # is the player's touches_ewm (the touch count at usage 1.0), exposed so the
+    # depth-chart control can be entered as a concrete projected-touches number
+    # and mapped back to the usage multiplier (usage = entered_touches / baseline).
+    # This is a UI reframe of usage; the projection math is unchanged.
+    proj_touches: float = 0.0
+    baseline_touches: float = 0.0
 
 
 @dataclass
@@ -2282,6 +2289,7 @@ class PlayerModel:
         name = str(f.get("full_name", pid))
         tid = str(f.get("team_id", ""))
         usage = _nan(float(f.get("usage_multiplier", 1.0)), 1.0)
+        usage_input = usage  # pre-nudge multiplier the depth-chart control edits
         gp = int(_nan(float(f.get("games_played", 0))))
         pos_def = POS_DEFAULTS.get(pos, POS_DEFAULTS["M"])
 
@@ -2305,6 +2313,11 @@ class PlayerModel:
             if pos_touches > 0 and touches_ewm > 0:
                 t_ratio = touches_ewm / pos_touches
                 # Credibility: thin samples stay near 1.0 (no nudge).
+                # NOTE: strengthening this nudge (coeff/cap sweep, 2026-07-23)
+                # monotonically WORSENED goals/assists/shots MAE — touches is ~0.73
+                # correlated with shots_ewm and ~0.75 with assist_opps, the anchors
+                # the projector already uses, so extra touch weight double-counts
+                # volume and overshoots. Kept at the calibrated gentle level.
                 t_cred = min(gp / (gp + 8.0), 0.6) if gp > 0 else 0.0
                 t_nudge = 1.0 + t_cred * 0.5 * (t_ratio - 1.0)
                 t_nudge = min(max(t_nudge, 0.80), 1.20)
@@ -2710,6 +2723,16 @@ class PlayerModel:
         # Pure bottom-up anchor estimates for two-way reconciliation (0 if none).
         capped._goal_anchor   = _goal_anchor_val
         capped._assist_anchor = _assist_anchor_val
+        # Touches (UI reframe of usage): baseline = player's touches_ewm (the
+        # count at usage 1.0); projected = baseline × usage. Lets the depth chart
+        # expose a concrete projected-touches control that maps to the multiplier.
+        _base_touch = _nan(float(f.get("touches_ewm", LG_TOUCHES.get(pos, 0.0))),
+                           LG_TOUCHES.get(pos, 0.0))
+        capped.baseline_touches = max(_base_touch, 0.0)
+        # Use the pre-nudge usage the depth-chart control edits, so the displayed
+        # projected touches round-trips exactly with what the user enters
+        # (touches = baseline × usage_input, usage_input = entered / baseline).
+        capped.proj_touches     = max(_base_touch * usage_input, 0.0)
         # Per-stat volatility overrides (dispersion index) — sim-only; reshape the
         # tails for X+/milestone pricing, mean projection preserved.
         for _vk in ("var_index_goals", "var_index_assists", "var_index_shots",
