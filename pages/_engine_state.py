@@ -780,22 +780,37 @@ def _extract_season_from_game(g: Dict) -> int:
 # -- Constants exposed for UI ----------------------------------------------
 TEAM_RATING_DEFS = {
     "goals_ewm": {
-        "label": "Scoring rate (goals/game)",
-        "help": "Team's recent avg goals/game. League avg ~11.2. Raise if offense is hot; lower if key scorer is out.",
+        "label": "Goals scored per game (count)",
+        "help": (
+            "The team's recent average number of goals scored per game — a count "
+            "of made shots, where a 2-point goal counts as 1 (not 2). This is NOT "
+            "the scoreboard total; the projection converts goals into points "
+            "separately by valuing 2-point goals at 2. League avg ~11.2 goals "
+            "≈ ~11.8 scoreboard points. Raise if the offense is hot; lower if a "
+            "key scorer is out."
+        ),
         "min": 5.0, "max": 20.0, "step": 0.1, "fmt": "{:.1f}",
     },
     "shot_pct_ewm": {
-        "label": "Shooting efficiency (goals/shot)",
-        "help": "Fraction of shots that become goals. League avg ~0.274.",
+        "label": "Finishing rate (goals per shot attempt)",
+        "help": (
+            "Goals divided by total shot attempts — how often any shot becomes a "
+            "goal. This is NOT shots-on-goal % / accuracy (how often a shot hits "
+            "the cage); it is the finishing conversion on all attempts. League "
+            "avg ~0.274."
+        ),
         "min": 0.15, "max": 0.45, "step": 0.005, "fmt": "{:.3f}",
     },
     "shots_ewm": {
-        "label": "Shot volume (shots/game)",
-        "help": "Shots per game. League avg ~41.",
+        "label": "Shot attempts per game",
+        "help": (
+            "Total shot attempts per game, counting both on-cage and off-cage "
+            "shots. This is not shots on goal (on-target only). League avg ~41."
+        ),
         "min": 25.0, "max": 60.0, "step": 0.5, "fmt": "{:.1f}",
     },
     "assists_ewm": {
-        "label": "Assists/game",
+        "label": "Assists per game",
         "help": (
             "Team's recent avg assists per game. League avg ~7.3. "
             "Some teams assist on most goals (high assist culture); others shoot more unassisted. "
@@ -810,13 +825,23 @@ TEAM_RATING_DEFS = {
     # team-level FO% here had no effect because the roster-derived rate overwrote
     # it. Adjust FO player ratings directly in Depth Charts instead.
     "bayes_save_pct": {
-        "label": "Goalie save% (saves / shots faced)",
-        "help": "Starting goalie's Bayesian save%. League avg ~0.537.",
+        "label": "Goalie save % (saves ÷ shots on goal faced)",
+        "help": (
+            "The starting goalie's Bayesian-shrunk save rate: saves ÷ shots on "
+            "goal faced, where shots on goal faced = saves + goals allowed. The "
+            "denominator is on-cage shots only (a save can only happen on an "
+            "on-target shot), not total opponent shot attempts. League avg ~0.537."
+        ),
         "min": 0.35, "max": 0.75, "step": 0.005, "fmt": "{:.3f}",
     },
     "goals_against_ewm": {
-        "label": "Goals allowed/game (defense)",
-        "help": "Goals allowed per game. LOWER = better defense. League avg ~11.2.",
+        "label": "Goals allowed per game (count, defense)",
+        "help": (
+            "The team's recent average number of goals allowed per game — a "
+            "count, where a 2-point goal allowed counts as 1 (not 2). LOWER = "
+            "better defense. This does not distinguish whether goals allowed were "
+            "1s or 2s, so it is not the same as points allowed. League avg ~11.2."
+        ),
         "min": 5.0, "max": 20.0, "step": 0.1, "fmt": "{:.1f}",
     },
 }
