@@ -135,7 +135,18 @@ def best_ou_line(ladder: Sequence[float], max_k: int) -> float:
 # Build export
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _stat_block(dist: np.ndarray, stat_key: str, proj: float, hold_pct: float) -> Dict[str, Any]:
+def _resolve_hold(stat_key: str, hold_pct: float,
+                  hold_by_stat: Optional[Dict[str, float]]) -> float:
+    """Per-stat hold with fallback to the global hold_pct. Mirrors
+    PricingEngine._hold_for so BOSS exports match the app exactly."""
+    if hold_by_stat and stat_key in hold_by_stat:
+        return hold_by_stat[stat_key]
+    return hold_pct
+
+
+def _stat_block(dist: np.ndarray, stat_key: str, proj: float, hold_pct: float,
+                hold_by_stat: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+    hold_pct = _resolve_hold(stat_key, hold_pct, hold_by_stat)
     max_k = MILESTONE_MAX.get(stat_key, 6)
     ladder = ge_probability_ladder(dist, max_k)
 
@@ -173,7 +184,8 @@ def _stat_block(dist: np.ndarray, stat_key: str, proj: float, hold_pct: float) -
 
 
 def build_export(result: Any, hold_pct: float = 0.045,
-                 game_meta: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                 game_meta: Optional[Dict[str, Any]] = None,
+                 hold_by_stat: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
     """Build the full BOSS export dict for one game.
 
     `result` is a ProjectionResult (from run_game / engine.project). `game_meta`
@@ -197,7 +209,8 @@ def build_export(result: Any, hold_pct: float = 0.045,
             # Skip stats with no real projection (keeps the file lean & relevant)
             if proj_val is None or float(proj_val) < 0.05:
                 continue
-            stats_out[stat_key] = _stat_block(np.asarray(dist), stat_key, proj_val, hold_pct)
+            stats_out[stat_key] = _stat_block(np.asarray(dist), stat_key, proj_val,
+                                              hold_pct, hold_by_stat)
         if not stats_out:
             continue
         players_out.append({
@@ -218,6 +231,7 @@ def build_export(result: Any, hold_pct: float = 0.045,
         "away_team": result.away_proj.team_id,
         "game_id": getattr(result, "game_id", ""),
         "hold_pct": hold_pct,
+        "hold_by_stat": dict(hold_by_stat) if hold_by_stat else {},
         "stat_labels": EXPORT_STATS,
     }
     if game_meta:
@@ -227,9 +241,10 @@ def build_export(result: Any, hold_pct: float = 0.045,
 
 
 def export_json(result: Any, hold_pct: float = 0.045,
-                game_meta: Optional[Dict[str, Any]] = None, indent: int = 2) -> str:
+                game_meta: Optional[Dict[str, Any]] = None, indent: int = 2,
+                hold_by_stat: Optional[Dict[str, float]] = None) -> str:
     """Return the export as a JSON string (for st.download_button)."""
-    return json.dumps(build_export(result, hold_pct, game_meta), indent=indent)
+    return json.dumps(build_export(result, hold_pct, game_meta, hold_by_stat), indent=indent)
 
 
 def suggest_filename(result: Any, game_meta: Optional[Dict[str, Any]] = None) -> str:

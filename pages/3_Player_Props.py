@@ -20,6 +20,7 @@ from _engine_state import (
     get_engine, init_session,
     team_color, team_name,
     render_update_projection_btn,
+    render_margin_editor, get_hold_by_stat, get_global_hold,
 )
 from projection_engine_v3 import PricingEngine
 import boss_export
@@ -38,8 +39,8 @@ home_id = result.home_proj.team_id
 away_id = result.away_proj.team_id
 home_nm = team_name(home_id)
 away_nm = team_name(away_id)
-hold_pct = st.session_state.get("hold_pct", 0.075)
-pricing  = PricingEngine(hold_pct=hold_pct)
+hold_pct = get_global_hold()
+pricing  = PricingEngine(hold_pct=hold_pct, hold_by_stat=get_hold_by_stat())
 
 st.title("👤 Player Prop Markets")
 _title_col, _boss_col = st.columns([3, 1])
@@ -61,8 +62,8 @@ with _boss_col:
             "away_team_name": away_nm,
         }
         _boss_json = boss_export.export_json(
-            result, hold_pct=st.session_state.get("hold_pct", 0.075),
-            game_meta=_game_meta,
+            result, hold_pct=get_global_hold(),
+            game_meta=_game_meta, hold_by_stat=get_hold_by_stat(),
         )
         st.download_button(
             "⬇️ Download BOSS file",
@@ -115,13 +116,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### Market Margin %")
-    hold_num = st.number_input(
-        "Market margin %",
-        min_value=2.0, max_value=15.0,
-        value=float(st.session_state.get("hold_pct", 0.075) * 100),
-        step=0.5, key="pp_hold_num",
-        help="Vig/margin applied to all priced props. Updates across all pages.",
-    )
+    render_margin_editor(key_prefix="pp")
     st.markdown("---")
     st.markdown("### Market Line Comparison")
     st.markdown('<span class="note-text">Enter a market line to see model edge vs market.</span>',
@@ -180,10 +175,9 @@ with st.sidebar:
 
     render_update_projection_btn(engine, key="p2")
 
-# hold_pct synced globally via session state
-new_hold_pct = hold_num / 100.0
-st.session_state.hold_pct = new_hold_pct
-pricing = PricingEngine(hold_pct=new_hold_pct)
+# hold_pct + per-market holds synced globally via session state (render_margin_editor)
+new_hold_pct = get_global_hold()
+pricing = PricingEngine(hold_pct=new_hold_pct, hold_by_stat=get_hold_by_stat())
 
 # -- Collect sims ----------------------------------------------------------
 all_projs = {p.player_id: p for p in result.home_players + result.away_players}
@@ -232,7 +226,7 @@ if not sims_filtered:
     st.info("No players match the current filters.")
     st.stop()
 
-st.markdown(f"**{len(sims_filtered)} players shown** · hold: {new_hold_pct*100:.1f}%")
+st.markdown(f"**{len(sims_filtered)} players shown** · margins: per-market (DK-style)")
 st.markdown("---")
 
 
@@ -440,7 +434,7 @@ if view_mode == "Table (all players)":
     st.markdown("---")
     st.markdown(
         f'<span class="note-text">'
-        f'Margin: {new_hold_pct*100:.1f}% · 20,000 sims · '
+        f'Margins: per-market · 20,000 sims · '
         f'Switch to Expander view for distributions, alt lines, and market comparison'
         f'</span>',
         unsafe_allow_html=True,
@@ -671,7 +665,7 @@ for ps in sims_filtered:
 st.markdown("---")
 st.markdown(
     f'<span class="note-text">'
-    f'Margin: {new_hold_pct*100:.1f}% · 20,000 sims · '
+    f'Margins: per-market · 20,000 sims · '
     f'Enable "Alternate line pricing" in sidebar for full line grids'
     f'</span>',
     unsafe_allow_html=True,

@@ -3331,9 +3331,67 @@ class Calibrator:
 # Class 7: PricingEngine
 # ---------------------------------------------------------------------------
 
+# Per-market margin (hold) defaults. DraftKings does NOT use a single flat hold:
+# observed live DK holds cluster by market type (tighter/low-scoring props carry
+# more vig). These defaults were reverse-engineered from live DK two-way prices
+# (goals ~9%, points ~8.7%, assists ~6-7%, ML ~6.8%, spread ~5.9%, total ~6.9%)
+# so that entering the app's over into DK regenerates (close to) the app's under.
+# Keys are canonical market/stat identifiers; see _stat_hold_key() for mapping.
+DEFAULT_HOLDS: Dict[str, float] = {
+    # game markets
+    "moneyline":     0.065,
+    "spread":        0.060,
+    "total":         0.070,
+    "team_total":    0.070,
+    # player props
+    "goals":         0.090,
+    "points":        0.085,
+    "assists":       0.065,
+    "shots":         0.080,
+    "shots_on_goal": 0.080,
+    "two_pt_goals":  0.080,
+    "one_pt_goals":  0.080,
+    "saves":         0.080,
+    "save_pct":      0.080,
+    "faceoff_wins":  0.080,
+    "ground_balls":  0.080,
+}
+
+# Fallback hold for any market/stat not explicitly listed above.
+DEFAULT_GLOBAL_HOLD: float = 0.075
+
+
+def _base_stat_key(stat: str) -> str:
+    """Strip milestone suffixes ('goals_3+') and market decorations so a priced
+    stat maps back to a DEFAULT_HOLDS key. Unknown keys pass through unchanged."""
+    if not stat:
+        return stat
+    s = str(stat)
+    # milestone form: "goals_3+", "assists_2+"
+    m = re.match(r"^(.*?)_\d+\+?$", s)
+    if m:
+        s = m.group(1)
+    return s
+
+
 class PricingEngine:
-    def __init__(self, hold_pct: float = 0.045):
+    def __init__(self, hold_pct: float = 0.045,
+                 hold_by_stat: Optional[Dict[str, float]] = None):
+        # Global fallback hold (used when a stat/market has no per-stat entry).
         self.hold_pct = hold_pct
+        # Per-market/per-stat holds. When provided, these override hold_pct for
+        # matching keys; anything not listed falls back to hold_pct. Passing None
+        # preserves the legacy single-hold behavior exactly.
+        self.hold_by_stat: Dict[str, float] = dict(hold_by_stat) if hold_by_stat else {}
+
+    def _hold_for(self, stat: Optional[str]) -> float:
+        """Resolve the hold to apply for a given market/stat key."""
+        if stat is None:
+            return self.hold_pct
+        key = _base_stat_key(stat)
+        if key in self.hold_by_stat:
+            return self.hold_by_stat[key]
+        return self.hold_pct
 
     def price_game(self, gs: GameSimulation, cal: Optional[Calibrator] = None) -> GameMarket:
         h = gs.home_win_prob
@@ -3347,19 +3405,22 @@ class PricingEngine:
             split = h / max(h + a, 1e-9)
             h += tie * split
             a = 1.0 - h
-        h_adj, a_adj = self._hold(max(h, 1e-4), max(a, 1e-4))
+        h_adj, a_adj = self._hold(max(h, 1e-4), max(a, 1e-4),
+                                  hold=self._hold_for("moneyline"))
 
         # Market lines should be x.5 only so integer PLL scoring outcomes cannot push.
         # Model projections can still be any decimal; only priced/displayed lines are snapped.
         total_line = self._opt_line(gs.total_distribution, allow_negative=False)
         ov_p = float(np.mean(gs.total_distribution > total_line))
-        ov_adj, un_adj = self._hold(max(ov_p, 1e-4), max(1.0 - ov_p, 1e-4))
+        ov_adj, un_adj = self._hold(max(ov_p, 1e-4), max(1.0 - ov_p, 1e-4),
+                                    hold=self._hold_for("total"))
 
         spread_line = self._opt_line(gs.margin_distribution, allow_negative=True)
         if abs(spread_line) < 1.5:  # minimum displayed spread is 1.5
             spread_line = 1.5 if spread_line >= 0 else -1.5
         h_cover = float(np.mean(gs.margin_distribution > spread_line))
-        h_spd_adj, a_spd_adj = self._hold(max(h_cover, 1e-4), max(1.0 - h_cover, 1e-4))
+        h_spd_adj, a_spd_adj = self._hold(max(h_cover, 1e-4), max(1.0 - h_cover, 1e-4),
+                                          hold=self._hold_for("spread"))
 
         return GameMarket(
             home_ml=self._am(h_adj), away_ml=self._am(a_adj),
@@ -3371,16 +3432,17 @@ class PricingEngine:
         )
 
     def price_prop(self, ps: PlayerSimulation, stat: str, line: Optional[float] = None) -> MarketLine:
+        _stat_hold = self._hold_for(stat)
         if stat not in ps.stat_distributions:
             fb = ps.prop_lines.get(stat, 0.5)
-            return MarketLine(stat, fb, 0.50, 0.50, "-110", "-110", round(self.hold_pct, 4))
+            return MarketLine(stat, fb, 0.50, 0.50, "-110", "-110", round(_stat_hold, 4))
         dist = ps.stat_distributions[stat]
         if line is None:
             line = self._opt_line(dist)
         else:
             line = self._force_half_only(line)
         ov = float(np.mean(dist > line))
-        ov_adj, un_adj = self._hold(max(ov, 1e-4), max(1.0 - ov, 1e-4))
+        ov_adj, un_adj = self._hold(max(ov, 1e-4), max(1.0 - ov, 1e-4), hold=_stat_hold)
         return MarketLine(
             stat=stat, line=line,
             fair_over_prob=round(ov, 4), fair_under_prob=round(1.0 - ov, 4),
@@ -3397,12 +3459,15 @@ class PricingEngine:
             out.append(ml)
         return out
 
-    def _hold(self, p1: float, p2: float) -> Tuple[float, float]:
+    def _hold(self, p1: float, p2: float,
+              hold: Optional[float] = None) -> Tuple[float, float]:
+        # hold=None preserves legacy behavior (uses the global self.hold_pct).
+        hp = self.hold_pct if hold is None else hold
         total = p1 + p2
         if total <= 0:
-            h = self.hold_pct / 2
+            h = hp / 2
             return 0.50 + h, 0.50 + h
-        t = 1.0 + self.hold_pct
+        t = 1.0 + hp
         return (p1 / total) * t, (p2 / total) * t
 
     def _am(self, prob: float) -> str:
@@ -3464,10 +3529,11 @@ class PricingEngine:
             line = self._force_half_only(line)
         arr = np.asarray(dist, dtype=float)
         arr = arr[np.isfinite(arr)]
+        _stat_hold = self._hold_for(stat)
         if arr.size == 0:
-            return MarketLine(stat, float(line), 0.50, 0.50, "-110", "-110", round(self.hold_pct, 4))
+            return MarketLine(stat, float(line), 0.50, 0.50, "-110", "-110", round(_stat_hold, 4))
         ov = float(np.mean(arr > line))
-        ov_adj, un_adj = self._hold(max(ov, 1e-4), max(1.0 - ov, 1e-4))
+        ov_adj, un_adj = self._hold(max(ov, 1e-4), max(1.0 - ov, 1e-4), hold=_stat_hold)
         return MarketLine(
             stat=stat, line=round(float(line), 1),
             fair_over_prob=round(ov, 4), fair_under_prob=round(1.0 - ov, 4),
@@ -3627,7 +3693,8 @@ class Backtester:
 class ProjectionEngine:
     """Main orchestrator."""
 
-    def __init__(self, db_path: Optional[str] = None, hold_pct: float = 0.045):
+    def __init__(self, db_path: Optional[str] = None, hold_pct: float = 0.045,
+                 hold_by_stat: Optional[Dict[str, float]] = None):
         self.loader = DataLoader(db_path=db_path)
         self.team_games: pd.DataFrame = pd.DataFrame()
         self.player_games: pd.DataFrame = pd.DataFrame()
@@ -3641,7 +3708,7 @@ class ProjectionEngine:
         self.player_model: Optional[PlayerModel] = None
         self.simulator = GameSimulator(n_sims=N_SIMS, seed=42)
         self.calibrator = Calibrator()
-        self.pricing = PricingEngine(hold_pct=hold_pct)
+        self.pricing = PricingEngine(hold_pct=hold_pct, hold_by_stat=hold_by_stat)
         self._loaded = False
         self._fitted = False
 

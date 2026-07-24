@@ -20,6 +20,7 @@ from _engine_state import (
     init_session, get_engine,
     team_color, team_name,
     render_update_projection_btn,
+    render_margin_editor, get_hold_by_stat, get_global_hold,
 )
 from projection_engine_v3 import PricingEngine
 
@@ -38,8 +39,11 @@ home_nm  = team_name(home_id)
 away_nm  = team_name(away_id)
 game     = st.session_state.selected_game or {}
 gs       = result.game_sim
+# gm's LINES (total_line, spread_home) are hold-independent and used as sidebar
+# input defaults; its ODDS are re-priced live below from the per-market margins
+# (result.game_market carries only the engine-build hold).
 gm       = result.game_market
-hold_pct = st.session_state.get("hold_pct", 0.045)
+hold_pct = get_global_hold()
 
 st.title("💰 Game Lines")
 st.markdown(
@@ -78,22 +82,24 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### Market Margin %")
-    hold_num = st.number_input(
-        "Market margin %",
-        min_value=2.0, max_value=15.0,
-        value=float(st.session_state.get("hold_pct", 0.075) * 100),
-        step=0.5, key="gl_hold_num",
-        help="Vig/margin applied to all priced markets. Updates across all pages.",
-    )
+    render_margin_editor(key_prefix="gl")
 
     st.markdown("---")
     engine = get_engine()
     render_update_projection_btn(engine, key="p4")
 
-# hold synced globally via session state
-hold_slider = hold_num / 100.0
-st.session_state.hold_pct = hold_slider
-pricing = PricingEngine(hold_pct=hold_slider)
+# Per-market margins synced globally via session state (render_margin_editor).
+hold_by_stat = get_hold_by_stat()
+hold_slider = get_global_hold()  # fallback hold (used for the "Hold" display column)
+pricing = PricingEngine(hold_pct=hold_slider, hold_by_stat=hold_by_stat)
+# Re-price the headline game markets live from the per-market margins.
+gm = pricing.price_game(
+    gs, engine.calibrator if engine.calibrator._fitted else None
+)
+
+def _hold_pct_for(market: str) -> float:
+    """Resolve the per-market hold for a game-line market key."""
+    return float(hold_by_stat.get(market, hold_slider))
 
 # -- Helpers ---------------------------------------------------------------
 def _am(prob: float) -> str:
@@ -102,11 +108,12 @@ def _am(prob: float) -> str:
         return str(int(-round((prob / (1 - prob)) * 100)))
     return "+" + str(int(round(((1 - prob) / prob) * 100)))
 
-def _hold_odds(p1: float, p2: float):
+def _hold_odds(p1: float, p2: float, market: str = "total"):
+    h = _hold_pct_for(market)
     t = p1 + p2
     if t <= 0:
-        return _am(0.5 + hold_slider / 2), _am(0.5 + hold_slider / 2)
-    tgt = 1 + hold_slider
+        return _am(0.5 + h / 2), _am(0.5 + h / 2)
+    tgt = 1 + h
     return _am((p1 / t) * tgt), _am((p2 / t) * tgt)
 
 def _force_half_only(x: float) -> float:
@@ -149,10 +156,10 @@ def _opt_half_line(arr, allow_negative=False) -> float:
             best, best_d = line, d
     return round(float(best), 1)
 
-def _price_arr(arr, line):
+def _price_arr(arr, line, market="team_total"):
     line = _force_half_only(line)
     p_over_local = float(np.mean(np.asarray(arr, dtype=float) > line))
-    o, u = _hold_odds(p_over_local, 1 - p_over_local)
+    o, u = _hold_odds(p_over_local, 1 - p_over_local, market)
     return line, p_over_local, o, u
 
 total_arr  = gs.total_distribution
@@ -166,13 +173,13 @@ act_spread = _force_half_only(cust_spd if use_spd else gm.spread_home)
 p_over   = float(np.mean(total_arr  > act_total))
 p_hcover = float(np.mean(margin_arr > act_spread))
 
-over_odds,  under_odds = _hold_odds(p_over,    1 - p_over)
-hspd_odds,  aspd_odds  = _hold_odds(p_hcover,  1 - p_hcover)
+over_odds,  under_odds = _hold_odds(p_over,    1 - p_over,   "total")
+hspd_odds,  aspd_odds  = _hold_odds(p_hcover,  1 - p_hcover, "spread")
 
 away_tt_line = _opt_half_line(away_team_total_arr)
 home_tt_line = _opt_half_line(home_team_total_arr)
-away_tt_line, p_away_tt_over, away_tt_over_odds, away_tt_under_odds = _price_arr(away_team_total_arr, away_tt_line)
-home_tt_line, p_home_tt_over, home_tt_over_odds, home_tt_under_odds = _price_arr(home_team_total_arr, home_tt_line)
+away_tt_line, p_away_tt_over, away_tt_over_odds, away_tt_under_odds = _price_arr(away_team_total_arr, away_tt_line, "team_total")
+home_tt_line, p_home_tt_over, home_tt_over_odds, home_tt_under_odds = _price_arr(home_team_total_arr, home_tt_line, "team_total")
 
 # -- Market display --------------------------------------------------------
 st.markdown("---")
@@ -243,27 +250,29 @@ st.markdown("---")
 
 # -- Summary table ---------------------------------------------------------
 st.markdown("### Full Market Summary")
+def _hpd(market: str) -> str:  # per-market hold, formatted for display
+    return f"{_hold_pct_for(market)*100:.1f}%"
 summary = pd.DataFrame([
     {"Market": f"{away_nm} ML",                   "Line": "--",                    "Odds": gm.away_ml,
-     "Fair Prob": fmt_prob(gm.away_win_prob),       "Hold": f"{hold_slider*100:.1f}%"},
+     "Fair Prob": fmt_prob(gm.away_win_prob),       "Hold": _hpd("moneyline")},
     {"Market": f"{home_nm} ML",                   "Line": "--",                    "Odds": gm.home_ml,
-     "Fair Prob": fmt_prob(gm.home_win_prob),       "Hold": f"{hold_slider*100:.1f}%"},
+     "Fair Prob": fmt_prob(gm.home_win_prob),       "Hold": _hpd("moneyline")},
     {"Market": f"{away_nm} {away_displayed_spd:+.1f}", "Line": f"{away_displayed_spd:+.1f}", "Odds": aspd_odds,
-     "Fair Prob": fmt_prob(1-p_hcover),              "Hold": f"{hold_slider*100:.1f}%"},
+     "Fair Prob": fmt_prob(1-p_hcover),              "Hold": _hpd("spread")},
     {"Market": f"{home_nm} {home_displayed_spd:+.1f}", "Line": f"{home_displayed_spd:+.1f}", "Odds": hspd_odds,
-     "Fair Prob": fmt_prob(p_hcover),                "Hold": f"{hold_slider*100:.1f}%"},
+     "Fair Prob": fmt_prob(p_hcover),                "Hold": _hpd("spread")},
     {"Market": "Total Over",                       "Line": f"{act_total:.1f}",     "Odds": over_odds,
-     "Fair Prob": fmt_prob(p_over),                 "Hold": f"{hold_slider*100:.1f}%"},
+     "Fair Prob": fmt_prob(p_over),                 "Hold": _hpd("total")},
     {"Market": "Total Under",                      "Line": f"{act_total:.1f}",     "Odds": under_odds,
-     "Fair Prob": fmt_prob(1-p_over),               "Hold": f"{hold_slider*100:.1f}%"},
+     "Fair Prob": fmt_prob(1-p_over),               "Hold": _hpd("total")},
     {"Market": f"{away_nm} Team Total Over",       "Line": f"{away_tt_line:.1f}",  "Odds": away_tt_over_odds,
-     "Fair Prob": fmt_prob(p_away_tt_over),         "Hold": f"{hold_slider*100:.1f}%"},
+     "Fair Prob": fmt_prob(p_away_tt_over),         "Hold": _hpd("team_total")},
     {"Market": f"{away_nm} Team Total Under",      "Line": f"{away_tt_line:.1f}",  "Odds": away_tt_under_odds,
-     "Fair Prob": fmt_prob(1-p_away_tt_over),       "Hold": f"{hold_slider*100:.1f}%"},
+     "Fair Prob": fmt_prob(1-p_away_tt_over),       "Hold": _hpd("team_total")},
     {"Market": f"{home_nm} Team Total Over",       "Line": f"{home_tt_line:.1f}",  "Odds": home_tt_over_odds,
-     "Fair Prob": fmt_prob(p_home_tt_over),         "Hold": f"{hold_slider*100:.1f}%"},
+     "Fair Prob": fmt_prob(p_home_tt_over),         "Hold": _hpd("team_total")},
     {"Market": f"{home_nm} Team Total Under",      "Line": f"{home_tt_line:.1f}",  "Odds": home_tt_under_odds,
-     "Fair Prob": fmt_prob(1-p_home_tt_over),       "Hold": f"{hold_slider*100:.1f}%"},
+     "Fair Prob": fmt_prob(1-p_home_tt_over),       "Hold": _hpd("team_total")},
 ])
 st.dataframe(summary, width="stretch", hide_index=True)
 
@@ -285,7 +294,7 @@ if show_alt_spreads:
     alt_spd_rows = []
     for asp in alt_spreads:
         p_h = float(np.mean(margin_arr > asp))
-        h_o, a_o = _hold_odds(p_h, 1 - p_h)
+        h_o, a_o = _hold_odds(p_h, 1 - p_h, "spread")
         # asp is the home margin line; displayed spreads are inverted per convention
         # (home laying = negative displayed spread, away getting = positive)
         home_disp = -asp   # home team displayed spread
@@ -317,7 +326,7 @@ if show_alt_totals:
     alt_tot_rows = []
     for at_val in alt_totals:
         p_ov = float(np.mean(total_arr > at_val))
-        o_o, u_o = _hold_odds(p_ov, 1 - p_ov)
+        o_o, u_o = _hold_odds(p_ov, 1 - p_ov, "total")
         alt_tot_rows.append({
             "Total Line": at_val,
             "P(Over)":  f"{p_ov:.3f}",
@@ -341,7 +350,7 @@ if show_alt_team_totals:
         hi = float(np.percentile(arr, 98)) + 2.0
         for line in _half_only_lines(lo, hi):
             p_ov = float(np.mean(arr > line))
-            o_o, u_o = _hold_odds(p_ov, 1 - p_ov)
+            o_o, u_o = _hold_odds(p_ov, 1 - p_ov, "team_total")
             team_total_rows.append({
                 "Team": label,
                 "Team Total Line": f"{line:.1f}",
@@ -404,7 +413,9 @@ st.plotly_chart(fig2, width="stretch")
 
 st.markdown(
     f'<span class="note-text">'
-    f"Engine v3 · {gs.n_sims:,} sims · Margin: {hold_slider*100:.1f}%"
+    f"Engine v3 · {gs.n_sims:,} sims · Margins: per-market "
+    f"(ML {_hold_pct_for('moneyline')*100:.1f}% · spread {_hold_pct_for('spread')*100:.1f}% · "
+    f"total {_hold_pct_for('total')*100:.1f}%)"
     f"</span>",
     unsafe_allow_html=True,
 )

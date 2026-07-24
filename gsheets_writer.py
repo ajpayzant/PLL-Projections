@@ -71,13 +71,20 @@ def _tab_name(game: Dict) -> str:
     return f"{away}@{home}_G{gn}_{date}"
 
 
-def _build_sections(result, game: Dict, hold_pct: float, engine) -> List[List[Any]]:
+def _build_sections(result, game: Dict, hold_pct: float, engine,
+                    hold_by_stat: Optional[Dict[str, float]] = None) -> List[List[Any]]:
     """
     Build all worksheet rows as a single flat list-of-lists.
     Sections separated by blank rows with bold headers.
+
+    hold_by_stat carries the per-market margins (DK-style). When provided, game
+    lines AND player props are priced per-market so the sheet/BOSS values match
+    what the app displays. Falls back to the flat hold_pct for unlisted keys.
     """
     from pages._engine_state import team_name
     from projection_engine_v3 import PricingEngine as _PE
+
+    _prop_pricing = _PE(hold_pct=hold_pct, hold_by_stat=hold_by_stat)
 
     rows: List[List[Any]] = []
 
@@ -136,11 +143,11 @@ def _build_sections(result, game: Dict, hold_pct: float, engine) -> List[List[An
     _header("GAME LINES")
     rows.append(["Market", "Line", "Odds", "Fair Prob"])
     gs = result.game_sim
-    # Re-price against the snapshot's hold_pct — result.game_market carries the
-    # engine-build default hold (0.045), not the user's margin slider. This is what
-    # gets pushed to the sheet / BOSS, so it must reflect the chosen margin.
+    # Re-price against the per-market margins — result.game_market carries the
+    # engine-build default hold (0.045), not the user's margins. This is what
+    # gets pushed to the sheet / BOSS, so it must reflect the chosen margins.
     _cal = getattr(engine, "calibrator", None)
-    gm = _PE(hold_pct=hold_pct).price_game(
+    gm = _prop_pricing.price_game(
         gs, _cal if (_cal is not None and getattr(_cal, "_fitted", False)) else None
     )
     home_tt = _PE._force_half_only(float(np.median(gs.home_scores)))
@@ -189,11 +196,15 @@ def _build_sections(result, game: Dict, hold_pct: float, engine) -> List[List[An
         for stat in stats:
             if stat not in ps.stat_distributions:
                 continue
-            mkt = ms.get(stat, {})
             proj_val = round(float(pv.get(stat, 0)), 3)
             if proj_val < 0.05 and proj.position not in ("G", "FO"):
                 continue
             dist = ps.stat_distributions[stat]
+            # Re-price at the per-market margins (result.player_markets carries
+            # only the engine-build hold, not the user's chosen margins).
+            _ml = _prop_pricing.price_prop(ps, stat)
+            mkt = {"line": _ml.line, "over_odds": _ml.over_odds,
+                   "under_odds": _ml.under_odds, "fair_over_prob": _ml.fair_over_prob}
             prop_rows.append([
                 proj.full_name or proj.player_id,
                 team_name(proj.team_id),
@@ -235,10 +246,14 @@ def _repeat(sid: int, r0: int, r1: int, c0: int, c1: int,
     }}
 
 
-def save_snapshot(result, game: Dict, hold_pct: float, engine) -> str:
+def save_snapshot(result, game: Dict, hold_pct: float, engine,
+                  hold_by_stat: Optional[Dict[str, float]] = None) -> str:
     """
     Write projection snapshot to a new tab in the master Google Sheet.
     Returns the tab name on success. Raises on failure.
+
+    hold_by_stat carries per-market margins (DK-style); game lines and player
+    props are priced per-market so the sheet matches the app / BOSS export.
     """
     gc  = _get_client()
     sh  = gc.open_by_key(_get_sheet_id())
@@ -249,7 +264,7 @@ def save_snapshot(result, game: Dict, hold_pct: float, engine) -> str:
     if existing:
         sh.del_worksheet(existing)
 
-    rows   = _build_sections(result, game, hold_pct, engine)
+    rows   = _build_sections(result, game, hold_pct, engine, hold_by_stat=hold_by_stat)
     n_rows = max(len(rows) + 5, 50)
     n_cols = 15   # A–O: 14 data cols + Actual Score in col O
 

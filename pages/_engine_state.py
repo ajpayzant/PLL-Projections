@@ -29,6 +29,8 @@ from projection_engine_v3 import (   # noqa: E402
     TeamProjection,
     PlayerProjection,
     PricingEngine,
+    DEFAULT_HOLDS,
+    DEFAULT_GLOBAL_HOLD,
     _norm_pos,
     LG_GOALS, LG_SHOTS, LG_SHOT_PCT, LG_SOG_RATE,
     LG_FO_PCT, LG_SAVE_PCT, LG_2PT_RATE,
@@ -260,7 +262,8 @@ def _autosave() -> None:
             "selected_game":         game,
             "depth_charts":          st.session_state.get("depth_charts", {}),
             "team_rating_overrides": st.session_state.get("team_rating_overrides", {}),
-            "hold_pct":              st.session_state.get("hold_pct", 0.075),
+            "hold_pct":              st.session_state.get("hold_pct", DEFAULT_GLOBAL_HOLD),
+            "hold_by_stat":          st.session_state.get("hold_by_stat", {}),
             "season_filter":         saved_season,
             "version":               1,
         }
@@ -299,12 +302,17 @@ def _autorestore() -> bool:
             restored = True
         if "hold_pct" in payload:
             st.session_state["hold_pct"] = float(payload["hold_pct"])
+        if isinstance(payload.get("hold_by_stat"), dict) and payload["hold_by_stat"]:
+            # Merge onto defaults so newly-added stat keys are never missing.
+            merged = dict(DEFAULT_HOLDS)
+            merged.update({k: float(v) for k, v in payload["hold_by_stat"].items()})
+            st.session_state["hold_by_stat"] = merged
         if payload.get("season_filter") is not None:
             st.session_state["season_filter"] = int(payload["season_filter"])
 
         # Clear widget seed keys so they re-init from restored values
         stale = [k for k in st.session_state
-                 if k.startswith(("tr_num_", "pr_num_", "hold_num_", "pp_hold_num"))]
+                 if k.startswith(("tr_num_", "pr_num_", "hold_num_", "pp_hold_num", "holdbs_"))]
         for k in stale:
             del st.session_state[k]
         for k in ("game_idx_p1",):
@@ -329,7 +337,10 @@ def init_session() -> None:
         # team_rating_overrides: {team_id: {rating_key: float}}
         "team_rating_overrides":    {},
         "line_overrides":           {},
-        "hold_pct":                 0.075,
+        "hold_pct":                 DEFAULT_GLOBAL_HOLD,
+        # Per-market/per-stat margins. Seeded from DK-observed defaults; the user
+        # tunes them in the sidebar. Falls back to hold_pct for unlisted keys.
+        "hold_by_stat":             dict(DEFAULT_HOLDS),
         "last_projection_updated_at": None,
     }
     for k, v in defaults.items():
@@ -439,7 +450,8 @@ def session_to_json() -> str:
         "selected_game":         game,
         "depth_charts":          st.session_state.get("depth_charts", {}),
         "team_rating_overrides": st.session_state.get("team_rating_overrides", {}),
-        "hold_pct":              st.session_state.get("hold_pct", 0.075),
+        "hold_pct":              st.session_state.get("hold_pct", DEFAULT_GLOBAL_HOLD),
+        "hold_by_stat":          st.session_state.get("hold_by_stat", {}),
         "season_filter":         saved_season,
         "version":               1,
     }
@@ -461,15 +473,20 @@ def session_from_json(json_str: str) -> bool:
             st.session_state["team_rating_overrides"] = payload["team_rating_overrides"]
         if "hold_pct" in payload:
             st.session_state["hold_pct"] = float(payload["hold_pct"])
+        if isinstance(payload.get("hold_by_stat"), dict) and payload["hold_by_stat"]:
+            merged = dict(DEFAULT_HOLDS)
+            merged.update({k: float(v) for k, v in payload["hold_by_stat"].items()})
+            st.session_state["hold_by_stat"] = merged
 
         # Clear all widget keys that need to re-seed from restored state:
         # - tr_num_*: team-rating number inputs (must re-init from team_rating_overrides)
         # - pr_num_*: player-rating number inputs in the depth chart panel
-        # - hold_num_* / pp_hold_num: hold% inputs
+        # - hold_num_* / pp_hold_num / holdbs_*: hold% inputs
         # - game_idx_p1: game selectbox -- cleared so it re-seeds to the restored game
         stale_keys = [k for k in st.session_state if k.startswith("tr_num_")
                       or k.startswith("pr_num_")
-                      or k.startswith("hold_num_") or k.startswith("pp_hold_num")]
+                      or k.startswith("hold_num_") or k.startswith("pp_hold_num")
+                      or k.startswith("holdbs_")]
         for k in stale_keys:
             del st.session_state[k]
         if "game_idx_p1" in st.session_state:
@@ -719,6 +736,96 @@ def build_team_adjustments() -> Dict:
         out[tid] = {"off_mult": overrides.get("off_mult", 1.0),
                     "def_mult_opp": overrides.get("def_mult_opp", 1.0)}
     return out
+
+
+# -- Per-market margin (hold) helpers --------------------------------------
+# DraftKings uses a different hold per market (not one flat number). These
+# helpers expose an editable per-market table so app odds match DK per market:
+# enter the app's over into DK and the under lines up (same hold => same price).
+
+# Display order + labels for the margin editor. Grouped game markets first,
+# then player props. Keys must match projection_engine_v3.DEFAULT_HOLDS.
+MARGIN_EDITOR_ROWS: List[tuple] = [
+    ("moneyline",     "Moneyline"),
+    ("spread",        "Spread"),
+    ("total",         "Total (game O/U)"),
+    ("goals",         "Goals"),
+    ("assists",       "Assists"),
+    ("points",        "Points"),
+    ("shots_on_goal", "Shots on Goal"),
+    ("two_pt_goals",  "2-Point Goals"),
+    ("saves",         "Saves"),
+    ("faceoff_wins",  "Faceoff Wins"),
+    ("ground_balls",  "Ground Balls"),
+]
+
+
+def get_hold_by_stat() -> Dict[str, float]:
+    """Current per-market holds, always merged onto the DK-observed defaults so
+    no key is ever missing (falls back to hold_pct only for keys absent here)."""
+    merged = dict(DEFAULT_HOLDS)
+    stored = st.session_state.get("hold_by_stat") or {}
+    if isinstance(stored, dict):
+        merged.update({k: float(v) for k, v in stored.items()})
+    return merged
+
+
+def get_global_hold() -> float:
+    """Fallback hold for any market/stat not in the per-market table."""
+    return float(st.session_state.get("hold_pct", DEFAULT_GLOBAL_HOLD))
+
+
+def render_margin_editor(key_prefix: str = "hm") -> Dict[str, float]:
+    """Render the per-market margin editor in the sidebar and return the current
+    per-market hold dict. Writes changes back to session_state['hold_by_stat'].
+
+    Shared by every page so the margins are set once and applied everywhere
+    (props, game lines, Excel export, and the sheet/BOSS snapshot)."""
+    holds = get_hold_by_stat()
+    st.caption("Margin % per market (DK-style). Sets the two-way hold; "
+               "enter the app's over into DK and the under matches.")
+
+    changed = False
+    for stat_key, label in MARGIN_EDITOR_ROWS:
+        cur = float(holds.get(stat_key, get_global_hold()))
+        new_pct = st.number_input(
+            label, min_value=2.0, max_value=15.0,
+            value=round(cur * 100.0, 1), step=0.5, format="%.1f",
+            key=f"{key_prefix}_holdbs_{stat_key}",
+        )
+        new_val = round(new_pct / 100.0, 4)
+        if abs(new_val - cur) > 1e-9:
+            holds[stat_key] = new_val
+            changed = True
+
+    # Other-props fallback (applies to shots, SOG variants, save%, one-pt, etc.
+    # not individually listed).
+    glob = get_global_hold()
+    new_glob_pct = st.number_input(
+        "Other props (fallback)", min_value=2.0, max_value=15.0,
+        value=round(glob * 100.0, 1), step=0.5, format="%.1f",
+        key=f"{key_prefix}_holdbs_global",
+        help="Hold for any market not listed above.",
+    )
+    new_glob = round(new_glob_pct / 100.0, 4)
+    if abs(new_glob - glob) > 1e-9:
+        st.session_state["hold_pct"] = new_glob
+        changed = True
+
+    if st.button("Reset margins to DK defaults", key=f"{key_prefix}_holdbs_reset",
+                 use_container_width=True):
+        st.session_state["hold_by_stat"] = dict(DEFAULT_HOLDS)
+        st.session_state["hold_pct"] = DEFAULT_GLOBAL_HOLD
+        for k in [k for k in st.session_state if k.startswith(f"{key_prefix}_holdbs_")]:
+            del st.session_state[k]
+        _autosave()
+        st.rerun()
+
+    if changed:
+        st.session_state["hold_by_stat"] = holds
+        _autosave()
+
+    return holds
 
 
 # -- Game selector helpers -------------------------------------------------

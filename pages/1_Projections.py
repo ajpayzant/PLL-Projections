@@ -28,6 +28,7 @@ from _engine_state import (
     session_to_json, session_from_json,
     _AUTOSAVE_PATH, get_data_freshness,
     maybe_refresh_on_roster_change,
+    render_margin_editor, get_hold_by_stat, get_global_hold,
 )
 
 st.set_page_config(page_title="Projections · PLL", page_icon="🥍", layout="wide")
@@ -290,17 +291,10 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # Hold % — single number input, synced globally via session state
-    hold_pct_pct = st.number_input(
-        "Market margin %",
-        min_value=2.0, max_value=15.0,
-        value=float(st.session_state.get("hold_pct", 0.075) * 100),
-        step=0.5,
-        key="hold_num_p1",
-        help="Vig/margin applied to all priced markets. 7.5% = standard sportsbook. Updates across all pages.",
-    )
-    hold_pct = hold_pct_pct / 100.0
-    st.session_state.hold_pct = hold_pct
+    # Per-market margins (DK-style) — set once, applied on every page.
+    st.markdown("### Market Margin %")
+    render_margin_editor(key_prefix="p1")
+    hold_pct = get_global_hold()
 
     if st.button("Reset all adjustments", key="reset_adj"):
         st.session_state.team_rating_overrides = {}
@@ -406,7 +400,7 @@ gs = result.game_sim
 # the ML/Spread/Total odds ignore the slider (props already re-price live). Matches
 # how pages/4_Game_Lines.py re-prices.
 from projection_engine_v3 import PricingEngine as _PricingEngine
-gm = _PricingEngine(hold_pct=hold_pct).price_game(
+gm = _PricingEngine(hold_pct=get_global_hold(), hold_by_stat=get_hold_by_stat()).price_game(
     gs, engine.calibrator if engine.calibrator._fitted else None
 )
 
@@ -579,10 +573,10 @@ st.markdown("### Download Projection Package")
 
 import io, datetime as _dt
 
-def _build_export(result, game, hold_pct, engine):
+def _build_export(result, game, hold_pct, engine, hold_by_stat=None):
     """Build a multi-tab Excel export of the current projection."""
     from projection_engine_v3 import PricingEngine
-    pricing = PricingEngine(hold_pct=hold_pct)
+    pricing = PricingEngine(hold_pct=hold_pct, hold_by_stat=hold_by_stat)
 
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as xl:
@@ -669,10 +663,14 @@ def _build_export(result, game, hold_pct, engine):
             for stat in stats:
                 if stat not in ps.stat_distributions:
                     continue
-                mkt = ms.get(stat, {})
                 proj_val = round(float(pv.get(stat, 0)), 3)
                 if proj_val < 0.05 and proj.position not in ("G","FO"):
                     continue
+                # Re-price at the current per-market margins (result.player_markets
+                # carries only the engine-build hold, not the user's margins).
+                _ml = pricing.price_prop(ps, stat)
+                mkt = {"line": _ml.line, "over_odds": _ml.over_odds,
+                       "under_odds": _ml.under_odds, "fair_over_prob": _ml.fair_over_prob}
                 prop_rows.append({
                     "Player":       proj.full_name or proj.player_id,
                     "Team":         team_name(proj.team_id),
@@ -751,7 +749,8 @@ with btn_dl:
                  width="stretch"):
         with st.spinner("Building Excel export..."):
             try:
-                xlsx_bytes = _build_export(result, game, hold_pct, engine)
+                xlsx_bytes = _build_export(result, game, hold_pct, engine,
+                                           hold_by_stat=get_hold_by_stat())
                 st.download_button(
                     label="⬇ Click to download",
                     data=xlsx_bytes,
@@ -770,7 +769,8 @@ with btn_save:
                 import sys
                 sys.path.insert(0, str(_ROOT))
                 from gsheets_writer import save_snapshot
-                tab = save_snapshot(result, game, hold_pct, engine)
+                tab = save_snapshot(result, game, hold_pct, engine,
+                                    hold_by_stat=get_hold_by_stat())
                 st.success(f"Saved → PLL Projections 2026 · tab: {tab}")
             except Exception as e:
                 st.error(f"Google Sheets save failed: {e}")
