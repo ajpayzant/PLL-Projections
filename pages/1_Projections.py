@@ -401,7 +401,14 @@ if result is None:
 hp = result.home_proj
 ap = result.away_proj
 gs = result.game_sim
-gm = result.game_market
+# Re-price game markets live against the sidebar margin slider. result.game_market
+# was priced once at engine-build time with the default hold (0.045); without this
+# the ML/Spread/Total odds ignore the slider (props already re-price live). Matches
+# how pages/4_Game_Lines.py re-prices.
+from projection_engine_v3 import PricingEngine as _PricingEngine
+gm = _PricingEngine(hold_pct=hold_pct).price_game(
+    gs, engine.calibrator if engine.calibrator._fitted else None
+)
 
 # -- Game header -----------------------------------------------------------
 st.markdown(
@@ -603,7 +610,11 @@ def _build_export(result, game, hold_pct, engine):
 
         # ── Tab 2: Game Lines ──────────────────────────────────────────────
         gs = result.game_sim
-        gm = result.game_market
+        # Re-price against the export's hold_pct (result.game_market carries the
+        # engine-build default hold, not the user's slider).
+        gm = pricing.price_game(
+            gs, engine.calibrator if engine.calibrator._fitted else None
+        )
         import numpy as np
         from projection_engine_v3 import PricingEngine as _PE
         home_tt = _PE._force_half_only(float(np.median(gs.home_scores)))

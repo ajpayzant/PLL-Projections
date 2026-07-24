@@ -136,7 +136,13 @@ def _build_sections(result, game: Dict, hold_pct: float, engine) -> List[List[An
     _header("GAME LINES")
     rows.append(["Market", "Line", "Odds", "Fair Prob"])
     gs = result.game_sim
-    gm = result.game_market
+    # Re-price against the snapshot's hold_pct — result.game_market carries the
+    # engine-build default hold (0.045), not the user's margin slider. This is what
+    # gets pushed to the sheet / BOSS, so it must reflect the chosen margin.
+    _cal = getattr(engine, "calibrator", None)
+    gm = _PE(hold_pct=hold_pct).price_game(
+        gs, _cal if (_cal is not None and getattr(_cal, "_fitted", False)) else None
+    )
     home_tt = _PE._force_half_only(float(np.median(gs.home_scores)))
     away_tt = _PE._force_half_only(float(np.median(gs.away_scores)))
     for market, line, odds, fair in [
