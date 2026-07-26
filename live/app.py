@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -45,6 +46,61 @@ _DB_PATH = os.getenv("PLL_DB_PATH",
                      str(_ROOT / "data" / "analytics_database" / "pll_warehouse.duckdb"))
 DEFAULT_YEAR = 2026
 TRADE_FOCUS = ("points", "goals", "assists")  # the markets the user trades
+
+
+# -- Bootstrap DB from parquet if missing (mirrors pages/_engine_state.py) -----
+# The .duckdb warehouse is gitignored (too large), so on a fresh Streamlit Cloud
+# deploy or clone it doesn't exist. scripts/bootstrap_db.py rebuilds it from the
+# committed parquet files in ~10s. The main projections app does this at startup;
+# the live app must too, or the engine constructor raises FileNotFoundError.
+def _db_is_valid() -> bool:
+    """True only if the DB file exists AND its clean schema is populated."""
+    p = Path(_DB_PATH)
+    if not p.exists() or p.stat().st_size < 4096:
+        return False
+    con = None
+    try:
+        import duckdb
+        con = duckdb.connect(str(p), read_only=True)
+        return con.execute("SELECT COUNT(*) FROM clean.team_game_stats").fetchone()[0] > 0
+    except Exception:
+        return False
+    finally:
+        if con is not None:
+            try:
+                con.close()
+            except Exception:
+                pass
+
+
+def _ensure_db() -> None:
+    if _db_is_valid():
+        return
+    bootstrap = _ROOT / "scripts" / "bootstrap_db.py"
+    if not bootstrap.exists():
+        st.error("Database not found and scripts/bootstrap_db.py is missing.")
+        st.stop()
+    with st.spinner("Building database from data files — first load only, ~10 seconds…"):
+        try:
+            result = subprocess.run(
+                [sys.executable, str(bootstrap), "--force"],
+                capture_output=True, text=True, timeout=300,
+            )
+        except subprocess.TimeoutExpired:
+            st.error("Database build timed out — press R to rerun or reboot the app.")
+            st.stop()
+        except Exception as e:
+            st.error(f"Database build could not start: {e}")
+            st.stop()
+    if result.returncode != 0:
+        st.error(
+            f"Database bootstrap failed.\n\n```\n{result.stderr[-2000:]}\n```\n\n"
+            "Run the GitHub Action (Update PLL Data Warehouse) to populate data/.")
+        st.stop()
+    if not _db_is_valid():
+        st.error("Database was rebuilt but still isn't valid — re-run the data "
+                 "GitHub Action, then reboot the app.")
+        st.stop()
 
 TEAM_NAMES = {
     "ATL": "Atlas", "OUT": "Outlaws", "CAN": "Cannons", "RED": "Redwoods",
@@ -248,6 +304,7 @@ if selected is None:
 st.subheader(f"{_tname(selected.away_team_id)} @ {_tname(selected.home_team_id)}"
              f"  ·  {selected.slug}")
 
+_ensure_db()  # rebuild the warehouse from parquet on a fresh deploy, before engine load
 engine = get_engine()
 cfg = _load_autosave()
 holds, glob_hold = _holds_from_cfg(cfg)
