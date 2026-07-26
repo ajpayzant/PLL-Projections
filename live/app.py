@@ -25,6 +25,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import streamlit as st
 
 # -- path bootstrap: repo root + this dir on sys.path --------------------------
@@ -37,7 +38,8 @@ for _p in (str(_ROOT), str(_LIVE_DIR)):
 from live_feed import LiveFeed, fetch_state                      # noqa: E402
 from live_state import reconstruct                               # noqa: E402
 from live_model import LiveModel                                 # noqa: E402
-from live_pricing import quote_edge, TRADED_STATS                # noqa: E402
+from live_pricing import (                                       # noqa: E402
+    prob_over, prob_to_american, american_to_profit, TRADED_STATS)
 from live_schedule import list_games, detect_live, find_game     # noqa: E402
 from projection_engine_v3 import ProjectionEngine, DEFAULT_HOLDS, DEFAULT_GLOBAL_HOLD  # noqa: E402
 
@@ -46,6 +48,7 @@ _DB_PATH = os.getenv("PLL_DB_PATH",
                      str(_ROOT / "data" / "analytics_database" / "pll_warehouse.duckdb"))
 DEFAULT_YEAR = 2026
 TRADE_FOCUS = ("points", "goals", "assists")  # the markets the user trades
+LIVE_SIMS = 8000  # live re-sim count: enough for prop probs, keeps the board snappy
 
 
 # -- Bootstrap DB from parquet if missing (mirrors pages/_engine_state.py) -----
@@ -313,100 +316,218 @@ engine.pricing.hold_by_stat = dict(holds)
 engine.pricing.hold_pct = glob_hold
 
 
-@st.fragment(run_every=refresh_secs)
-def live_board():
-    """Polls the feed and re-renders the board every `refresh_secs`. Isolated in a
-    fragment so only this section reruns on the timer, not the whole app."""
-    state = LiveFeed(selected.slug).poll()
+def _parse_odds(txt):
+    """Parse a typed American-odds string ('-110', '+120', '110') -> float or None."""
+    if txt is None:
+        return None
+    s = str(txt).strip().replace("+", "")
+    if not s:
+        return None
+    try:
+        v = float(s)
+    except ValueError:
+        return None
+    return v if abs(v) >= 100 else None  # ignore obviously-bad entries
+
+
+def _ev(prob: float, odds) -> float | None:
+    """EV per $1 staked at American `odds` given model win prob."""
+    o = _parse_odds(odds)
+    if o is None:
+        return None
+    return prob * american_to_profit(o) - (1.0 - prob)
+
+
+@st.cache_data(ttl=600, show_spinner=False, max_entries=8)
+def build_board(_engine, slug: str, home_id: str, away_id: str,
+                game_date: str | None, cfg_token: str, pace_weight: float,
+                tick: int) -> dict:
+    """Poll the feed, reconstruct banked stats, run the cached pregame projection
+    and the live rest-of-game re-sim, and return a fully-computed, picklable board.
+
+    Cached on a per-refresh `tick` so the EXPENSIVE work (poll + Monte Carlo re-sim)
+    runs at most once per refresh window. Every keystroke in the book-odds boxes
+    reruns the fragment but hits this cache instead of re-simulating — that's what
+    keeps typing responsive. Returns plain floats/strings only (no numpy/objects)."""
+    state = LiveFeed(slug).poll()
     if not state.ok:
-        st.error(f"Feed error: {state.error}")
-        return
+        return {"ok": False, "error": state.error}
 
     banked = reconstruct(state.events)
     frac_rem = state.fraction_remaining
 
-    # clock / score row
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Score", f"{state.away_score} – {state.home_score}",
-              help=f"{_tname(selected.away_team_id)} – {_tname(selected.home_team_id)}")
-    c2.metric("Period / Clock", f"P{state.period}  {state.clock_minutes:02d}:{state.clock_seconds:02d}")
-    c3.metric("Game remaining", f"{frac_rem:.0%}")
-    c4.metric("Events", state.n_events)
+    pregame = get_pregame(_engine, home_id, away_id, game_date, cfg_token)
+    pre_by_pid = {str(ps.player_id): ps
+                  for ps in (pregame.home_player_sims + pregame.away_player_sims)}
 
-    if state.is_final:
-        st.info("Game reads FINAL — projections below are the settled banked totals.")
-
-    home_id = selected.home_team_id or _infer_home(state)
-    away_id = selected.away_team_id or _infer_away(state, home_id)
-    if not home_id or not away_id:
-        st.warning("Could not determine team IDs for this game; use 'Pick from "
-                   "schedule' so home/away are known.")
-        return
-
-    # pregame projection (cached) + live re-sim (every poll)
-    pregame = get_pregame(engine, home_id, away_id, selected.game_date,
-                          _cfg_token(cfg))
-    live = LiveModel(engine).resimulate(
+    live = LiveModel(_engine, n_sims=LIVE_SIMS).resimulate(
         pregame, banked.by_player, frac_rem, pace_weight=pace_weight,
         home_team_id=home_id, away_team_id=away_id,
         team_of=banked.team_of, events=state.events)
 
-    # index sims by player for the props table
-    sims = {str(ps.player_id): ps for ps in live.all_sims()}
+    stats: dict[str, list] = {}
+    for stat in TRADE_FOCUS:
+        rows = []
+        for ps in live.all_sims():
+            if stat not in ps.stat_distributions:
+                continue
+            pid = str(ps.player_id)
+            dist = ps.stat_distributions[stat]
+            live_proj = float(np.mean(dist))
+            bk = banked.get(pid, stat)
+            if live_proj < 0.3 and bk <= 0:
+                continue
+            # One market line per player-stat (the live balanced line) so pregame
+            # and live odds are quoted at the SAME line and are directly comparable.
+            line = float(ps.prop_lines.get(stat, np.floor(np.median(dist)) + 0.5))
+            settled = bool(dist.size and float(np.std(dist)) < 1e-9)
+            p_over = prob_over(dist, line)
+            live_odds = "LOCKED" if settled else prob_to_american(p_over)
 
-    st.markdown("### Live player projections & edge")
+            pre_ps = pre_by_pid.get(pid)
+            if pre_ps is not None and stat in pre_ps.stat_distributions:
+                pre_dist = pre_ps.stat_distributions[stat]
+                pre_proj = float(np.mean(pre_dist))
+                pre_odds = prob_to_american(prob_over(pre_dist, line))
+            else:
+                pre_proj, pre_odds = None, "—"  # call-up: no pregame projection
+
+            rows.append({
+                "pid": pid, "Player": ps.full_name, "Line": line,
+                "Now": float(bk), "PreProj": pre_proj, "PreOddsO": pre_odds,
+                "LiveProj": round(live_proj, 2), "LiveOddsO": live_odds,
+                "Pover": round(p_over, 4), "settled": settled,
+            })
+        rows.sort(key=lambda r: r["LiveProj"], reverse=True)
+        stats[stat] = rows
+
+    return {
+        "ok": True,
+        "meta": {
+            "away_score": state.away_score, "home_score": state.home_score,
+            "period": state.period, "cm": state.clock_minutes, "cs": state.clock_seconds,
+            "frac_rem": frac_rem, "n_events": state.n_events, "is_final": state.is_final,
+        },
+        "stats": stats,
+    }
+
+
+@st.fragment(run_every=refresh_secs)
+def live_board():
+    """Renders the board every `refresh_secs`. The heavy compute is cached in
+    build_board(); this function only formats + prices typed odds (cheap)."""
+    import time
+    home_id = selected.home_team_id
+    away_id = selected.away_team_id
+    if not home_id or not away_id:
+        # manual-slug path with unknown teams: peek one poll to infer
+        peek = LiveFeed(selected.slug).poll()
+        home_id = home_id or _infer_home(peek)
+        away_id = away_id or _infer_away(peek, home_id)
+    if not home_id or not away_id:
+        st.warning("Could not determine team IDs. Use 'Pick from schedule' so "
+                   "home/away are known.")
+        return
+
+    # per-refresh cache tick: the same within a refresh window, so keystrokes
+    # reuse the cached sim instead of recomputing it.
+    tick = int(time.time() // refresh_secs)
+    board = build_board(engine, selected.slug, home_id, away_id,
+                        selected.game_date, _cfg_token(cfg), pace_weight, tick)
+    if not board.get("ok"):
+        st.error(f"Feed error: {board.get('error')}")
+        return
+
+    m = board["meta"]
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Score", f"{m['away_score']} – {m['home_score']}",
+              help=f"{_tname(away_id)} (away) – {_tname(home_id)} (home)")
+    c2.metric("Period / Clock", f"P{m['period']}  {m['cm']:02d}:{m['cs']:02d}")
+    c3.metric("Game remaining", f"{m['frac_rem']:.0%}")
+    c4.metric("Events", m["n_events"])
+    if m["is_final"]:
+        st.info("Game reads FINAL — projections below are the settled banked totals.")
+
+    st.markdown("### Live player board")
     stat = st.radio("Market", list(TRADE_FOCUS), horizontal=True, key="mkt")
+    st.caption("**Now** = stats already banked · **Pre** = pregame projection & fair "
+               "over-odds · **Live** = current full-game projection & fair over-odds "
+               "(all at the same line). Type the book's odds into **Book O/U** to see "
+               "**Edge** (EV per $1). Editing odds does NOT re-run the simulation.")
 
-    rows = []
-    for pid, ps in sims.items():
-        if stat not in ps.stat_distributions:
+    rows = board["stats"].get(stat, [])
+    if not rows:
+        st.info("No tradeable players for this market yet.")
+        return
+
+    # Persist typed odds across refreshes, keyed by stat+player, in session_state.
+    ostore = st.session_state.setdefault("book_odds", {})
+
+    df = pd.DataFrame(rows).set_index("pid")
+    df["Book O"] = [ostore.get(f"{stat}:{pid}:o", "") for pid in df.index]
+    df["Book U"] = [ostore.get(f"{stat}:{pid}:u", "") for pid in df.index]
+    show = df[["Player", "Line", "Now", "PreProj", "PreOddsO",
+               "LiveProj", "LiveOddsO", "Pover", "Book O", "Book U"]].copy()
+    show["Pover"] = (show["Pover"] * 100).round(0)
+
+    edited = st.data_editor(
+        show, hide_index=True, use_container_width=True, key=f"editor_{stat}",
+        column_config={
+            "Player": st.column_config.TextColumn("Player", disabled=True, width="medium"),
+            "Line": st.column_config.NumberColumn("Line", disabled=True, format="%.1f"),
+            "Now": st.column_config.NumberColumn("Now", disabled=True, format="%.0f",
+                                                 help="Banked so far (certain)"),
+            "PreProj": st.column_config.NumberColumn("Pre Proj", disabled=True, format="%.2f",
+                                                     help="Pregame projection"),
+            "PreOddsO": st.column_config.TextColumn("Pre O", disabled=True,
+                                                    help="Pregame fair over-odds at this line"),
+            "LiveProj": st.column_config.NumberColumn("Live Proj", disabled=True, format="%.2f",
+                                                      help="Current full-game projection"),
+            "LiveOddsO": st.column_config.TextColumn("Live O", disabled=True,
+                                                     help="Current fair over-odds at this line"),
+            "Pover": st.column_config.NumberColumn("P(o)%", disabled=True, format="%.0f",
+                                                   help="Model prob of going over the line"),
+            "Book O": st.column_config.TextColumn("Book O", help="Book's over odds, e.g. -110"),
+            "Book U": st.column_config.TextColumn("Book U", help="Book's under odds, e.g. +120"),
+        },
+    )
+
+    # Persist edits + compute edge (cheap: arithmetic on the cached prob).
+    edge_rows = []
+    for pid, r in edited.iterrows():
+        bo, bu = str(r["Book O"] or ""), str(r["Book U"] or "")
+        ostore[f"{stat}:{pid}:o"] = bo
+        ostore[f"{stat}:{pid}:u"] = bu
+        p_over = float(df.loc[pid, "Pover"])
+        if bool(df.loc[pid, "settled"]):
             continue
-        dist = ps.stat_distributions[stat]
-        proj = float(np.mean(dist))
-        if proj < 0.3 and float(np.max(dist)) < 1:
+        ev_o = _ev(p_over, bo)
+        ev_u = _ev(1.0 - p_over, bu)
+        cands = [(s, e) for s, e in (("Over", ev_o), ("Under", ev_u)) if e is not None]
+        if not cands:
             continue
-        line = ps.prop_lines.get(stat, np.floor(np.median(dist)) + 0.5)
-        bk = banked.get(pid, stat if stat != "points" else "points")
-        rows.append({"pid": pid, "name": ps.full_name, "line": float(line),
-                     "proj": proj, "banked": bk, "dist": dist})
-    rows.sort(key=lambda r: r["proj"], reverse=True)
+        side, ev = max(cands, key=lambda x: x[1])
+        edge_rows.append({"Player": r["Player"], "Line": float(df.loc[pid, "Line"]),
+                          "Bet": side, "Book": bo if side == "Over" else bu,
+                          "Edge %": round(ev * 100, 1)})
 
-    st.caption("Enter the book's American odds to see EV per $1 staked. Blank = "
-               "just show the model's fair line.")
+    if edge_rows:
+        st.markdown("#### Edge (from your entered odds)")
+        edf = pd.DataFrame(edge_rows).sort_values("Edge %", ascending=False)
+        st.dataframe(
+            edf, hide_index=True, use_container_width=True,
+            column_config={"Edge %": st.column_config.NumberColumn(
+                "Edge %", format="%.1f",
+                help="EV per $1 staked. Positive = +EV bet at your odds.")},
+        )
+        pos = edf[edf["Edge %"] > 0]
+        if not pos.empty:
+            st.success(f"{len(pos)} +EV opportunit{'y' if len(pos)==1 else 'ies'} "
+                       f"— best: {pos.iloc[0]['Player']} {pos.iloc[0]['Bet']} "
+                       f"{pos.iloc[0]['Line']:.1f} ({pos.iloc[0]['Edge %']:+.1f}%)")
 
-    # header
-    h = st.columns([3, 1, 1, 1, 1.2, 1.2, 1.2, 1.2, 1.4])
-    for col, lbl in zip(h, ["Player", "Line", "Proj", "Bank", "P(over)",
-                            "Fair O", "Book O", "Book U", "Edge"]):
-        col.markdown(f"**{lbl}**")
-
-    for r in rows[:24]:
-        q = quote_edge(r["pid"], r["name"], stat, r["dist"], r["line"],
-                       banked=r["banked"])
-        cols = st.columns([3, 1, 1, 1, 1.2, 1.2, 1.2, 1.2, 1.4])
-        cols[0].write(r["name"])
-        cols[1].write(f'{r["line"]:.1f}')
-        cols[2].write(f'{r["proj"]:.2f}')
-        cols[3].write(f'{r["banked"]:.0f}')
-        cols[4].write("LOCK" if q.is_settled else f'{q.model_prob_over:.0%}')
-        cols[5].write(q.model_fair_over)
-        bo = cols[6].text_input("bo", key=f"bo_{stat}_{r['pid']}",
-                                label_visibility="collapsed", placeholder="-110")
-        bu = cols[7].text_input("bu", key=f"bu_{stat}_{r['pid']}",
-                                label_visibility="collapsed", placeholder="+120")
-        # recompute EV if the user entered odds
-        eq = quote_edge(r["pid"], r["name"], stat, r["dist"], r["line"],
-                        banked=r["banked"],
-                        book_over_odds=bo.strip() or None,
-                        book_under_odds=bu.strip() or None)
-        edge_txt = ""
-        if eq.best_ev is not None:
-            side = eq.best_side or "—"
-            edge_txt = f"{side} {eq.best_ev:+.1%}" if side != "—" else "no +EV"
-        cols[8].write(edge_txt)
-
-    st.caption(f"Last poll: {state.n_events} events · pace_weight={pace_weight:.2f} · "
-               f"holds inherited from projections app")
+    st.caption(f"Last poll: {m['n_events']} events · pace_weight={pace_weight:.2f} · "
+               f"{LIVE_SIMS:,} live sims · holds inherited from projections app")
 
 
 live_board()

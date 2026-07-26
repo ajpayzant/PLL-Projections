@@ -226,11 +226,15 @@ class LiveModel:
     """Turns a pregame ProjectionResult + banked live stats into a full-game
     live projection by re-simulating only the time remaining."""
 
-    def __init__(self, engine, seed: int = 123):
+    def __init__(self, engine, seed: int = 123, n_sims: Optional[int] = None):
         # engine: a fitted ProjectionEngine (for player_games correlation input).
+        # n_sims: override the sim count for the LIVE re-sim. Live pricing only
+        # needs prop probabilities (not tail precision), so a smaller count than
+        # the pregame default keeps the board responsive during a game. Defaults
+        # to the engine's own count when not supplied.
         self.engine = engine
-        self.simulator = GameSimulator(n_sims=getattr(engine.simulator, "n_sims", 20000),
-                                       seed=seed)
+        n = int(n_sims) if n_sims else getattr(engine.simulator, "n_sims", 20000)
+        self.simulator = GameSimulator(n_sims=n, seed=seed)
 
     def resimulate(self, result: ProjectionResult,
                    banked_by_player: Dict[str, Dict[str, float]],
