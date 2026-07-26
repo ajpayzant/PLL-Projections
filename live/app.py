@@ -450,10 +450,13 @@ def live_board():
 
     st.markdown("### Live player board")
     stat = st.radio("Market", list(TRADE_FOCUS), horizontal=True, key="mkt")
-    st.caption("**Now** = stats already banked · **Pre** = pregame projection & fair "
-               "over-odds · **Live** = current full-game projection & fair over-odds "
-               "(all at the same line). Type the book's odds into **Book O/U** to see "
-               "**Edge** (EV per $1). Editing odds does NOT re-run the simulation.")
+    stat_label = stat.replace("_", " ").title()  # "points" -> "Points"
+    now_header = f"{stat_label} (live)"           # the current in-game stat line
+    st.caption(f"**{now_header}** = the player's current {stat_label.lower()} so far "
+               "in this game · **Pre** = pregame projection & fair over-odds · "
+               "**Live** = current full-game projection & fair over-odds (all at the "
+               "same line). Type the book's odds into **Book O/U** to see **Edge** "
+               "(EV per $1). Editing odds does NOT re-run the simulation.")
 
     rows = board["stats"].get(stat, [])
     if not rows:
@@ -475,8 +478,10 @@ def live_board():
         column_config={
             "Player": st.column_config.TextColumn("Player", disabled=True, width="medium"),
             "Line": st.column_config.NumberColumn("Line", disabled=True, format="%.1f"),
-            "Now": st.column_config.NumberColumn("Now", disabled=True, format="%.0f",
-                                                 help="Banked so far (certain)"),
+            "Now": st.column_config.NumberColumn(
+                now_header, disabled=True, format="%.0f",
+                help=f"The player's current {stat_label.lower()} in this game so far "
+                     "(already banked, certain)"),
             "PreProj": st.column_config.NumberColumn("Pre Proj", disabled=True, format="%.2f",
                                                      help="Pregame projection"),
             "PreOddsO": st.column_config.TextColumn("Pre O", disabled=True,
