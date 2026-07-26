@@ -73,6 +73,31 @@ _ADDITIVE_DIST_KEYS = (
 
 _EPS = 1e-6
 
+# ---------------------------------------------------------------------------
+# In-game lead mean-reversion.
+#
+# The rest-of-game re-simulation reproduces the REST-of-game margin variance
+# correctly (verified empirically: sim SD matches historical SD*sqrt(frac_rem)
+# to within ~5%). What a naive "banked lead + fresh remainder" does WRONG is
+# treat the current lead as fully persistent (a random-walk / diffusion), so an
+# early lead gets full credit toward the final margin. Real PLL games mean-revert:
+# regressing final margin on the in-game lead over 187 games (2022-2026 PBP)
+# gives a persistence factor beta ~= 0.70 at the end of Q1 rising to ~0.95 late.
+# Both that regression and an independent fit of the empirical win-prob curve
+# collapse to shrink ~= 1 - 0.4*frac_rem. We shrink ONLY the margin (the totals
+# are real, already-scored points); the lead's expected value toward the final
+# is pulled toward zero by (1 - shrink)*lead. See project_pll_live_trading memory.
+_REVERSION_SLOPE = 0.4      # shrink = 1 - slope*frac_rem
+_REVERSION_FLOOR = 0.55     # never credit an early lead less than 55%
+
+
+def _lead_persistence(frac_rem: float) -> float:
+    """Fraction of the current in-game lead that persists to the final margin,
+    as a function of the game fraction remaining. 1.0 at the buzzer (a lead is
+    final), ~0.6 early (an early lead mean-reverts). Fit from historical PBP."""
+    frac_rem = min(max(float(frac_rem), 0.0), 1.0)
+    return max(1.0 - _REVERSION_SLOPE * frac_rem, _REVERSION_FLOOR)
+
 
 @dataclass
 class LiveProjection:
@@ -313,7 +338,7 @@ class LiveModel:
         banked_home_scores = bh + bh_2   # 1pt*1 + 2pt*2 = goals + (extra point per 2pt)
         banked_away_scores = ba + ba_2
         live_game_sim = self._live_game_sim(
-            game_sim, bh, ba, banked_home_scores, banked_away_scores)
+            game_sim, bh, ba, banked_home_scores, banked_away_scores, frac_rem)
 
         return LiveProjection(
             home_team=result.home_team, away_team=result.away_team,
@@ -328,12 +353,25 @@ class LiveModel:
     @staticmethod
     def _live_game_sim(rest: "GameSimulation", banked_home_goals: float,
                        banked_away_goals: float, banked_home_scores: float,
-                       banked_away_scores: float) -> "GameSimulation":
+                       banked_away_scores: float,
+                       frac_rem: float = 0.0) -> "GameSimulation":
         """Full-game live GameSimulation = banked (certain) + re-simulated
         remainder. Adds the banked scalars onto the remainder arrays, then
-        recomputes win probs / spread / total exactly as simulate_game does."""
+        recomputes win probs / spread / total exactly as simulate_game does.
+
+        The banked TOTALS are certain (points already scored), but the banked
+        LEAD mean-reverts: an early lead over-predicts the final margin. We pull
+        the score margin toward even by (1 - persistence)*banked_lead — a mean
+        shift on the margin distribution only, leaving each side's total scoring
+        (and the game total) untouched. See _lead_persistence / project memory."""
         hs = rest.home_scores + banked_home_scores
         as_ = rest.away_scores + banked_away_scores
+        banked_lead = float(banked_home_scores) - float(banked_away_scores)
+        drift = (1.0 - _lead_persistence(frac_rem)) * banked_lead
+        if abs(drift) > _EPS:
+            # move each side halfway so the total (hs + as_) is preserved
+            hs = hs - drift / 2.0
+            as_ = as_ + drift / 2.0
         tied = hs == as_
         # deterministic 50/50 tie-break without RNG (Date/random unavailable in
         # some contexts): alternate by index parity, mean ~0.5 either way.
