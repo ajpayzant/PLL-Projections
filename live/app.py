@@ -38,8 +38,7 @@ for _p in (str(_ROOT), str(_LIVE_DIR)):
 from live_feed import LiveFeed, fetch_state                      # noqa: E402
 from live_state import reconstruct                               # noqa: E402
 from live_model import LiveModel                                 # noqa: E402
-from live_pricing import (                                       # noqa: E402
-    prob_over, prob_to_american, american_to_profit, TRADED_STATS)
+from live_pricing import TRADED_STATS                            # noqa: E402
 from live_schedule import list_games, detect_live, find_game     # noqa: E402
 from projection_engine_v3 import ProjectionEngine, DEFAULT_HOLDS, DEFAULT_GLOBAL_HOLD  # noqa: E402
 
@@ -49,6 +48,14 @@ _DB_PATH = os.getenv("PLL_DB_PATH",
 DEFAULT_YEAR = 2026
 TRADE_FOCUS = ("points", "goals", "assists")  # the markets the user trades
 LIVE_SIMS = 8000  # live re-sim count: enough for prop probs, keeps the board snappy
+
+# X+ thresholds to post per market ("N+" == over N-0.5). Points ladders higher
+# than goals/assists because point totals run higher.
+LADDER = {
+    "points":  (1, 2, 3, 4, 5, 6),
+    "goals":   (1, 2, 3, 4),
+    "assists": (1, 2, 3, 4),
+}
 
 
 # -- Bootstrap DB from parquet if missing (mirrors pages/_engine_state.py) -----
@@ -316,28 +323,6 @@ engine.pricing.hold_by_stat = dict(holds)
 engine.pricing.hold_pct = glob_hold
 
 
-def _parse_odds(txt):
-    """Parse a typed American-odds string ('-110', '+120', '110') -> float or None."""
-    if txt is None:
-        return None
-    s = str(txt).strip().replace("+", "")
-    if not s:
-        return None
-    try:
-        v = float(s)
-    except ValueError:
-        return None
-    return v if abs(v) >= 100 else None  # ignore obviously-bad entries
-
-
-def _ev(prob: float, odds) -> float | None:
-    """EV per $1 staked at American `odds` given model win prob."""
-    o = _parse_odds(odds)
-    if o is None:
-        return None
-    return prob * american_to_profit(o) - (1.0 - prob)
-
-
 @st.cache_data(ttl=600, show_spinner=False, max_entries=8)
 def build_board(_engine, slug: str, home_id: str, away_id: str,
                 game_date: str | None, cfg_token: str, pace_weight: float,
@@ -373,41 +358,80 @@ def build_board(_engine, slug: str, home_id: str, away_id: str,
         home_team_id=home_id, away_team_id=away_id,
         team_of=banked.team_of, events=state.events)
 
+    pricing = _engine.pricing
+
+    # ---- player props: moving O/U line + posted X+ price ladder --------------
     stats: dict[str, list] = {}
     for stat in TRADE_FOCUS:
+        thresholds = LADDER[stat]
         rows = []
         for ps in live.all_sims():
             if stat not in ps.stat_distributions:
                 continue
             pid = str(ps.player_id)
-            dist = ps.stat_distributions[stat]
+            dist = np.asarray(ps.stat_distributions[stat], dtype=float)
             live_proj = float(np.mean(dist))
-            bk = banked.get(pid, stat)
+            bk = float(banked.get(pid, stat))
             if live_proj < 0.3 and bk <= 0:
                 continue
-            # One market line per player-stat (the live balanced line) so pregame
-            # and live odds are quoted at the SAME line and are directly comparable.
-            line = float(ps.prop_lines.get(stat, np.floor(np.median(dist)) + 0.5))
             settled = bool(dist.size and float(np.std(dist)) < 1e-9)
-            p_over = prob_over(dist, line)
-            live_odds = "LOCKED" if settled else prob_to_american(p_over)
 
+            # Balanced O/U line NOW (the moving reference the user prices off).
+            live_line = float(ps.prop_lines.get(stat, np.floor(np.median(dist)) + 0.5))
+            # Pregame balanced line + projection, for the "how far has it moved".
             pre_ps = pre_by_pid.get(pid)
             if pre_ps is not None and stat in pre_ps.stat_distributions:
-                pre_dist = pre_ps.stat_distributions[stat]
-                pre_proj = float(np.mean(pre_dist))
-                pre_odds = prob_to_american(prob_over(pre_dist, line))
+                pre_dist = np.asarray(pre_ps.stat_distributions[stat], dtype=float)
+                pre_line = float(pre_ps.prop_lines.get(
+                    stat, np.floor(np.median(pre_dist)) + 0.5))
+                pre_proj = round(float(np.mean(pre_dist)), 2)
             else:
-                pre_proj, pre_odds = None, "—"  # call-up: no pregame projection
+                pre_line, pre_proj = None, None  # call-up: no pregame projection
 
-            rows.append({
-                "pid": pid, "Player": ps.full_name, "Line": line,
-                "Now": float(bk), "PreProj": pre_proj, "PreOddsO": pre_odds,
-                "LiveProj": round(live_proj, 2), "LiveOddsO": live_odds,
-                "Pover": round(p_over, 4), "settled": settled,
-            })
+            # Posted X+ ladder: "N+" == over (N-0.5). Use the engine's PricingEngine
+            # so the held (juiced) price reflects the inherited per-market hold —
+            # this is the number the trader posts into BOSS for "N or more".
+            ladder = {}
+            for n in thresholds:
+                p = float(np.mean(dist >= n))
+                if p >= 0.995:
+                    ladder[n] = "LOCK"      # already banked — a certain winner
+                elif p <= 0.02:
+                    ladder[n] = ""          # too unlikely to bother posting
+                else:
+                    ml = pricing.price_distribution(stat, dist, line=n - 0.5)
+                    ladder[n] = ml.over_odds
+            row = {
+                "pid": pid, "Player": ps.full_name, "Now": bk,
+                "PreLine": pre_line, "LiveLine": live_line,
+                "LiveProj": round(live_proj, 2), "settled": settled,
+            }
+            for n in thresholds:
+                row[f"{n}+"] = ladder[n]
+            rows.append(row)
         rows.sort(key=lambda r: r["LiveProj"], reverse=True)
         stats[stat] = rows
+
+    # ---- game markets: live ML / spread / total, vs pregame ------------------
+    def _mkt(gm):
+        # home gets + when underdog; away lays - when favored (projections-app convention)
+        return {
+            "home_ml": gm.home_ml, "away_ml": gm.away_ml,
+            "home_wp": round(gm.home_win_prob * 100, 1),
+            "away_wp": round(gm.away_win_prob * 100, 1),
+            "spread_home_disp": round(-gm.spread_home, 1), "spread_home_odds": gm.spread_home_odds,
+            "spread_away_disp": round(gm.spread_home, 1), "spread_away_odds": gm.spread_away_odds,
+            "total_line": gm.total_line, "over": gm.over_odds, "under": gm.under_odds,
+        }
+    game = {"home_name": _tname(home_id), "away_name": _tname(away_id)}
+    try:
+        game["live"] = _mkt(pricing.price_game(live.game_sim)) if live.game_sim else None
+    except Exception:
+        game["live"] = None
+    try:
+        game["pre"] = _mkt(pricing.price_game(pregame.game_sim))
+    except Exception:
+        game["pre"] = None
 
     return {
         "ok": True,
@@ -416,7 +440,7 @@ def build_board(_engine, slug: str, home_id: str, away_id: str,
             "period": state.period, "cm": state.clock_minutes, "cs": state.clock_seconds,
             "frac_rem": frac_rem, "n_events": state.n_events, "is_final": state.is_final,
         },
-        "stats": stats,
+        "stats": stats, "game": game,
     }
 
 
@@ -454,90 +478,83 @@ def live_board():
     c3.metric("Game remaining", f"{m['frac_rem']:.0%}")
     c4.metric("Events", m["n_events"])
     if m["is_final"]:
-        st.info("Game reads FINAL — projections below are the settled banked totals.")
+        st.info("Game reads FINAL — lines below are the settled result.")
 
-    st.markdown("### Live player board")
+    # ---- game markets: suggested live prices to post -------------------------
+    g = board.get("game") or {}
+    live_g, pre_g = g.get("live"), g.get("pre")
+    st.markdown("### Game markets — suggested live prices")
+    if live_g:
+        an, hn = g["away_name"], g["home_name"]
+        grows = [
+            {"Market": f"{an} ML", "Live": live_g["away_ml"],
+             "Pregame": pre_g["away_ml"] if pre_g else "—",
+             "Win %": live_g["away_wp"]},
+            {"Market": f"{hn} ML", "Live": live_g["home_ml"],
+             "Pregame": pre_g["home_ml"] if pre_g else "—",
+             "Win %": live_g["home_wp"]},
+            {"Market": f"{an} {live_g['spread_away_disp']:+.1f}", "Live": live_g["spread_away_odds"],
+             "Pregame": (f"{pre_g['spread_away_disp']:+.1f} ({pre_g['spread_away_odds']})"
+                         if pre_g else "—"), "Win %": None},
+            {"Market": f"{hn} {live_g['spread_home_disp']:+.1f}", "Live": live_g["spread_home_odds"],
+             "Pregame": (f"{pre_g['spread_home_disp']:+.1f} ({pre_g['spread_home_odds']})"
+                         if pre_g else "—"), "Win %": None},
+            {"Market": f"Over {live_g['total_line']:.1f}", "Live": live_g["over"],
+             "Pregame": (f"{pre_g['total_line']:.1f} ({pre_g['over']})" if pre_g else "—"),
+             "Win %": None},
+            {"Market": f"Under {live_g['total_line']:.1f}", "Live": live_g["under"],
+             "Pregame": (f"{pre_g['total_line']:.1f} ({pre_g['under']})" if pre_g else "—"),
+             "Win %": None},
+        ]
+        st.dataframe(
+            pd.DataFrame(grows), hide_index=True, use_container_width=True,
+            column_config={
+                "Live": st.column_config.TextColumn("Live (post this)"),
+                "Pregame": st.column_config.TextColumn("Pregame"),
+                "Win %": st.column_config.NumberColumn("Win %", format="%.1f"),
+            })
+    else:
+        st.info("Game markets unavailable (team IDs unknown for this game).")
+
+    # ---- player props: moving line + X+ ladder to post -----------------------
+    st.markdown("### Player props — suggested X+ prices")
     stat = st.radio("Market", list(TRADE_FOCUS), horizontal=True, key="mkt")
-    stat_label = stat.replace("_", " ").title()  # "points" -> "Points"
-    now_header = f"{stat_label} (live)"           # the current in-game stat line
-    st.caption(f"**{now_header}** = the player's current {stat_label.lower()} so far "
-               "in this game · **Pre** = pregame projection & fair over-odds · "
-               "**Live** = current full-game projection & fair over-odds (all at the "
-               "same line). Type the book's odds into **Book O/U** to see **Edge** "
-               "(EV per $1). Editing odds does NOT re-run the simulation.")
+    stat_label = stat.title()
+    thresholds = LADDER[stat]
+    st.caption(f"**{stat_label} (live)** = current {stat_label.lower()} in the game so far · "
+               "**Live Line** = the model's balanced O/U line right now (moves as the "
+               "game develops) · **N+** columns = the held price to POST for "
+               f"“N or more {stat_label.lower()}”. LOCK = already clinched. Adjust these "
+               "into BOSS as events occur. No prices are bet here — this is your book-side monitor.")
 
     rows = board["stats"].get(stat, [])
     if not rows:
         st.info("No tradeable players for this market yet.")
         return
 
-    # Persist typed odds across refreshes, keyed by stat+player, in session_state.
-    ostore = st.session_state.setdefault("book_odds", {})
+    df = pd.DataFrame(rows)
+    ladder_cols = [f"{n}+" for n in thresholds]
+    show_cols = ["Player", "Now", "PreLine", "LiveLine", "LiveProj"] + ladder_cols
+    show = df[show_cols].copy()
 
-    df = pd.DataFrame(rows).set_index("pid")
-    df["Book O"] = [ostore.get(f"{stat}:{pid}:o", "") for pid in df.index]
-    df["Book U"] = [ostore.get(f"{stat}:{pid}:u", "") for pid in df.index]
-    show = df[["Player", "Line", "Now", "PreProj", "PreOddsO",
-               "LiveProj", "LiveOddsO", "Pover", "Book O", "Book U"]].copy()
-    show["Pover"] = (show["Pover"] * 100).round(0)
+    colcfg = {
+        "Player": st.column_config.TextColumn("Player", width="medium"),
+        "Now": st.column_config.NumberColumn(
+            f"{stat_label} (live)", format="%.0f",
+            help=f"Current {stat_label.lower()} in this game so far (banked)"),
+        "PreLine": st.column_config.NumberColumn(
+            "Pre Line", format="%.1f", help="Pregame balanced O/U line"),
+        "LiveLine": st.column_config.NumberColumn(
+            "Live Line", format="%.1f",
+            help="Current balanced O/U line — moves with the game; price your X+ off this"),
+        "LiveProj": st.column_config.NumberColumn(
+            "Live Proj", format="%.2f", help="Current projected full-game total"),
+    }
+    for n in thresholds:
+        colcfg[f"{n}+"] = st.column_config.TextColumn(
+            f"{n}+", help=f"Suggested price to post for {n}+ {stat_label.lower()}")
 
-    edited = st.data_editor(
-        show, hide_index=True, use_container_width=True, key=f"editor_{stat}",
-        column_config={
-            "Player": st.column_config.TextColumn("Player", disabled=True, width="medium"),
-            "Line": st.column_config.NumberColumn("Line", disabled=True, format="%.1f"),
-            "Now": st.column_config.NumberColumn(
-                now_header, disabled=True, format="%.0f",
-                help=f"The player's current {stat_label.lower()} in this game so far "
-                     "(already banked, certain)"),
-            "PreProj": st.column_config.NumberColumn("Pre Proj", disabled=True, format="%.2f",
-                                                     help="Pregame projection"),
-            "PreOddsO": st.column_config.TextColumn("Pre O", disabled=True,
-                                                    help="Pregame fair over-odds at this line"),
-            "LiveProj": st.column_config.NumberColumn("Live Proj", disabled=True, format="%.2f",
-                                                      help="Current full-game projection"),
-            "LiveOddsO": st.column_config.TextColumn("Live O", disabled=True,
-                                                     help="Current fair over-odds at this line"),
-            "Pover": st.column_config.NumberColumn("P(o)%", disabled=True, format="%.0f",
-                                                   help="Model prob of going over the line"),
-            "Book O": st.column_config.TextColumn("Book O", help="Book's over odds, e.g. -110"),
-            "Book U": st.column_config.TextColumn("Book U", help="Book's under odds, e.g. +120"),
-        },
-    )
-
-    # Persist edits + compute edge (cheap: arithmetic on the cached prob).
-    edge_rows = []
-    for pid, r in edited.iterrows():
-        bo, bu = str(r["Book O"] or ""), str(r["Book U"] or "")
-        ostore[f"{stat}:{pid}:o"] = bo
-        ostore[f"{stat}:{pid}:u"] = bu
-        p_over = float(df.loc[pid, "Pover"])
-        if bool(df.loc[pid, "settled"]):
-            continue
-        ev_o = _ev(p_over, bo)
-        ev_u = _ev(1.0 - p_over, bu)
-        cands = [(s, e) for s, e in (("Over", ev_o), ("Under", ev_u)) if e is not None]
-        if not cands:
-            continue
-        side, ev = max(cands, key=lambda x: x[1])
-        edge_rows.append({"Player": r["Player"], "Line": float(df.loc[pid, "Line"]),
-                          "Bet": side, "Book": bo if side == "Over" else bu,
-                          "Edge %": round(ev * 100, 1)})
-
-    if edge_rows:
-        st.markdown("#### Edge (from your entered odds)")
-        edf = pd.DataFrame(edge_rows).sort_values("Edge %", ascending=False)
-        st.dataframe(
-            edf, hide_index=True, use_container_width=True,
-            column_config={"Edge %": st.column_config.NumberColumn(
-                "Edge %", format="%.1f",
-                help="EV per $1 staked. Positive = +EV bet at your odds.")},
-        )
-        pos = edf[edf["Edge %"] > 0]
-        if not pos.empty:
-            st.success(f"{len(pos)} +EV opportunit{'y' if len(pos)==1 else 'ies'} "
-                       f"— best: {pos.iloc[0]['Player']} {pos.iloc[0]['Bet']} "
-                       f"{pos.iloc[0]['Line']:.1f} ({pos.iloc[0]['Edge %']:+.1f}%)")
+    st.dataframe(show, hide_index=True, use_container_width=True, column_config=colcfg)
 
     st.caption(f"Last poll: {m['n_events']} events · pace_weight={pace_weight:.2f} · "
                f"{LIVE_SIMS:,} live sims · holds inherited from projections app")

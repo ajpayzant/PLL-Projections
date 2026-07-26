@@ -36,7 +36,7 @@ import numpy as np
 try:
     from projection_engine_v3 import (
         PlayerProjection, PlayerSimulation, TeamProjection,
-        ProjectionResult, GameSimulator, LG_SAVE_PCT,
+        ProjectionResult, GameSimulator, GameSimulation, LG_SAVE_PCT,
     )
 except ModuleNotFoundError:  # pragma: no cover - script/CLI path
     import sys
@@ -44,7 +44,7 @@ except ModuleNotFoundError:  # pragma: no cover - script/CLI path
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from projection_engine_v3 import (
         PlayerProjection, PlayerSimulation, TeamProjection,
-        ProjectionResult, GameSimulator, LG_SAVE_PCT,
+        ProjectionResult, GameSimulator, GameSimulation, LG_SAVE_PCT,
     )
 
 # PlayerProjection additive field  ->  banked-stat key it corresponds to.
@@ -88,6 +88,9 @@ class LiveProjection:
     # live full-game team-goal draw arrays (banked + remainder), for game markets
     home_goal_dist: np.ndarray
     away_goal_dist: np.ndarray
+    # live full-game GameSimulation (banked scores + re-simulated remainder),
+    # ready to hand to PricingEngine.price_game for live ML / spread / total.
+    game_sim: Optional["GameSimulation"] = None
 
     def all_sims(self) -> List[PlayerSimulation]:
         return self.home_player_sims + self.away_player_sims
@@ -300,6 +303,18 @@ class LiveModel:
 
         bh = _team_banked_all(banked_by_player, team_of, home_team_id, "goals")
         ba = _team_banked_all(banked_by_player, team_of, away_team_id, "goals")
+
+        # Live full-game GameSimulation for ML / spread / total. Game markets
+        # score 2-pt goals as 2, so we work in SCORES: banked scores (certain)
+        # are added onto the re-simulated remainder's scores. The simulator's
+        # game_sim already carries remainder home_scores/away_scores.
+        bh_2 = _team_banked_all(banked_by_player, team_of, home_team_id, "two_pt_goals")
+        ba_2 = _team_banked_all(banked_by_player, team_of, away_team_id, "two_pt_goals")
+        banked_home_scores = bh + bh_2   # 1pt*1 + 2pt*2 = goals + (extra point per 2pt)
+        banked_away_scores = ba + ba_2
+        live_game_sim = self._live_game_sim(
+            game_sim, bh, ba, banked_home_scores, banked_away_scores)
+
         return LiveProjection(
             home_team=result.home_team, away_team=result.away_team,
             home_player_sims=h_sims, away_player_sims=a_sims,
@@ -307,6 +322,36 @@ class LiveModel:
             banked_home_goals=bh, banked_away_goals=ba,
             home_goal_dist=game_sim.home_goals + bh,
             away_goal_dist=game_sim.away_goals + ba,
+            game_sim=live_game_sim,
+        )
+
+    @staticmethod
+    def _live_game_sim(rest: "GameSimulation", banked_home_goals: float,
+                       banked_away_goals: float, banked_home_scores: float,
+                       banked_away_scores: float) -> "GameSimulation":
+        """Full-game live GameSimulation = banked (certain) + re-simulated
+        remainder. Adds the banked scalars onto the remainder arrays, then
+        recomputes win probs / spread / total exactly as simulate_game does."""
+        hs = rest.home_scores + banked_home_scores
+        as_ = rest.away_scores + banked_away_scores
+        tied = hs == as_
+        # deterministic 50/50 tie-break without RNG (Date/random unavailable in
+        # some contexts): alternate by index parity, mean ~0.5 either way.
+        even = (np.arange(hs.size) % 2 == 0)
+        home_wins = (hs > as_) | (tied & even)
+        away_wins = (as_ > hs) | (tied & ~even)
+        return GameSimulation(
+            n_sims=rest.n_sims,
+            home_goals=rest.home_goals + banked_home_goals,
+            away_goals=rest.away_goals + banked_away_goals,
+            home_scores=hs, away_scores=as_,
+            home_win_prob=float(np.mean(home_wins)),
+            away_win_prob=float(np.mean(away_wins)),
+            tie_prob=0.0,
+            expected_total=float(np.median(hs + as_)),
+            spread_home=float(np.median(hs - as_)),
+            total_distribution=hs + as_,
+            margin_distribution=hs - as_,
         )
 
     @staticmethod
