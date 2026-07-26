@@ -360,7 +360,15 @@ def build_board(_engine, slug: str, home_id: str, away_id: str,
     pre_by_pid = {str(ps.player_id): ps
                   for ps in (pregame.home_player_sims + pregame.away_player_sims)}
 
-    live = LiveModel(_engine, n_sims=LIVE_SIMS).resimulate(
+    # Build the live model. n_sims trims the live re-sim for responsiveness, but
+    # tolerate an older LiveModel (e.g. a stale module still cached in a warm
+    # Streamlit process) that predates the n_sims parameter — fall back rather
+    # than crash the whole board with a TypeError.
+    try:
+        model = LiveModel(_engine, n_sims=LIVE_SIMS)
+    except TypeError:
+        model = LiveModel(_engine)
+    live = model.resimulate(
         pregame, banked.by_player, frac_rem, pace_weight=pace_weight,
         home_team_id=home_id, away_team_id=away_id,
         team_of=banked.team_of, events=state.events)
