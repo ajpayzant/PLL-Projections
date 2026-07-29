@@ -365,11 +365,35 @@ holds, glob_hold = _holds_from_cfg(cfg)
 engine.pricing.hold_by_stat = dict(holds)
 engine.pricing.hold_pct = glob_hold
 
+# -- pregame-setup provenance banner -------------------------------------------
+# Make it unmistakable whether the board is running on your finalized Projections
+# setup or on raw model defaults — the latter is exactly the failure mode where
+# "the live lines don't match my finalized projections".
+_src = st.session_state.get("_uploaded_cfg")
+_n_overrides = sum(len(v or {}) for v in (cfg.get("depth_charts") or {}).values())
+_n_teamrat = sum(len(v or {}) for v in (cfg.get("team_rating_overrides") or {}).values())
+if _src:
+    st.success(
+        f"Pregame setup loaded from your uploaded file — "
+        f"{_n_overrides} player override(s), {_n_teamrat} team-rating override(s), "
+        f"holds inherited. Pregame lines below reproduce your finalized projections.")
+elif cfg:
+    st.info(
+        f"Using the local session file — {_n_overrides} player override(s), "
+        f"{_n_teamrat} team-rating override(s). (Upload a setup file in the sidebar "
+        "if this deployment can't see the Projections app's local state.)")
+else:
+    st.warning(
+        "⚠️ No pregame setup loaded — the board is using RAW MODEL DEFAULTS "
+        "(no overrides, default margins). Export a setup file from the Projections "
+        "app (💾 Save for Live Trading) and upload it in the sidebar so the pregame "
+        "lines match your finalized projections.")
+
 
 @st.cache_data(ttl=600, show_spinner=False, max_entries=8)
 def build_board(_engine, slug: str, home_id: str, away_id: str,
                 game_date: str | None, cfg_token: str, pace_weight: float,
-                tick: int) -> dict:
+                tick: int, sched_is_final: bool = False) -> dict:
     """Poll the feed, reconstruct banked stats, run the cached pregame projection
     and the live rest-of-game re-sim, and return a fully-computed, picklable board.
 
@@ -476,12 +500,42 @@ def build_board(_engine, slug: str, home_id: str, away_id: str,
     except Exception:
         game["pre"] = None
 
+    # Orientation guard: the scoreboard (feed homeScore/visitorScore) and the
+    # priced game markets (which sum banked goals by team_of vs the SCHEDULE's
+    # home/away ids) must refer to the same team as "home". If the feed's home
+    # score disagrees with the banked-goal home total by more than a rounding
+    # slack, home/away are likely flipped for this slug — surface it rather than
+    # price the wrong side. (Scores can exceed goals via 2-pt, so compare goals.)
+    orient_ok = True
+    orient_msg = ""
+    if home_id and away_id:
+        bh_goals = _team_banked_all(banked.by_player, banked.team_of, home_id, "goals")
+        ba_goals = _team_banked_all(banked.by_player, banked.team_of, away_id, "goals")
+        # feed scores count 2-pt as 2, so only compare when we can back those out;
+        # use goals-only banked vs feed score direction (which side leads) as a
+        # cheap, robust orientation check.
+        if (bh_goals + ba_goals) > 0 and (state.home_score + state.away_score) > 0:
+            feed_home_leads = state.home_score > state.away_score
+            bank_home_leads = bh_goals > ba_goals
+            if state.home_score != state.away_score and bh_goals != ba_goals \
+                    and feed_home_leads != bank_home_leads:
+                orient_ok = False
+                orient_msg = (
+                    f"Feed score {state.away_score}-{state.home_score} (away-home) "
+                    f"disagrees with banked goals ({_tname(away_id)} {ba_goals:.0f} / "
+                    f"{_tname(home_id)} {bh_goals:.0f}). Home/away may be flipped for "
+                    "this slug — game-market sides may be reversed.")
+
     return {
         "ok": True,
         "meta": {
             "away_score": state.away_score, "home_score": state.home_score,
             "period": state.period, "cm": state.clock_minutes, "cs": state.clock_seconds,
-            "frac_rem": frac_rem, "n_events": state.n_events, "is_final": state.is_final,
+            "frac_rem": frac_rem, "n_events": state.n_events,
+            # Authoritative FINAL = schedule eventStatus; feed clock is the fallback.
+            "is_final": bool(sched_is_final or state.is_final),
+            "is_overtime": bool(getattr(state, "is_overtime", False)),
+            "orient_ok": orient_ok, "orient_msg": orient_msg,
         },
         "stats": stats, "game": game,
     }
@@ -508,7 +562,8 @@ def live_board():
     # reuse the cached sim instead of recomputing it.
     tick = int(time.time() // refresh_secs)
     board = build_board(engine, selected.slug, home_id, away_id,
-                        selected.game_date, _cfg_token(cfg), pace_weight, tick)
+                        selected.game_date, _cfg_token(cfg), pace_weight, tick,
+                        sched_is_final=bool(getattr(selected, "is_final", False)))
     if not board.get("ok"):
         st.error(f"Feed error: {board.get('error')}")
         return
@@ -520,8 +575,14 @@ def live_board():
     c2.metric("Period / Clock", f"P{m['period']}  {m['cm']:02d}:{m['cs']:02d}")
     c3.metric("Game remaining", f"{m['frac_rem']:.0%}")
     c4.metric("Events", m["n_events"])
+    if m.get("is_overtime") and not m["is_final"]:
+        st.warning("Overtime (sudden death) — regulation is fully banked; the board "
+                   "treats all stats as settled and does not simulate more time.")
     if m["is_final"]:
         st.info("Game reads FINAL — lines below are the settled result.")
+    if not m.get("orient_ok", True):
+        st.error("⚠️ " + m.get("orient_msg", "Home/away orientation mismatch — "
+                 "game-market sides may be reversed. Verify before trading."))
 
     # ---- game markets: suggested live prices to post -------------------------
     g = board.get("game") or {}

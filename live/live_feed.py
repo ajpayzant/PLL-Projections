@@ -76,11 +76,22 @@ class GameState:
 
     # ----- derived game-clock helpers -----
     @property
+    def is_overtime(self) -> bool:
+        """True once play is past the four regulation quarters (period >= 5).
+        PLL overtime is sudden-death, so from a rest-of-game standpoint there is
+        no meaningful 'time remaining' to simulate — the game is effectively all
+        banked until it reads final."""
+        return self.period >= 5
+
+    @property
     def seconds_elapsed(self) -> int:
-        """Total game seconds elapsed (period-aware). Overtime clamps to regulation
-        for the purpose of remaining-time (OT is handled as bonus, see is_final)."""
+        """Total REGULATION seconds elapsed (period-aware). In overtime this pins
+        to a full regulation (2880s) — OT is sudden-death bonus time that the
+        rest-of-game re-sim must not treat as more regulation to play."""
         if self.period <= 0:
             return 0
+        if self.is_overtime:
+            return REGULATION_SECONDS
         completed = (min(self.period, 4) - 1) * QUARTER_SECONDS
         # clock counts DOWN within a quarter, so elapsed-in-quarter = QUARTER - remaining
         in_q = QUARTER_SECONDS - (self.clock_minutes * 60 + self.clock_seconds)
@@ -89,7 +100,10 @@ class GameState:
 
     @property
     def seconds_remaining(self) -> int:
-        """Regulation seconds left. 0 in OT / final."""
+        """Regulation seconds left. 0 in OT / final (nothing left to re-simulate:
+        every stat is banked and the outcome is decided by sudden death)."""
+        if self.is_overtime:
+            return 0
         return max(0, REGULATION_SECONDS - self.seconds_elapsed)
 
     @property
@@ -107,7 +121,9 @@ class GameState:
     def is_final(self) -> bool:
         """Best-effort final detection: regulation clock exhausted with events present.
         (The schedule endpoint's event_status is the authoritative check; this is a
-        feed-only fallback.)"""
+        feed-only fallback.) NOTE: this cannot distinguish 'end of regulation tied,
+        OT about to start' from 'game over' — a tied game at 0:00 of Q4 may go to
+        OT. The app prefers the schedule's eventStatus == FINAL over this."""
         return self.period >= 4 and self.seconds_remaining == 0 and self.n_events > 0
 
 
