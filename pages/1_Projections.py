@@ -351,6 +351,24 @@ with st.sidebar:
         help="Downloads a JSON file with your current game selection, depth chart, and rating overrides.",
     )
 
+    # Export for the Live Trading app -------------------------------------
+    # The Live app is a SEPARATE deployment (its own container/filesystem), so
+    # it cannot read this app's auto-saved session file. Export the finalized
+    # setup here and upload it in the Live app; because the game simulator is
+    # seeded, re-running the projection there reproduces these exact lines.
+    st.download_button(
+        label="💾 Save for Live Trading",
+        data=save_data,
+        file_name=f"PLL_live_setup_game{_gnum}_{_gdate}.json",
+        mime="application/json",
+        key="save_live_setup_btn",
+        width="stretch",
+        type="primary",
+        help="Exports your finalized game selection, depth chart, overrides and "
+             "per-market margins. Upload this file in the Live Trading app so its "
+             "pregame lines match these projections exactly.",
+    )
+
     # Load from uploaded file
     uploaded = st.file_uploader("Load session", type="json",
                                  key="load_session_file",

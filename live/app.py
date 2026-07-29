@@ -145,8 +145,20 @@ def get_pregame(_engine: ProjectionEngine, home_id: str, away_id: str,
 
 
 def _load_autosave() -> dict:
-    """Read the projections app's shared state (holds, overrides, selected game).
+    """Return the pregame setup (holds, overrides, selected game) the live board
+    should inherit from the Projections app.
+
+    Resolution order:
+      1. A setup file the user UPLOADED in the sidebar (stored in session_state).
+         This is the reliable path when the two apps are SEPARATE deployments —
+         they don't share a filesystem, so the local autosave below is never
+         written by the projections container.
+      2. The local ``data/session_autosave.json`` — only present when both apps
+         run from the same folder on one machine (local dev).
     Best-effort: an empty dict just means the live app uses model defaults."""
+    uploaded = st.session_state.get("_uploaded_cfg")
+    if isinstance(uploaded, dict) and uploaded.get("version") == 1:
+        return uploaded
     try:
         p = json.loads(_AUTOSAVE_PATH.read_text(encoding="utf-8"))
         if p.get("version") != 1:
@@ -249,11 +261,42 @@ def _infer_away(state, home_id):
 # =============================================================================
 st.set_page_config(page_title="PLL Live Trading", page_icon="🥍", layout="wide")
 st.title("🥍 PLL Live Trading")
-st.caption("Live rest-of-game re-simulation. Inherits your pregame setup from the "
-           "Projections app (margins, overrides) via the shared session file.")
+st.caption("Live rest-of-game re-simulation. Upload the setup file you exported "
+           "from the Projections app so the pregame lines here match your "
+           "finalized projections, margins and overrides exactly.")
 
-# -- sidebar: game selection ---------------------------------------------------
+# -- sidebar: pregame setup file -----------------------------------------------
 with st.sidebar:
+    st.header("Pregame setup")
+    st.caption("Export a setup file from the Projections app "
+               "(**💾 Save for Live Trading**) and upload it here. The live board "
+               "reproduces your finalized pregame lines from it, then updates as "
+               "the game develops.")
+    _setup = st.file_uploader(
+        "Setup file (.json)", type="json", key="live_setup_file",
+        help="The JSON exported from the Projections app: game selection, depth "
+             "chart, rating overrides and per-market margins.")
+    if _setup is not None:
+        try:
+            _cfg_in = json.loads(_setup.read().decode("utf-8"))
+            if _cfg_in.get("version") == 1:
+                # Only re-apply (and clear caches) when the uploaded content
+                # actually changes, so re-runs don't thrash the pregame cache.
+                _tok = _cfg_token(_cfg_in)
+                if st.session_state.get("_uploaded_cfg_token") != _tok:
+                    st.session_state["_uploaded_cfg"] = _cfg_in
+                    st.session_state["_uploaded_cfg_token"] = _tok
+                    get_pregame.clear()
+                st.success("Setup loaded — pregame lines will match the "
+                           "Projections app.")
+            else:
+                st.error("Unrecognised setup file (expected version 1).")
+        except Exception as _e:
+            st.error(f"Could not read setup file: {_e}")
+    elif st.session_state.get("_uploaded_cfg"):
+        st.caption("✓ Using a previously uploaded setup file this session.")
+
+    st.divider()
     st.header("Game")
     year = st.number_input("Season", min_value=2019, max_value=2100,
                            value=DEFAULT_YEAR, step=1)
