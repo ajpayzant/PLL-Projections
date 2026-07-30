@@ -37,7 +37,7 @@ for _p in (str(_ROOT), str(_LIVE_DIR)):
 
 from live_feed import LiveFeed, fetch_state                      # noqa: E402
 from live_state import reconstruct                               # noqa: E402
-from live_model import LiveModel                                 # noqa: E402
+from live_model import LiveModel, _team_banked_all              # noqa: E402
 from live_pricing import TRADED_STATS                            # noqa: E402
 from live_schedule import list_games, detect_live, find_game     # noqa: E402
 from projection_engine_v3 import ProjectionEngine, DEFAULT_HOLDS, DEFAULT_GLOBAL_HOLD  # noqa: E402
