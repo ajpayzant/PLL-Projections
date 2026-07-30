@@ -83,12 +83,21 @@ _EPS = 1e-6
 # early lead gets full credit toward the final margin. Real PLL games mean-revert:
 # regressing final margin on the in-game lead over 187 games (2022-2026 PBP)
 # gives a persistence factor beta ~= 0.70 at the end of Q1 rising to ~0.95 late.
-# Both that regression and an independent fit of the empirical win-prob curve
-# collapse to shrink ~= 1 - 0.4*frac_rem. We shrink ONLY the margin (the totals
-# are real, already-scored points); the lead's expected value toward the final
-# is pulled toward zero by (1 - shrink)*lead. See project_pll_live_trading memory.
-_REVERSION_SLOPE = 0.4      # shrink = 1 - slope*frac_rem
-_REVERSION_FLOOR = 0.55     # never credit an early lead less than 55%
+#
+# The reversion CURVE was then calibrated by full replay (live/calibrate_reversion.py):
+# sweeping (slope, floor) over all 187 games at each elapsed snapshot showed
+# slope=0.6 / floor=0.45 IMPROVES margin accuracy vs the final at every early
+# snapshot (e.g. margAE 3.326->3.311 at 15% elapsed, 3.276->3.260 at 25%) while
+# cutting the early win-prob swing ~25-30% (WPmove 9.2%->6.6% at 15%, 12.6%->10.9%
+# at 25%) -- i.e. the extra early movement the old 0.4/0.55 curve produced was
+# NOISE, so damping it is free accuracy-wise. Pushing further (0.8/1.0) starts to
+# cost accuracy, so 0.6/0.45 is the empirical optimum, not the extreme. We shrink
+# ONLY the margin (the totals are real, already-scored points); the lead's expected
+# value toward the final is pulled toward zero by (1 - shrink)*lead. This is the
+# primary lever against "unrealistic odds after an early goal". See
+# project_pll_live_trading memory.
+_REVERSION_SLOPE = 0.6      # shrink = 1 - slope*frac_rem  (calibrated 2026-07)
+_REVERSION_FLOOR = 0.45     # never credit an early lead less than 45%
 
 
 def _lead_persistence(frac_rem: float) -> float:
