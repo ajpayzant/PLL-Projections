@@ -620,3 +620,144 @@ class TestTeamTotalConditioning:
 
     def test_empty_field_returns_empty(self, rng):
         assert E._condition_to_team_total(rng, [], np.zeros(10), []) == []
+
+
+# ---------------------------------------------------------------------------
+# SOG thinning (_draw_thinned)
+# ---------------------------------------------------------------------------
+
+# (proj_shots, sog_rate) pairs spanning the volume range the old clamp damaged.
+# The loss scaled inversely with volume -- -13% at 6 shots, -38% at 1.5 -- so the
+# low end matters most and is deliberately over-represented.
+_SOG_CASES = [
+    (6.00, 0.63),
+    (4.50, 0.63),
+    (3.50, 0.63),
+    (2.50, 0.63),
+    (1.50, 0.63),
+    (0.80, 0.60),
+    (4.50, 0.85),   # high-rate shooter
+]
+
+
+def _shots_draw(rng, mu, n=N_DRAWS):
+    """A shots draw as simulate_players builds it (plain NegBin, no inflation)."""
+    nb_n, nb_p = E._negbinom_params(mu, E.PHI_PLAYER["shots"])
+    return rng.negative_binomial(nb_n, nb_p, n).astype(float)
+
+
+class TestSOGThinning:
+    """SOG is a subset of shots, so it must be thinned out of the shots draw.
+
+    Drawing it independently and clipping with ``np.minimum`` cost 13-38% of the
+    projected mean, because the minimum of two independent draws sits below both.
+    On the book that showed up as SOG projections running 0.788x actual and a
+    +16.3 point calibration gap.
+    """
+
+    # 1.5% of the mean. Sampling error at N_DRAWS is well under this; the bug
+    # being guarded against was 10-40x larger.
+    MEAN_TOL = 0.015
+
+    @pytest.mark.parametrize("shots,rate", _SOG_CASES)
+    def test_thinning_preserves_the_projected_mean(self, rng, shots, rate):
+        """E[Binomial(N, r)] = r*E[N], so the mean comes out for free."""
+        sh = _shots_draw(rng, shots)
+        sog = E._draw_thinned(rng, sh, rate)
+        target = rate * float(sh.mean())
+        assert abs(float(sog.mean()) - target) <= self.MEAN_TOL * target, (
+            f"proj_shots={shots} rate={rate}: got {sog.mean():.4f}, "
+            f"want {target:.4f}"
+        )
+
+    @pytest.mark.parametrize("shots,rate", _SOG_CASES)
+    def test_the_old_clamp_wiring_fails_this(self, rng, shots, rate):
+        """Teeth check. If min(independent NegBin, shots) ever stops losing mass,
+        this test has stopped testing anything."""
+        sh = _shots_draw(rng, shots)
+        mu_sog = shots * rate
+        nb_n, nb_p = E._negbinom_params(mu_sog, E.PHI_PLAYER["sog"])
+        indep = rng.negative_binomial(nb_n, nb_p, len(sh)).astype(float)
+        old = np.minimum(indep, sh)
+        loss = (mu_sog - float(old.mean())) / mu_sog
+        assert loss > 0.10, (
+            f"the old clamp should lose >10% of the mean at proj_shots={shots}; "
+            f"measured {loss:.1%}"
+        )
+
+    @pytest.mark.parametrize("shots,rate", _SOG_CASES)
+    def test_sog_never_exceeds_shots_in_any_sim(self, rng, shots, rate):
+        """The invariant the clamp existed to enforce, now true by construction
+        rather than imposed after the fact."""
+        sh = _shots_draw(rng, shots)
+        sog = E._draw_thinned(rng, sh, rate)
+        assert np.all(sog <= sh)
+        assert np.all(sog >= 0)
+
+    def test_thinned_sog_dispersion_matches_measurement(self, rng):
+        """Thinning inherits the parent's width, so this is really a check on
+        PHI_PLAYER["shots"].
+
+        At the matched population mean (mu_shots=5.211, rate=0.6375, over 2,179
+        full-workload player-games) actual SOG is var/mean 1.095 and thinning a
+        phi=15 shots draw returns 1.213 -- close, and much closer than the phi=5
+        this replaced, which gave 1.663. The band below would fail if phi["shots"]
+        drifted back toward 5."""
+        sh = _shots_draw(rng, 5.211)
+        sog = E._draw_thinned(rng, sh, 0.6375)
+        vm = float(sog.var()) / float(sog.mean())
+        assert 0.95 <= vm <= 1.35, (
+            f"thinned SOG var/mean {vm:.3f} outside the measured band; actual is "
+            f"1.095 and phi['shots']={E.PHI_PLAYER['shots']}"
+        )
+
+    def test_shots_dispersion_stays_near_the_measured_value(self, rng):
+        """The parent draw's own shape, checked directly at the matched mean.
+        Actual is var/mean 1.211, sd 2.512. phi=5 gave 2.038/3.256 -- far too
+        wide -- and that width propagated into SOG."""
+        sh = _shots_draw(rng, 5.211)
+        vm = float(sh.var()) / float(sh.mean())
+        assert 1.05 <= vm <= 1.55, f"shots var/mean {vm:.3f}; actual is 1.211"
+
+    @pytest.mark.parametrize("vi", [1.05, 1.3, 1.6, 2.0])
+    def test_var_index_override_moves_dispersion_not_the_mean(self, rng, vi):
+        """The user's per-player dispersion slider must still work, and must
+        reshape only the tails. A plain binomial cannot widen on request, so the
+        per-shot probability is drawn from a Beta with the same mean."""
+        sh = _shots_draw(rng, 4.0)
+        rate = 0.63
+        sog = E._draw_thinned(rng, sh, rate, var_index=vi)
+        target = rate * float(sh.mean())
+        assert abs(float(sog.mean()) - target) <= self.MEAN_TOL * target
+        got = float(sog.var()) / float(sog.mean())
+        # The thinned draw has a natural floor set by the parent's own width (see
+        # test_thinned_sog_dispersion_matches_measurement), so a request below it
+        # clamps rather than failing: a subset count cannot be steadier than one
+        # draw per parent event. Only requests above the floor are held to target.
+        floor = float(E._draw_thinned(rng, sh, rate).var()) / float(
+            E._draw_thinned(rng, sh, rate).mean())
+        if vi > floor + 0.15:
+            assert abs(got - vi) <= 0.10, f"asked for {vi}, got {got:.3f}"
+        else:
+            assert got >= floor - 0.10
+
+    def test_var_index_is_monotone(self, rng):
+        """Higher requested dispersion must not produce a narrower result."""
+        sh = _shots_draw(rng, 4.0)
+        seen = [float(E._draw_thinned(rng, sh, 0.63, var_index=v).var())
+                for v in (1.2, 1.5, 1.8, 2.2)]
+        assert seen == sorted(seen), seen
+
+    def test_degenerate_rates(self, rng):
+        sh = _shots_draw(rng, 3.0)
+        assert np.all(E._draw_thinned(rng, sh, 0.0) == 0.0)
+        assert np.array_equal(E._draw_thinned(rng, sh, 1.0), sh)
+        # Out-of-range rates clamp rather than raising or producing sog > shots.
+        assert np.array_equal(E._draw_thinned(rng, sh, 1.4), sh)
+        assert np.all(E._draw_thinned(rng, sh, -0.2) == 0.0)
+
+    def test_all_zero_parent_is_safe(self, rng):
+        """A player projected for no shots must yield no SOG, not a NaN."""
+        out = E._draw_thinned(rng, np.zeros(1000), 0.63, var_index=1.5)
+        assert np.all(out == 0.0)
+        assert np.all(np.isfinite(out))

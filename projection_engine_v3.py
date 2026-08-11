@@ -259,8 +259,35 @@ PHI_PLAYER: Dict[str, float] = {
                        # at mu=0.8. phi=4 put too much mass at zero and was the
                        # second cause (with ZINB stacking) of assists overs
                        # pricing 35% against a realized 52%.
-    "shots":    5.0,   # var/mean ~ 1.3 empirically
-    "sog":      6.0,
+    "shots":   15.0,   # was 5.0, whose comment claimed "var/mean ~ 1.3
+                       # empirically" but which actually delivers 2.04 at the
+                       # mu=5.2 of a prop-worthy shooter -- the constant and its
+                       # own stated target disagreed. Re-measured WITHIN
+                       # player-season (446 player-seasons, >=6 games) shots are
+                       # var/mean 0.929, i.e. slightly UNDERdispersed, and the
+                       # figure is flat across cuts (0.928 for mu>1.5, 0.926 for
+                       # A/M only). At the matched population mean (mu=5.211 over
+                       # 2,179 full-workload player-games) the shape check is:
+                       #        sd     var/mean  P(<=1)   P(>=8)
+                       #    5  3.256    2.038    0.1001   0.2134
+                       #   15  2.645    1.342    0.0552   0.1844
+                       #   40  2.429    1.132    0.0424   0.1691
+                       #  act  2.512    1.211    0.0500   0.1840
+                       # 15 is closest on every column, and lands P(<=1) and
+                       # P(>=8) within 0.005 and 0.0004 of actual. This matters
+                       # beyond shots props: SOG is now THINNED out of the shots
+                       # draw (see _draw_thinned), so it inherits the parent's
+                       # width, and phi=5 was pushing SOG to var/mean 1.66
+                       # against an actual 1.10.
+    "sog":      6.0,   # Retained only for the ``ge_probability_ladder`` path in
+                       # boss_export.py, which has no shots draw to thin from.
+                       # The simulator no longer uses it: SOG is drawn as a
+                       # binomial thinning of shots, so its dispersion follows
+                       # PHI_PLAYER["shots"] and the per-shot rate instead. At
+                       # phi_shots=15 that reproduces actual SOG closely --
+                       # sd 2.008 vs 1.907, var/mean 1.213 vs 1.095, P(<=1)
+                       # 0.1836 vs 0.1703, P(>=5) 0.2532 vs 0.2542 at the matched
+                       # mean.
     "2pt":     30.0,   # var/mean ~ 1.01 — Poisson-like
     "gb":       4.0,   # var/mean ~ 1.2-1.7
     "saves":  120.0,   # actual saves are near-Poisson: empirical var/mean~1.0
@@ -1278,6 +1305,104 @@ def _condition_to_team_total(
             diff[rem_idx[~ok]] = 0
 
     return [counts[i] for i in range(k)]
+
+
+def _draw_thinned(
+    rng: np.random.Generator,
+    parent: np.ndarray,
+    rate: float,
+    var_index: Optional[float] = None,
+) -> np.ndarray:
+    """Draw a sub-count of ``parent`` by thinning, preserving ``rate * E[parent]``.
+
+    For a stat that is a strict subset of another — a shot on goal *is* a shot —
+    the sub-count must be drawn **conditionally on the parent draw**, not drawn
+    independently and then clipped to it.
+
+    The engine previously did the latter::
+
+        sog = np.minimum(_nb(proj_sog, "sog"), shots_draw)
+
+    which is wrong for a reason that is easy to miss: **the minimum of two
+    independent draws sits below both of their means.** Clipping only ever removes
+    mass, and it removes it whenever the shots draw happens to come in low, which
+    for a 4-shot player is often. The damage scales inversely with volume, because
+    a low-volume player's two draws overlap more:
+
+        proj_shots  proj_sog  mean actually returned   loss
+              6.00     3.780                   3.287   -13.0%
+              4.50     2.835                   2.361   -16.7%
+              2.50     1.575                   1.154   -26.7%
+              1.50     0.945                   0.588   -37.7%
+
+    On the 430 graded SOG props this is visible directly: projections ran 0.788x
+    actual while every other stat sat within 5% of 1.0, and SOG carried a +16.3
+    point calibration gap — the second worst market on the book. It also made the
+    displayed number disagree with the priced one, since the UI shows the clean
+    pre-clamp ``proj_sog`` (see pages/3_Player_Props.py) while the price came from
+    the clipped distribution.
+
+    Thinning fixes it exactly: draw ``Binomial(parent, rate)``, so every SOG is one
+    of that sim's shots by construction. ``E[Binomial(N, r)] = r * E[N]``, so the
+    mean is preserved for free rather than corrected after the fact, and the
+    ``sog <= shots`` invariant holds in every sim instead of being imposed.
+
+    The data says thinning is also the right *model*, not just the convenient one.
+    Measured on 4,315 player-games, the realized SOG rate is flat in shot volume —
+    0.596 / 0.634 / 0.619 / 0.627 / 0.634 across shots buckets 1-2, 2-3, 3-4, 4-6,
+    6+ — which is what a constant per-shot probability predicts. Within-player
+    season SOG is also *under*-dispersed (var/mean 0.927 pooled over 443
+    player-seasons), so an independent NegBin was the wrong shape regardless of
+    the clipping.
+
+    ``var_index`` keeps the user's per-player dispersion override working. A plain
+    binomial is the steadiest possible shape and cannot widen on request, so the
+    per-shot probability itself is drawn from a Beta with the same mean, which
+    widens the result without moving it (a Beta-binomial). Solving for the Beta
+    variance ``s2`` that hits a target var/mean ``vi``, using
+    ``Var(S) = E[N](r - r^2 - s2) + (Var(N) + E[N]^2) s2 + r^2 Var(N)``:
+
+        s2 = (r*E[N]*(vi - 1 + r) - r^2*Var(N)) / (Var(N) + E[N]^2 - E[N])
+
+    Verified against simulation to within 0.005 of the requested var/mean across
+    ``vi`` 1.05-2.0, with the mean held to 0.005 throughout. Requests below the
+    binomial's natural floor clamp to it, which is the honest answer: a subset
+    count cannot be steadier than one draw per parent event.
+
+    Args:
+        rng: generator.
+        parent: the containing count per sim (shots). Non-integer input is floored.
+        rate: expected share of the parent, clamped to [0, 1].
+        var_index: optional target variance/mean. ``None`` uses a plain binomial.
+
+    Returns:
+        A float array of the same length as ``parent``, elementwise ``<= parent``.
+    """
+    par = np.maximum(np.asarray(parent, dtype=float), 0.0)
+    n_par = par.astype(np.int64)
+    r = min(max(float(rate), 0.0), 1.0)
+    if r <= 0.0:
+        return np.zeros(len(par), dtype=float)
+    if r >= 1.0:
+        return par.copy()
+
+    p = r
+    if var_index is not None:
+        m_s = float(par.mean())
+        v_s = float(par.var())
+        den = v_s + m_s * m_s - m_s
+        if den > 1e-9 and m_s > 0.0:
+            vi = min(max(float(var_index), 1.01), 3.0)
+            s2 = (r * m_s * (vi - 1.0 + r) - r * r * v_s) / den
+            # A Beta on [0,1] with mean r cannot exceed variance r(1-r); stay just
+            # inside so the concentration stays positive and finite.
+            s2 = min(max(s2, 0.0), r * (1.0 - r) * 0.999)
+            if s2 > 1e-9:
+                k = r * (1.0 - r) / s2 - 1.0
+                if k > 1e-6:
+                    p = rng.beta(r * k, (1.0 - r) * k, len(par))
+
+    return rng.binomial(n_par, p).astype(float)
 
 
 def _trunc_normal_sample(rng: np.random.Generator, mu: float, sigma: float, n: int,
@@ -3550,10 +3675,16 @@ class GameSimulator:
             one = np.maximum(g - t, 0)
             a = raw_assists.get(pid, np.zeros(n))
             sh = raw_shots.get(pid, np.zeros(n))
+            # SOG is a SUBSET of shots, so it is thinned out of the shots draw
+            # rather than drawn separately and clipped to it. The old
+            # min(_nb(proj_sog), sh) wiring lost 13-38% of the projected mean --
+            # the minimum of two independent draws sits below both -- which showed
+            # up on the book as SOG projections running 0.788x actual and a +16.3
+            # point calibration gap, the second worst market. Thinning preserves
+            # the mean by construction and keeps sog <= shots in every sim.
+            # See _draw_thinned for the measurement and the dispersion algebra.
             sog_rate = pp.proj_sog / max(pp.proj_shots, 0.01)
-            _sogphi = (_var_index_to_phi(pp.var_index_sog, pp.proj_sog)
-                       if pp.var_index_sog is not None else None)
-            sog = np.minimum(_nb(pp.proj_sog, "sog", phi_override=_sogphi), sh)
+            sog = _draw_thinned(rng, sh, sog_rate, pp.var_index_sog)
 
             dists: Dict[str, np.ndarray] = {
                 "goals": g,
