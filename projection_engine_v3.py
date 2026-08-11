@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import re
 import unicodedata
@@ -32,7 +33,7 @@ import warnings
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -83,6 +84,20 @@ SAVE_PRIOR_B: float = (1.0 - LG_SAVE_PCT) * SAVE_PRIOR_STRENGTH  # ≈ 69.4
 # these factors only convert it into shots-faced for the save projection.
 LG_TEAM_SF_PER_OPP_SOG: float = 0.942
 LG_STARTER_SF_PER_OPP_SOG: float = 0.915
+# Goalie playing time. The 0.915/0.942 = 0.971 ratio above is the AVERAGE share of
+# team shots the starter faces, so proj_saves is already a mixture mean: it blends
+# full games with the occasional short outing. Simulating every start at that mean
+# makes a 2-save night impossible, which is wrong in the one direction that costs
+# real money — a saves MS longshot. Measured over 336 team-games (2022-26) where a
+# pre-game starter was predictable from prior shots faced:
+#   P(starter faced <99% of team shots) = 0.086 (per season: .014 .101 .099 .029 .105)
+#   share | partial, method-of-moments Beta fit = Beta(1.59, 0.77), mean 0.674
+#   E[share] = 0.914*1 + 0.086*0.674 = 0.972  -- matches 0.971 above, so drawing the
+#   share leaves the projected mean untouched; it only moves mass into the low tail.
+# Validated at 400k draws: P(saves<=2) goes 0.05% -> 0.78% against an actual 1.19%,
+# while the mean holds at 12.57 and the 25th-75th percentiles do not move.
+P_GOALIE_PARTIAL_GAME: float = 0.086
+GOALIE_PARTIAL_SHARE_BETA: Tuple[float, float] = (1.59, 0.77)
 LG_FO_PCT: float = 0.500
 LG_FOS_PER_GAME: int = 26
 # How many days after a game date the engine still treats it as a "current"
@@ -161,8 +176,44 @@ LG_CLEAN_SAVE_RATE: float = 0.344
 SEASON_HALFLIFE: float = 1.5
 N_SIMS: int = 20_000
 
+# Minimum sims that must clear a line (on BOTH sides) before it can be priced.
+# Below this the tail probability is sampling noise: at N_SIMS=20,000 the smallest
+# resolvable probability is 1/20,000, and a market built on a handful of draws
+# turns that noise into a four-figure payout.
+MIN_SIM_SUPPORT: int = 50
+
+# Floor/ceiling on any priced prop probability, before hold. 0.02 caps the price
+# near +4900 — well beyond any prop we intend to book, while blocking the
+# +8,000-to-+99,900 range where every 2026 prop priced there was wrong by orders
+# of magnitude. _am() alone clamps at 0.001, i.e. +99,900, which is no cap at all.
+MIN_PRICE_PROB: float = 0.02
+
 # Team goal std dev (measured: ~3.1/game per team)
 TEAM_GOAL_SIGMA_BASE: float = 3.1
+
+# How far above the Poisson-implied floor exp(-mu) a zero rate may sit before it
+# is treated as inconsistent with the projection.
+#
+# Fitted on 1,149 player-seasons with >=6 games (2022-26), comparing each
+# player-season's observed scoreless rate to exp(-mu) at its own mean:
+#
+#   population              n     mean excess   median
+#   front-line (mu>=0.5)   487      -0.018      -0.018
+#   sparse     (mu<0.25)   662      -0.004       0.000
+#
+# The mean excess is NEGATIVE in every mean bucket for both goals and assists:
+# these players are Poisson or very slightly LESS zero-heavy than Poisson. The
+# wide per-season scatter (p90 ~ +0.10) is sampling noise -- at 10 games the
+# standard error on a zero rate is ~0.15 -- not evidence of real excess zeros, so
+# calibrating the slack to that spread would be fitting the noise.
+#
+# 0.03 therefore still sits ABOVE anything the data supports, leaving room for
+# genuine overdispersion, while being tight enough to bind: at 0.10 the cap never
+# engaged and the Poisson-floor regression test failed on four of six cells.
+# Residual effect on assists is ~3 points of zero mass more than observed, which
+# errs toward underpricing the over -- the direction that lost money -- and is
+# left to the hold rather than tuned away on a single season.
+ZERO_RATE_POISSON_SLACK: float = 0.03
 
 # Player zero-inflation rates — empirically measured from all seasons.
 # These are the PRIOR defaults; the engine also computes per-player
@@ -174,6 +225,10 @@ ZERO_RATE: Dict[str, float] = {
     # Calibrated from backtest: actual A_goals=32%, M_goals=39% zero rates.
     # Set priors slightly above empirical so cap pulls them down for established
     # players, while sparse players stay conservatively estimated.
+    # NOTE: these are POOLED across each position, so they overstate the zero rate
+    # for the front-line players props are actually offered on. _cap_zero_rate
+    # bounds them by the projected mean rather than lowering them here, which keeps
+    # them correct for the sparse/low-usage players they were measured on.
     "A_goals":    0.22, "M_goals":    0.40, "FO_goals":   0.78,
     "SSDM_goals": 0.84, "LSM_goals":  0.87, "D_goals":    0.95,
     "A_assists":  0.55, "M_assists":  0.70, "FO_assists":  0.94,
@@ -194,7 +249,16 @@ ZERO_RATE: Dict[str, float] = {
 # At phi=40 and typical player mu=1.0, var/mean = 1 + 1.0/40 = 1.025 (Poisson-like).
 PHI_PLAYER: Dict[str, float] = {
     "goals":   40.0,   # var/mean ~ 1.02-1.07 empirically — near-Poisson
-    "assists":  4.0,   # var/mean ~ 1.4 empirically
+    "assists": 20.0,   # was 4.0 (var/mean ~1.4). That 1.4 is the POOLED figure
+                       # across a whole position; it is a mixture artefact, since
+                       # combining low- and high-usage players inflates variance
+                       # even when each player is individually Poisson. Measured
+                       # on the 2026 offered book, front-line assists are
+                       # var/mean 0.99 (A, n=116) and 0.83 (M, n=102) — i.e.
+                       # Poisson or slightly UNDERdispersed. phi=20 gives ~1.04
+                       # at mu=0.8. phi=4 put too much mass at zero and was the
+                       # second cause (with ZINB stacking) of assists overs
+                       # pricing 35% against a realized 52%.
     "shots":    5.0,   # var/mean ~ 1.3 empirically
     "sog":      6.0,
     "2pt":     30.0,   # var/mean ~ 1.01 — Poisson-like
@@ -203,9 +267,48 @@ PHI_PLAYER: Dict[str, float] = {
                        # over 2024-26 backtest. At mu~13.3, phi=120 -> var/mean
                        # ~1.11. Old phi=20 (var/mean~1.66) made sim tails ~60%
                        # too wide, mispricing over/unders at the extremes.
-    "fo_wins": 30.0,   # empirical FO-win var/mean ~1.42 (2024-26 backtest, mu~12.5).
-                       # phi=30 -> var/mean 1.42 (matches); old phi=20 gave 1.63,
-                       # tails ~15% too wide (coverage 65/87 vs target 50/80).
+    "fo_wins": 20.0,   # was 30 (var/mean 1.42, from a 2024-26 backtest at mu~12.5).
+                       # Re-measured over 2022-26 on the pre-game FO specialist
+                       # (311 team-games), WITHIN player-season so between-player
+                       # skill differences -- which a per-player projection already
+                       # captures -- are excluded: var/mean 1.689, implied phi 20.3.
+                       # Pooling across players instead gives 2.04 (phi 12.9), but
+                       # that is the same mixture artefact that made assists phi=4
+                       # wrong, so it is the within-player figure that belongs here.
+                       # The same method run on saves as a control returns 0.87 for
+                       # full appearances against phi=120's 1.11, i.e. it correctly
+                       # says saves must NOT widen -- so it is not simply biased
+                       # toward wider tails.
+                       # Faceoff volume is genuinely lumpy: a specialist's win rate
+                       # has sd 0.169 across games, driven by matchup and by how
+                       # many faceoffs the game produces at all.
+                       #
+                       # Checked at the matched population mean (mu=13.693, the
+                       # pre-game specialist over 283 full-workload team-games) so
+                       # no projection error is mixed in:
+                       #        sd     P(<=8)   P(<=6)
+                       #   30  4.461   0.1138   0.0377
+                       #   20  4.788   0.1331   0.0489
+                       #   act 5.146   0.1590   0.0424
+                       # 20 is closer on sd and on P(<=8), and both are still short
+                       # of actual -- the real distribution is skewed (+0.74 vs a
+                       # NegBin's +0.50) in a way no phi reproduces. At the very
+                       # deep P(<=6) tail 20 overshoots and 30 happens to sit
+                       # closer; that is one crossing point on a shape that is too
+                       # narrow at every other point, not a reason to go back.
+                       # Erring wide is also the safe side for an MS longshot.
+                       #
+                       # Do NOT read the FO tail off scripts/run_backtest_saves_faceoffs.py
+                       # as a verdict on this constant. There the model shows
+                       # P(<=6)=0.095 against an observed 0.038, but the model is
+                       # internally consistent there (0.0947 predicted vs 0.0948 if
+                       # its own draws were the truth). The gap is projection
+                       # OVER-SPREAD, not dispersion: by projected bucket, sub-10
+                       # projections under-predict by 1.35 wins while 16+ ones
+                       # over-predict by 1.16. Shrinking projected spread 20-35%
+                       # toward the mean improves both that tail and MAE. That is a
+                       # PlayerModel finding, tracked separately -- widening or
+                       # narrowing phi cannot fix a mean that is spread too wide.
     "default":  5.0,
 }
 
@@ -976,6 +1079,207 @@ def _var_index_to_phi(var_index: float, mu: float) -> float:
     return min(max(phi, 0.3), 500.0)
 
 
+def _cap_zero_rate(zero_prob: float, mu: float,
+                   slack: float = ZERO_RATE_POISSON_SLACK) -> float:
+    """Clamp a zero rate to what is consistent with the projected mean.
+
+    ``ZERO_RATE`` priors are measured across a whole position, but props are only
+    offered on the highest-usage players in it. A mixture of low- and high-usage
+    players has a much higher zero rate than any individual member, so applying
+    the pooled prior to a front-line player overstates his chance of being blanked
+    and underprices his over.
+
+    The mean itself bounds the zero rate: a player projected for ``mu`` events has
+    a Poisson-implied floor of ``exp(-mu)``, and real counts here sit close to it
+    (measured on offered players, observed P(0) is within 0.04 of ``exp(-mu)`` for
+    A/M goals and assists alike). ``slack`` allows genuine overdispersion above
+    that floor while blocking the contradiction of, say, a 1.5-goal projection
+    carrying a 40% shutout probability.
+
+    Only ever lowers a rate; sparse and low-usage players keep their priors.
+    """
+    mu = max(float(mu), 0.0)
+    if mu <= 0.0:
+        return float(zero_prob)
+    ceiling = min(math.exp(-mu) + slack, 0.99)
+    return float(min(float(zero_prob), ceiling))
+
+
+def _solve_excess_zero(mu: float, phi: float, target_p0: float) -> float:
+    """Excess zero mass such that a ZINB's TOTAL P(0) equals ``target_p0``.
+
+    A NegBin already places mass at zero, so feeding a measured zero rate
+    straight into a zero-inflated draw double-counts it:
+
+        P(0) = z + (1 - z) * P_nb(0)   >   z
+
+    The mean is unaffected (the ``mu / (1 - z)`` inflation compensates for it),
+    which is why this error is invisible to bias/MAE checks and only shows up in
+    the priced probability. Measured on 2026 weeks 8-12, assists were priced at
+    35.0% to go over 0.5 when the true rate was 52.3% — a 17-point gap that
+    traced entirely to this stacking.
+
+    Inverts the relation by bisection: P(0) is monotonically increasing in z, so
+    60 halvings reach machine precision. Returns 0.0 when the NegBin alone
+    already meets or exceeds the target, in which case no inflation belongs in
+    the draw at all and the raw NegBin is the correct distribution.
+    """
+    mu = max(mu, 0.01)
+    target_p0 = min(max(float(target_p0), 0.0), 0.999)
+    nb_n, nb_p = _negbinom_params(mu, phi)
+    if nb_p ** nb_n >= target_p0:
+        return 0.0
+    lo, hi = 0.0, 0.999
+    for _ in range(60):
+        mid = 0.5 * (lo + hi)
+        n_i, p_i = _negbinom_params(mu / max(1.0 - mid, 0.01), phi)
+        if mid + (1.0 - mid) * (p_i ** n_i) < target_p0:
+            lo = mid
+        else:
+            hi = mid
+    return lo
+
+
+def _draw_goalie_saves(rng: np.random.Generator, mu: float, phi: float, n: int,
+                       partial_prob: float = P_GOALIE_PARTIAL_GAME) -> np.ndarray:
+    """Draw saves as playing time first, then saves conditional on it.
+
+    ``mu`` is the projected saves for the start, which already averages over
+    playing time (``LG_STARTER_SF_PER_OPP_SOG`` embeds the mean backup share).
+    So the full-game rate is recovered by dividing out ``E[share]`` before the
+    share is redrawn; the mixture mean then returns to ``mu`` by construction and
+    the projection does not move — only the shape does.
+
+    Without this, every start is simulated at the average share and a pulled or
+    relieved goalie is impossible. That understates the low tail precisely where
+    a market-selection payout lives: at ``phi=120`` the model puts 0.05% on two
+    saves or fewer, against 1.19% observed. The dispersion constant is not the
+    problem and is left alone — full appearances run var/mean 0.88 against the
+    1.10 ``phi=120`` implies, so widening it would break the common case.
+
+    ``partial_prob=0.0`` disables the mixture and returns a plain NegBin draw,
+    used when a caller has stated the dispersion explicitly.
+    """
+    mu = max(float(mu), 0.01)
+    partial_prob = min(max(float(partial_prob), 0.0), 1.0)
+    if partial_prob <= 0.0:
+        nb_n, nb_p = _negbinom_params(mu, phi)
+        return rng.negative_binomial(nb_n, nb_p, n).astype(float)
+
+    alpha, beta = GOALIE_PARTIAL_SHARE_BETA
+    mean_partial_share = alpha / (alpha + beta)
+    expected_share = (1.0 - partial_prob) + partial_prob * mean_partial_share
+    mu_full = mu / max(expected_share, 0.01)
+
+    share = np.where(rng.random(n) < partial_prob, rng.beta(alpha, beta, n), 1.0)
+    # Vectorised _negbinom_params: n is the shape (constant across draws, since
+    # phi is per-goalie) and p varies with each draw's mean. Same algebra as the
+    # scalar helper, so the per-draw NegBin mean is exactly mu_full * share.
+    nb_n = max(int(round(max(phi, 0.1))), 1)
+    per_draw_mu = np.maximum(mu_full * share, 0.01)
+    nb_p = np.clip(nb_n / (per_draw_mu + nb_n), 1e-6, 1 - 1e-6)
+    return rng.negative_binomial(nb_n, nb_p).astype(float)
+
+
+def _condition_to_team_total(
+    rng: np.random.Generator,
+    player_draws: List[np.ndarray],
+    team_draws: np.ndarray,
+    weights: Sequence[float],
+) -> List[np.ndarray]:
+    """Reconcile per-player counts to a team total by moving whole events.
+
+    Every player's draw must add up to the team's own draw in each simulation,
+    since a teammate's goal is the same goal. The obvious way to enforce that is
+    to rescale — ``round(draw * team_total / sum_of_draws)`` — and that is what
+    this engine did. It has two flaws, and the second is expensive:
+
+    1. **It rarely hits the target.** Rounding each player independently lands on
+       the exact team total in only ~50% of sims, so the constraint the step
+       exists to enforce is half-enforced.
+    2. **Zero is an absorbing state, so it manufactures zeros.** ``0 * scale`` is
+       zero for every scale, but a player who drew one goal loses it whenever
+       ``scale < 0.5``. Mass therefore flows into zero and never back out. On a
+       200k-draw six-player field this added 4-7 points of zero mass at every
+       projection level, pushing fair P(Over) on a 0.5 line 5-7 points BELOW the
+       Poisson floor at the player's own mean — i.e. the price contradicted the
+       projection behind it. It is the same defect as the zero-inflation
+       double-count (see :func:`_solve_excess_zero`) arriving by a different
+       route, and equally invisible to a mean-based check: the team total is
+       conserved, so bias and MAE both look clean.
+
+    So reconcile additively instead. Compute the shortfall between the team draw
+    and the sum of the player draws, then transfer that many whole events:
+    surplus is removed from players who have events (weighted by how many they
+    have), shortfall is added (weighted by ``weights``, normally projected mean).
+    Adding is the branch that lets a zero become a one, which is exactly what the
+    multiplicative version could never do.
+
+    When the sums already agree this is the identity, so a player's marginal is
+    left alone rather than perturbed by a scale near 1.0.
+
+    Args:
+        rng: generator, used for the weighted picks.
+        player_draws: one array of counts per player, all the same length.
+        team_draws: the team's own draw, same length; rounded and floored at 0.
+        weights: relative propensity to receive an added event, per player.
+            Non-positive or degenerate weights fall back to uniform.
+
+    Returns:
+        New arrays in the same order. The originals are not modified.
+    """
+    if not player_draws:
+        return []
+    n = len(player_draws[0])
+    k = len(player_draws)
+    counts = np.stack([np.asarray(d, dtype=float) for d in player_draws])
+
+    target = np.round(np.asarray(team_draws, dtype=float)).clip(min=0)
+    diff = np.rint(target - counts.sum(axis=0)).astype(np.int64)
+
+    w = np.asarray(weights, dtype=float)
+    if w.shape[0] != k or not np.all(np.isfinite(w)) or w.sum() <= 0:
+        w = np.ones(k)
+    w = np.maximum(w, 1e-9)
+    w = w / w.sum()
+
+    # Loop over the transfer budget rather than over sims: the two sums differ by
+    # only a few events, and each pass handles every sim at once. Bounded by
+    # MAX_TRANSFER_PASSES so a pathological team draw cannot hang the sim.
+    MAX_TRANSFER_PASSES = 64
+    for _ in range(min(int(np.abs(diff).max(initial=0)), MAX_TRANSFER_PASSES)):
+        if not diff.any():
+            break
+
+        add_idx = np.flatnonzero(diff > 0)
+        if add_idx.size:
+            pick = rng.choice(k, size=add_idx.size, p=w)
+            counts[pick, add_idx] += 1.0
+            diff[add_idx] -= 1
+
+        rem_idx = np.flatnonzero(diff < 0)
+        if rem_idx.size:
+            have = counts[:, rem_idx]
+            tot = have.sum(axis=0)
+            ok = tot > 0
+            if ok.any():
+                sub = rem_idx[ok]
+                # Weighted pick per sim by inverse CDF: a player is chosen in
+                # proportion to the events they actually hold, so we never try to
+                # take an event from someone at zero.
+                cdf = np.cumsum(have[:, ok] / tot[ok], axis=0)
+                u = rng.random(sub.size)
+                pick = (cdf < u).sum(axis=0).clip(0, k - 1)
+                counts[pick, sub] -= 1.0
+                diff[sub] += 1
+            # A sim with nothing left to remove cannot reach a lower target. Stop
+            # trying: this is the same floor the multiplicative version hits, and
+            # it only occurs when the team draw is below the field's minimum.
+            diff[rem_idx[~ok]] = 0
+
+    return [counts[i] for i in range(k)]
+
+
 def _trunc_normal_sample(rng: np.random.Generator, mu: float, sigma: float, n: int,
                           lo: float = 0.0) -> np.ndarray:
     """Sample from Normal(mu, sigma) truncated below at lo."""
@@ -1100,6 +1404,13 @@ class MarketLine:
     over_odds: str
     under_odds: str
     juice: float
+    # False when the simulation cannot support a price at this line — either too
+    # few sims cleared it to estimate the tail, or the projection carries no
+    # playing-time signal at all. The line is still returned (callers and the UI
+    # expect a MarketLine) but it must not be published. See
+    # PricingEngine.price_prop and MIN_SIM_SUPPORT.
+    offerable: bool = True
+    suppress_reason: str = ""
 
 
 @dataclass
@@ -3075,11 +3386,20 @@ class GameSimulator:
                   phi_override: Optional[float] = None) -> np.ndarray:
             """Zero-inflated NegBin draw. phi_override lets a caller set the
             dispersion directly (used by the per-player goals variance override);
-            it changes tail fatness / X+ prices while the mean stays = mu."""
+            it changes tail fatness / X+ prices while the mean stays = mu.
+
+            ``zero_prob`` is the measured rate of scoreless games, i.e. the
+            TOTAL probability of zero we want the draw to reproduce. The NegBin
+            supplies part of that mass on its own, so only the shortfall is
+            added as explicit inflation — see :func:`_solve_excess_zero`. Passing
+            ``zero_prob`` straight through would stack the two and systematically
+            underprice every over.
+            """
             mu = max(mu, 0.01)
             phi = phi_override if phi_override is not None else PHI_PLAYER.get(phi_key, 2.0)
-            nb_n, nb_p = _negbinom_params(mu / max(1.0 - zero_prob, 0.01), phi)
-            is_zero = rng.random(n) < zero_prob
+            z = _solve_excess_zero(mu, phi, _cap_zero_rate(zero_prob, mu))
+            nb_n, nb_p = _negbinom_params(mu / max(1.0 - z, 0.01), phi)
+            is_zero = rng.random(n) < z
             counts = rng.negative_binomial(nb_n, nb_p, n).astype(float)
             return np.where(is_zero, 0.0, counts)
 
@@ -3194,26 +3514,31 @@ class GameSimulator:
             except Exception:
                 pass  # correlation adjustment is best-effort, never crash the sim
 
-        # Condition field players' goals on team draw
+        # Condition field players' goals on team draw.
+        #
+        # Reconciled by transferring whole goals rather than by rescaling. The
+        # rescale-and-round version this replaces looked mean-safe — the team
+        # total was conserved — but it silently piled mass onto zero, because
+        # round(1 * scale) drops to 0 whenever scale < 0.5 while 0 * scale can
+        # never climb back. That cost 4-7 points of zero mass per player and put
+        # fair P(Over) on 0.5-line goals props ~7 points BELOW a Poisson at the
+        # player's own projected mean, i.e. the price contradicted the
+        # projection. It also only hit the exact team total in ~50% of sims.
+        # See _condition_to_team_total for the full argument and the measurement.
         if field and len(raw_goals) > 0:
-            sum_raw = sum(raw_goals[p.player_id] for p in field)
-            sum_raw = np.maximum(sum_raw, 0.01)
-            team_draw_rounded = np.round(team_goal_draws).clip(min=0)
-            scale = team_draw_rounded / sum_raw
-            # Default uses deterministic rounding (unbiased enough for near-Poisson
-            # goal draws). If any field player has a goals-VOLATILITY override, the
-            # draw is right-skewed and plain np.round biases the mean DOWN, which
-            # would move the O/U line. Use stochastic rounding in that case — it's
-            # unbiased in expectation (E[round(x)] = x), so the mean is preserved
-            # while the fattened tail (X+ prices) is kept.
-            _stoch = any(pp.var_index_goals is not None for pp in field)
-            for pp in field:
-                scaled = raw_goals[pp.player_id] * scale
-                if _stoch:
-                    scaled = np.floor(scaled + rng.random(n))
-                else:
-                    scaled = np.round(scaled)
-                raw_goals[pp.player_id] = scaled.clip(min=0)
+            ordered = [pp for pp in field if pp.player_id in raw_goals]
+            if ordered:
+                conditioned = _condition_to_team_total(
+                    rng,
+                    [raw_goals[pp.player_id] for pp in ordered],
+                    team_goal_draws,
+                    # Projected goals is the right propensity for receiving a
+                    # transferred goal: it is the same quantity that set the
+                    # relative size of the draws being reconciled.
+                    [max(pp.proj_goals, 1e-6) for pp in ordered],
+                )
+                for pp, arr in zip(ordered, conditioned):
+                    raw_goals[pp.player_id] = arr.clip(min=0)
 
         # Build simulations
         for pp in field:
@@ -3263,8 +3588,22 @@ class GameSimulator:
             _pin_sv = pp.var_index_saves is not None
             if _pin_sv:
                 goalie_phi = _var_index_to_phi(pp.var_index_saves, max(pp.proj_saves, 0.01))
-            nb_n_sv, nb_p_sv = _negbinom_params(max(pp.proj_saves, 0.01), goalie_phi)
-            sv = rng.negative_binomial(nb_n_sv, nb_p_sv, n).astype(float)
+            # Playing time first, saves second. Drawing a share rather than
+            # assuming a full game is what makes a short outing possible at all;
+            # holding phi fixed is deliberate, because full appearances have
+            # var/mean 0.88 and widening phi would corrupt the 91% of starts the
+            # model already fits in order to reach the 9% it does not simulate.
+            # mu is divided by E[share] first, since proj_saves is already the
+            # share-averaged mean (see P_GOALIE_PARTIAL_GAME) — without that the
+            # mixture would double-count the backup's share and cut the
+            # projection ~3%.
+            sv = _draw_goalie_saves(
+                rng, max(pp.proj_saves, 0.01), goalie_phi, n,
+                # A user dispersion override is an explicit statement about the
+                # spread of THIS goalie's outcomes, so honour it as given and skip
+                # the league playing-time mixture rather than compounding the two.
+                partial_prob=0.0 if _pin_sv else P_GOALIE_PARTIAL_GAME,
+            )
             if _pin_sv:
                 sv = _pin_mean(sv, max(pp.proj_saves, 0.01))
             shots_faced = max(pp.proj_saves / max(pp.proj_save_pct, 0.01), 1.0)
@@ -3441,13 +3780,32 @@ class PricingEngine:
             line = self._opt_line(dist)
         else:
             line = self._force_half_only(line)
-        ov = float(np.mean(dist > line))
-        ov_adj, un_adj = self._hold(max(ov, 1e-4), max(1.0 - ov, 1e-4), hold=_stat_hold)
+        # Tail support: how many sims actually cleared the line. A probability
+        # estimated from a handful of draws out of N_SIMS is noise, and pricing it
+        # converts that noise into a four-figure payout. In 2026 a starting goalie
+        # projected at exactly 0.000 saves was offered Over 0.5 at +8,554 and
+        # recorded 11 — the distribution was all zeros, so the price was an
+        # artefact of the sim floor, not an estimate.
+        support = int(np.count_nonzero(dist > line))
+        offerable, reason = True, ""
+        if float(np.mean(dist)) <= 0.0:
+            offerable, reason = False, "no playing-time signal (projection is zero)"
+        elif support < MIN_SIM_SUPPORT:
+            offerable, reason = False, f"insufficient tail support ({support} sims)"
+        elif len(dist) - support < MIN_SIM_SUPPORT:
+            offerable, reason = False, f"insufficient under support ({len(dist) - support} sims)"
+
+        ov = float(support) / float(len(dist)) if len(dist) else 0.0
+        # Clamp the priced probability into a band we can actually estimate, so a
+        # thin tail cannot produce a five-figure price even when it is offerable.
+        ov = min(max(ov, MIN_PRICE_PROB), 1.0 - MIN_PRICE_PROB)
+        ov_adj, un_adj = self._hold(ov, 1.0 - ov, hold=_stat_hold)
         return MarketLine(
             stat=stat, line=line,
             fair_over_prob=round(ov, 4), fair_under_prob=round(1.0 - ov, 4),
             over_odds=self._am(ov_adj), under_odds=self._am(un_adj),
             juice=round((ov_adj + un_adj) - 1.0, 4),
+            offerable=offerable, suppress_reason=reason,
         )
 
     def price_milestones(self, ps: PlayerSimulation, stat: str,

@@ -296,6 +296,136 @@ def player_section(tg, pg, project_game):
     return pf
 
 
+def poisson_floor_section(tg, pg, project_game, n_sims, max_games=20):
+    """Assert every 0.5-line price is consistent with the projection behind it.
+
+    On a 0.5 line, "Over" is just "at least one", so a Poisson at the same mean
+    puts it at ``1 - exp(-mu)``. A count distribution may sit slightly below that
+    -- real overdispersion does push mass toward zero -- but it cannot sit far
+    below without contradicting its own mean.
+
+    **The check applies to goals and assists only, and points is deliberately
+    excluded from the verdict.** Points is a sum of correlated components, and
+    the floor is not a valid bound on such a sum, for two separate reasons —
+    both measured rather than assumed:
+
+    1. Points is ``1*(1pt goals) + 2*(2pt goals) + assists``, so a two-point goal
+       raises E[points] without adding a scoring event. ``1 - exp(-E[points])``
+       therefore overstates P(at least one). On independent Poisson goals and
+       assists with a 2-point rate, where true P(Over 0.5) is 0.7756, the naive
+       floor claims 0.8128 — a spurious +3.7-point breach. Using the event rate
+       (goals + assists) instead gives 0.7769, correct to 0.001.
+    2. Even on the event rate, positive correlation between a player's goals and
+       assists lowers P(at least one): a quiet game is quiet in both. This is
+       real and the engine models it on purpose (the Cholesky layer and the team
+       conditioning both induce it). At corr(g,a) = +0.086 the legitimate breach
+       is already +0.029, and at +0.244 it is +0.080 — larger than this check's
+       whole tolerance, on a distribution with nothing wrong with it.
+
+    So a points breach is not evidence of a bug and must not fail the run. It is
+    still printed, because a sudden jump in it is worth a look, but the verdict is
+    taken on goals and assists — which are single count draws, where the floor is
+    a genuine bound.
+
+    This is the check the rest of this harness structurally cannot make. MAE,
+    bias and correlation all read the mean, and the zero-inflation bug that cost
+    the most money this season left the mean exactly right while moving P(Over)
+    17 points. P10-P90 coverage misses it too, since a percentile band says
+    nothing about where mass sits at a single integer. So this section is not a
+    nice-to-have: it is the only assertion here that would have caught it.
+
+    Runs on ``max_games`` test games rather than all of them because it has to
+    build the full player simulation, which the sections above skip. The
+    per-prop breach rate is a property of the distribution code, not of the
+    slate, so a subset is sufficient to catch a regression -- exhaustive
+    coverage lives in scripts/test_prop_distributions.py.
+    """
+    # 5 points of slack. Below the floor is the direction that underprices the
+    # over, which is what lost money, so the tolerance is deliberately one-sided.
+    TOL = 0.05
+    rows = []
+    test_pg = pg[pg["season"] == TEST_SEASON]
+    game_ids = list(test_pg["game_id"].unique())[:max_games]
+
+    for gid in game_ids:
+        game_pg = test_pg[test_pg["game_id"] == gid]
+        game_tg = tg[tg["game_id"] == gid]
+        if game_tg.empty or len(game_tg) != 2:
+            continue
+        gnum = int(game_pg["game_number"].iloc[0])
+        actual_ids = {}
+        for tid in game_tg["team_id"].unique():
+            am = game_pg[(game_pg["team_id"] == tid) &
+                         (game_pg["position"].isin(["A", "M", "FO", "G", "SSDM", "LSM", "D"]))]
+            actual_ids[str(tid)] = set(am["player_id"].astype(str).tolist())
+        try:
+            res = project_game(gid, TEST_SEASON, gnum,
+                               str(game_tg.iloc[0]["team_id"]),
+                               str(game_tg.iloc[1]["team_id"]),
+                               actual_player_ids=actual_ids)
+            if res is None or "player_projs" not in res:
+                continue
+            sim = GameSimulator(n_sims=n_sims, seed=42)
+            hp, ap_, gsim = res["hp"], res["ap"], res["gs"]
+            sides = [
+                (str(game_tg.iloc[0]["team_id"]), gsim.home_goals, hp.proj_goals, ap_.proj_save_pct),
+                (str(game_tg.iloc[1]["team_id"]), gsim.away_goals, ap_.proj_goals, hp.proj_save_pct),
+            ]
+            for tid, goal_draws, team_goals, opp_svp in sides:
+                projs = res["player_projs"].get(tid)
+                if not projs:
+                    continue
+                psims = sim.simulate_players(projs, goal_draws, team_goals,
+                                             opp_save_pct=opp_svp)
+                for ps in psims:
+                    for stat in ("goals", "assists", "points"):
+                        dist = ps.stat_distributions.get(stat)
+                        mu = ps.proj_values.get(stat, 0.0)
+                        if dist is None or not mu or mu <= 0.02:
+                            continue
+                        if stat == "points":
+                            # Rate of scoring EVENTS, not of points. See docstring.
+                            mu_events = (ps.proj_values.get("goals", 0.0)
+                                         + ps.proj_values.get("assists", 0.0))
+                        else:
+                            mu_events = mu
+                        if mu_events <= 0.02:
+                            continue
+                        rows.append({
+                            "stat": stat, "mu": float(mu),
+                            "mu_events": float(mu_events),
+                            "p_over": float(np.mean(dist > 0.5)),
+                            "floor": float(1.0 - np.exp(-mu_events)),
+                        })
+        except Exception:
+            continue
+
+    print(f"\n== POISSON FLOOR (0.5 lines, TEST 2025, {len(game_ids)} games) ==")
+    pf = pd.DataFrame(rows)
+    if pf.empty:
+        print("  no rows -- CHECK DID NOT RUN (treat as a failure, not a pass)")
+        return pf
+    # Only these two are single count draws, so only these two are bindable.
+    BINDING = ("goals", "assists")
+    pf["breach"] = pf["floor"] - pf["p_over"]
+    ok = True
+    for stat, g in pf.groupby("stat"):
+        worst = g["breach"].max()
+        rate = (g["breach"] > TOL).mean()
+        if stat in BINDING:
+            status = "OK" if rate == 0 else "FAIL"
+            ok = ok and rate == 0
+        else:
+            status = "info only - not a valid bound, see docstring"
+        print(f"  {stat:8s}: n={len(g):5d}  avg mu={g['mu'].mean():.3f}  "
+              f"avg mu_events={g['mu_events'].mean():.3f}  "
+              f"avg P(Over)={g['p_over'].mean():.3f}  avg floor={g['floor'].mean():.3f}  "
+              f"worst breach={worst:+.4f}  breaching>{TOL:.2f}={rate:.1%}  [{status}]")
+    print(f"  VERDICT ({'+'.join(BINDING)}): "
+          f"{'PASS' if ok else 'FAIL -- a price contradicts its own projection'}")
+    return pf
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sims", type=int, default=3000)
@@ -303,6 +433,11 @@ def main():
     ap.add_argument("--players-only", action="store_true")
     ap.add_argument("--team-seasons", type=int, nargs="*", default=[TEST_SEASON, EARLY_SEASON])
     ap.add_argument("--tag", type=str, default="")
+    ap.add_argument("--floor-games", type=int, default=20,
+                    help="games for the Poisson-floor check; 0 skips it")
+    ap.add_argument("--floor-only", action="store_true",
+                    help="run only the Poisson-floor check (skips the mean-based "
+                         "sections, which cannot see a shape bug anyway)")
     args = ap.parse_args()
 
     print("=" * 60)
@@ -323,10 +458,13 @@ def main():
 
     project_game = build_project_fn(tg, pg, quality_fitted, tm_train, args.sims)
 
-    if not args.players_only:
+    if not args.players_only and not args.floor_only:
         team_section(tg, project_game, args.team_seasons)
     if not args.team_only:
-        player_section(tg, pg, project_game)
+        if not args.floor_only:
+            player_section(tg, pg, project_game)
+        if args.floor_games:
+            poisson_floor_section(tg, pg, project_game, args.sims, args.floor_games)
 
     print("\n" + "=" * 60)
     print(f"DONE  tag={args.tag or '(none)'}")

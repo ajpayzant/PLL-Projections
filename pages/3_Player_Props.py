@@ -323,6 +323,9 @@ if view_mode == "Table (all players)":
                 "Over":     ml.over_odds,
                 "Under":    ml.under_odds,
                 "P(Over)":  f"{ml.fair_over_prob:.1%}",
+                # Blank when fine, so the column only draws the eye to markets
+                # the sim cannot actually support a price for.
+                "Offer?":   "" if ml.offerable else f"NO - {ml.suppress_reason}",
             })
         if not rows:
             return pd.DataFrame()

@@ -37,7 +37,7 @@ from projection_engine_v3 import (
     PlayerModel, PricingEngine,
     _assign_goalie_saves_team, _assign_player_goalie_saves,
     _assign_faceoff_from_specialist,
-    _negbinom_params,
+    _negbinom_params, _draw_goalie_saves,
     LG_SAVE_PCT, LG_FO_PCT, LG_FOS_PER_GAME, LG_SAVES, LG_CLEAN_SAVE_RATE,
     PHI_PLAYER,
 )
@@ -48,6 +48,17 @@ TEST_LABEL  = 2025
 CURR_LABEL  = 2026
 N_SIMS      = 4_000
 SEED        = 17
+
+# Pre-fix distribution parameters, drawn alongside the current ones so one run
+# answers "did this regress?" directly. Building the leakage-safe ratings and
+# projections costs ~18s per game and dominates the runtime; the draws are
+# almost free. Running the harness twice would therefore double a 30-minute job
+# to compare distributions that are held on identical means anyway -- and it
+# would compare across two different RNG streams. Drawing both here keeps the
+# projection, the game set, and the seed identical, so any difference in
+# coverage or variance is attributable to the distribution change alone.
+OLD_PHI_FO_WINS = 30.0   # was PHI_PLAYER["fo_wins"] before the within-player refit
+OLD_GOALIE_PARTIAL_PROB = 0.0   # no playing-time mixture: every start a full game
 
 print("=" * 72, flush=True)
 print("PLL SAVE & FACEOFF BACKTEST", flush=True)
@@ -216,11 +227,20 @@ for i, grow in enumerate(games):
             continue
         goalie_proj = goalie_projs[0]
 
-        # NegBin sim distribution — mirrors simulate_players exactly
+        # Sim distribution — mirrors simulate_players exactly. Calls the engine's
+        # own _draw_goalie_saves rather than a local NegBin draw so the
+        # playing-time mixture is included; a local copy silently drifted from
+        # the simulator once already, which made the backtest report on a
+        # distribution the engine no longer shipped.
         csr = getattr(goalie_proj, "clean_save_rate", LG_CLEAN_SAVE_RATE) or LG_CLEAN_SAVE_RATE
         csr_ratio = csr / max(LG_CLEAN_SAVE_RATE, 0.01)
         goalie_phi = float(np.clip(PHI_PLAYER["saves"] * csr_ratio, 70.0, 220.0))
-        dist = _nb_draw(max(goalie_proj.proj_saves, 0.01), goalie_phi, N_SIMS)
+        dist = _draw_goalie_saves(rng, max(goalie_proj.proj_saves, 0.01),
+                                  goalie_phi, N_SIMS)
+        # Same mean, same phi, no playing-time mixture — the pre-fix shape.
+        dist_old = _draw_goalie_saves(rng, max(goalie_proj.proj_saves, 0.01),
+                                      goalie_phi, N_SIMS,
+                                      partial_prob=OLD_GOALIE_PARTIAL_PROB)
 
         act_saves = float(starter_actual.get("saves", 0) or 0)
         act_sf    = float(starter_actual["shots_faced"])
@@ -254,6 +274,17 @@ for i, grow in enumerate(games):
             "fair_over":  fair_over,
             "over_hit":   over_hit,
             "split": _split_of(gsea),
+            # Pre-fix shape on the identical projection, for the regression check.
+            "old_dist_mean": float(dist_old.mean()),
+            "old_dist_std":  float(dist_old.std()),
+            "old_dist_p10":  float(np.percentile(dist_old, 10)),
+            "old_dist_p25":  float(np.percentile(dist_old, 25)),
+            "old_dist_p75":  float(np.percentile(dist_old, 75)),
+            "old_dist_p90":  float(np.percentile(dist_old, 90)),
+            # The low tail is the whole point of the goalie fix: an MS longshot is
+            # priced off exactly this number, and bias/MAE/coverage cannot see it.
+            "p_le2":     float(np.mean(dist <= 2)),
+            "old_p_le2": float(np.mean(dist_old <= 2)),
         })
 
     # ── FO specialist backtest ──
@@ -276,6 +307,9 @@ for i, grow in enumerate(games):
                 continue
             dist = _nb_draw(max(proj.proj_faceoff_wins, 0.01),
                             PHI_PLAYER["fo_wins"], N_SIMS)
+            # Same mean, pre-refit dispersion — isolates the phi change.
+            dist_old = _nb_draw(max(proj.proj_faceoff_wins, 0.01),
+                                OLD_PHI_FO_WINS, N_SIMS)
             act_wins  = float(arow.get("faceoffs_won", 0) or 0)
             act_denom = float(arow["fo_denom"])
             act_pct   = act_wins / act_denom if act_denom > 0 else float("nan")
@@ -303,6 +337,16 @@ for i, grow in enumerate(games):
                 "fair_over":  fair_over,
                 "over_hit":   over_hit,
                 "split":      _split_of(gsea),
+                "old_dist_mean": float(dist_old.mean()),
+                "old_dist_std":  float(dist_old.std()),
+                "old_dist_p10":  float(np.percentile(dist_old, 10)),
+                "old_dist_p25":  float(np.percentile(dist_old, 25)),
+                "old_dist_p75":  float(np.percentile(dist_old, 75)),
+                "old_dist_p90":  float(np.percentile(dist_old, 90)),
+                # FO's O/U line sits at the median, so widening barely moves
+                # fair_over. The loss was on MS, which is priced off this tail.
+                "p_le6":     float(np.mean(dist <= 6)),
+                "old_p_le6": float(np.mean(dist_old <= 6)),
             })
 
 
@@ -515,6 +559,90 @@ if not fo.empty:
     res = fo_test["actual_fo_wins"] - fo_test["pred_fo_wins"]
     print(f"    Residual std = {res.std():.3f}  |  simulated std avg = "
           f"{fo_test['dist_std'].mean():.3f}")
+
+# ────────────────── BEFORE / AFTER THE DISTRIBUTION FIXES ──────────────────
+# Both shapes were drawn from the same projection on the same game, so the mean
+# columns must agree to sampling noise. If they do not, a shape fix has leaked
+# into the projection and the change is wrong regardless of how the tails look.
+_section("BEFORE / AFTER — did the shape fixes improve calibration?")
+
+def _shape_compare(df, act_col, label, tail_col, tail_desc, tail_valid=True):
+    if df.empty:
+        print(f"  [{label}] no rows")
+        return
+    n = len(df)
+    print(f"\n  {label}  (n={n}, all splits — the distribution is not fitted "
+          f"per split, so pooling is the larger sample and the fair test)")
+    print(f"    {'':26s}{'before':>10s}{'after':>10s}{'actual':>10s}")
+    print(f"    {'mean of distribution':26s}{df['old_dist_mean'].mean():10.3f}"
+          f"{df['dist_mean'].mean():10.3f}{df[act_col].mean():10.3f}")
+    print(f"    {'sd of distribution':26s}{df['old_dist_std'].mean():10.3f}"
+          f"{df['dist_std'].mean():10.3f}{df[act_col].std():10.3f}")
+    drift = abs(df["dist_mean"].mean() - df["old_dist_mean"].mean())
+    print(f"    mean drift = {drift:.4f}  "
+          f"[{'OK - projection untouched' if drift < 0.15 else 'INVESTIGATE'}]")
+
+    for lo_o, hi_o, lo_n, hi_n, cov_label, target in [
+        ("old_dist_p25", "old_dist_p75", "dist_p25", "dist_p75", "50%", 0.50),
+        ("old_dist_p10", "old_dist_p90", "dist_p10", "dist_p90", "80%", 0.80),
+    ]:
+        before = ((df[act_col] >= df[lo_o]) & (df[act_col] <= df[hi_o])).mean()
+        after  = ((df[act_col] >= df[lo_n]) & (df[act_col] <= df[hi_n])).mean()
+        better = abs(after - target) <= abs(before - target)
+        print(f"    coverage {cov_label:4s} (target {target:.0%})"
+              f"{before:10.3f}{after:10.3f}"
+              f"      [{'closer to target' if better else 'further from target'}]")
+    # Coverage of a DISCRETE distribution does not hit its nominal target, and the
+    # miss is not a modelling error. Feeding a known-correct NegBin its own draws
+    # returns coverage 0.559/0.845 at saves (phi=120, mu=12.8) against nominal
+    # 0.50/0.80, because a percentile of an integer distribution lands ON an
+    # integer and the closed interval [p25, p75] then includes more than half the
+    # mass. So "over-covered" here is the expected reading for a correct
+    # distribution, and a change that moves coverage further above target is not
+    # thereby wrong. Reported for continuity with the rest of this harness; the
+    # tail row below is the discriminating measurement.
+
+    # The tail is what an MS payout is priced off, and it is the one thing the
+    # coverage and bias checks above structurally cannot see.
+    act_tail = float((df[act_col] <= tail_desc[1]).mean())
+    print(f"    {tail_desc[0]:26s}{df['old_' + tail_col].mean():10.4f}"
+          f"{df[tail_col].mean():10.4f}{act_tail:10.4f}")
+    if not tail_valid:
+        print(f"    ^ the 'actual' column here is NOT a valid target -- "
+              f"see the note below. Do not read a verdict off it.")
+    else:
+        err_before = abs(df["old_" + tail_col].mean() - act_tail)
+        err_after  = abs(df[tail_col].mean() - act_tail)
+        print(f"    tail error: {err_before:.4f} -> {err_after:.4f}  "
+              f"[{'BETTER' if err_after < err_before else 'WORSE'}]")
+
+if not gs.empty:
+    # tail_valid=False: this harness picks the starter as whoever ACTUALLY faced
+    # the most shots (see the goalie loop above), which is circular for a
+    # playing-time question -- by construction the player it selects cannot be
+    # the one who left early. The sample it produces has a minimum of 4 saves and
+    # ZERO games at <=2 in 222 rows, against a real rate of 1.19% measured on a
+    # pre-game named-starter proxy. So its "actual" low tail is an artefact of the
+    # selection rule, not a fact about goalies, and the goalie mixture cannot be
+    # graded here. It is graded in scripts/test_prop_distributions.py against the
+    # 336-team-game measurement instead.
+    _shape_compare(gs, "actual_saves", "STARTER GOALIE SAVES",
+                   "p_le2", ("P(saves <= 2)", 2), tail_valid=False)
+if not fo.empty:
+    # The FO specialist is matched by player_id against a pre-game projection, so
+    # there is no equivalent selection circularity and the tail is readable.
+    _shape_compare(fo, "actual_fo_wins", "FACEOFF SPECIALIST WINS",
+                   "p_le6", ("P(FO wins <= 6)", 6))
+
+print("\n  How to read this section:")
+print("  * bias and MAE (above) must be UNCHANGED -- neither fix touches a")
+print("    projected mean, so a fix that moved bias would be a bug.")
+print("  * sd is the primary evidence: it should move toward the actual column.")
+print("  * coverage is reported but is NOT a pass/fail signal on a discrete")
+print("    distribution -- a correct NegBin over-covers here (see note above).")
+print("  * the goalie low tail is NOT measurable in this harness at all, because")
+print("    it selects the starter using the outcome. That is why the goalie")
+print("    mixture is validated in the unit suite against the warehouse instead.")
 
 print("\n" + "=" * 72)
 print("BACKTEST COMPLETE")

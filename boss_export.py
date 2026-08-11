@@ -56,7 +56,24 @@ MILESTONE_MAX: Dict[str, int] = {
     "ground_balls":  10,
 }
 
-SCHEMA_VERSION = 1
+# 2 adds per-market `offerable`/`suppress_reason`, plus `n_sims` on each stat
+# block. Additive only, so a v1 reader still works, but a reader that ignores
+# `offerable` will release markets we have flagged as unpriceable.
+SCHEMA_VERSION = 2
+
+# Publishing guards. Duplicated from projection_engine_v3 rather than imported so
+# this module stays numpy+stdlib only (see the module docstring); the drift risk is
+# covered by a test that asserts the two definitions agree.
+#
+# The ladders above are generous by design -- 22 thresholds for saves, 26 for
+# faceoff wins -- and the top of a long ladder is estimated from a handful of the
+# 20,000 sims. Publishing that turns sampling noise into a four-figure payout. In
+# 2026 a goalie projected at 0.000 saves was offered Over 0.5 at +8,554 and
+# recorded 11. Anything failing these checks is exported with offerable=false and
+# a reason, so the BOSS Tool can still show the model's view but must not release
+# the market.
+MIN_SIM_SUPPORT = 50
+MIN_PRICE_PROB = 0.02
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -97,6 +114,10 @@ def ge_probability_ladder(dist: np.ndarray, max_k: int) -> List[float]:
     This is the canonical object the BOSS Tool uses: every O/U and X+ price is
     derived from it, so recomputing after a manual edit keeps all lines mutually
     consistent (no arbitrage between an O/U over and its equivalent X+).
+
+    Deliberately UNCLAMPED: this is the model's raw view and the object the BOSS
+    Tool re-derives from, so it must stay internally consistent and monotonic.
+    The MIN_PRICE_PROB clamp is applied where prices are formed, not here.
     """
     arr = np.asarray(dist, dtype=float)
     arr = arr[np.isfinite(arr)]
@@ -144,15 +165,45 @@ def _resolve_hold(stat_key: str, hold_pct: float,
     return hold_pct
 
 
+def offerability(prob: float, n_sims: int) -> tuple[bool, str]:
+    """Whether a fair probability rests on enough simulated support to publish.
+
+    Checks both tails: ``prob * n_sims`` sims cleared the threshold and
+    ``(1 - prob) * n_sims`` did not, and each side needs ``MIN_SIM_SUPPORT``
+    before the estimate means anything. Returns the reason alongside the verdict
+    so a suppressed market can be explained rather than silently dropped.
+    """
+    if n_sims <= 0:
+        return False, "no simulated distribution"
+    over = int(round(prob * n_sims))
+    under = n_sims - over
+    if over < MIN_SIM_SUPPORT:
+        return False, f"insufficient over support ({over} sims)"
+    if under < MIN_SIM_SUPPORT:
+        return False, f"insufficient under support ({under} sims)"
+    return True, ""
+
+
 def _stat_block(dist: np.ndarray, stat_key: str, proj: float, hold_pct: float,
                 hold_by_stat: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
     hold_pct = _resolve_hold(stat_key, hold_pct, hold_by_stat)
     max_k = MILESTONE_MAX.get(stat_key, 6)
     ladder = ge_probability_ladder(dist, max_k)
+    n_sims = int(np.count_nonzero(np.isfinite(np.asarray(dist, dtype=float))))
+    # A projection of exactly zero means the model has no playing-time signal for
+    # this player, not that the event is impossible; nothing built on it is
+    # publishable at any price.
+    no_signal = float(np.mean(np.asarray(dist, dtype=float))) <= 0.0 if n_sims else True
 
     # O/U at the model's balanced line
     line = best_ou_line(ladder, max_k)
     p_over = ou_from_ladder(ladder, line)
+    ou_ok, ou_reason = offerability(p_over, n_sims)
+    if no_signal:
+        ou_ok, ou_reason = False, "no playing-time signal (projection is zero)"
+    # Clamp into the band we can actually estimate, so a thin tail cannot produce
+    # a five-figure price even on a market that clears the support checks.
+    p_over = min(max(p_over, MIN_PRICE_PROB), 1.0 - MIN_PRICE_PROB)
     p_under = 1.0 - p_over
     o_adj, u_adj = apply_hold(p_over, p_under, hold_pct)
 
@@ -160,6 +211,10 @@ def _stat_block(dist: np.ndarray, stat_key: str, proj: float, hold_pct: float,
     milestones = []
     for k in range(1, max_k + 1):
         p_yes = float(ladder[k - 1])
+        ok, reason = offerability(p_yes, n_sims)
+        if no_signal:
+            ok, reason = False, "no playing-time signal (projection is zero)"
+        p_yes = min(max(p_yes, MIN_PRICE_PROB), 1.0 - MIN_PRICE_PROB)
         p_no = 1.0 - p_yes
         y_adj, n_adj = apply_hold(p_yes, p_no, hold_pct)
         milestones.append({
@@ -168,16 +223,21 @@ def _stat_block(dist: np.ndarray, stat_key: str, proj: float, hold_pct: float,
             "fair_prob": round(p_yes, 5),
             "yes_odds": american_from_prob(y_adj),
             "no_odds": american_from_prob(n_adj),
+            "offerable": ok,
+            "suppress_reason": reason,
         })
 
     return {
         "proj": round(float(proj), 3),
+        "n_sims": n_sims,
         "ge_probs": [round(p, 5) for p in ladder],   # P(X>=1..max_k) — used for re-derivation
         "ou": {
             "line": line,
             "fair_over_prob": round(p_over, 5),
             "over_odds": american_from_prob(o_adj),
             "under_odds": american_from_prob(u_adj),
+            "offerable": ou_ok,
+            "suppress_reason": ou_reason,
         },
         "milestones": milestones,
     }
