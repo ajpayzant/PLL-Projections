@@ -1,117 +1,117 @@
 player_id,player_name,first_name,last_name,team_id,team_name,team_code,position,position_group,jersey_number,status,is_active,game_id,game_slug,game_number,home_team_id,away_team_id,year,week,scraped_at
-000408,Matt DeLuca,Matt,DeLuca,WAT,Philadelphia Waterdogs,PHI,G,Goalie,1,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003232,Casey Wilson,Casey,Wilson,WAT,Philadelphia Waterdogs,PHI,M,Midfield,2,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003181,Jimmy Freehill,Jimmy,Freehill,WAT,Philadelphia Waterdogs,PHI,D,Defense,5,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-000240,Kieran McArdle,Kieran,McArdle,WAT,Philadelphia Waterdogs,PHI,A,Attack,6,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-001816,Dox Aitken,Dox,Aitken,WAT,Philadelphia Waterdogs,PHI,M,Midfield,6,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003281,Kyle Lewis,Kyle,Lewis,WAT,Philadelphia Waterdogs,PHI,M,Midfield,7,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003288,Josh Yago,Josh,Yago,WAT,Philadelphia Waterdogs,PHI,M,Midfield,10,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003096,Marcus Hudgins,Marcus,Hudgins,WAT,Philadelphia Waterdogs,PHI,D,Defense,11,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003159,CJ Kirst,CJ,Kirst,WAT,Philadelphia Waterdogs,PHI,A,Attack,15,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003273,Matt Collison,Matt,Collison,WAT,Philadelphia Waterdogs,PHI,M,Midfield,16,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003266,Silas Richmond,Silas,Richmond,WAT,Philadelphia Waterdogs,PHI,A,Attack,18,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-001810,Michael Sowers,Michael,Sowers,WAT,Philadelphia Waterdogs,PHI,A,Attack,22,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-001733,Charlie Hayes,Charlie,Hayes,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,23,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003089,Kenny Brower,Kenny,Brower,WAT,Philadelphia Waterdogs,PHI,D,Defense,29,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003269,Brendan Staub,Brendan,Staub,WAT,Philadelphia Waterdogs,PHI,LSM,Long Stick Midfield,32,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-001707,Matt Whitcher,Matt,Whitcher,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,33,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-000339,Connor Kelly,Connor,Kelly,WAT,Philadelphia Waterdogs,PHI,M,Midfield,40,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003119,Alec Stathakis,Alec,Stathakis,WAT,Philadelphia Waterdogs,PHI,FO,Faceoff,73,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-000409,Zach Currier,Zach,Currier,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,77,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003008,Gavin Adler,Gavin,Adler,WAT,Philadelphia Waterdogs,PHI,D,Defense,97,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003264,Sean Byrne,Sean,Byrne,WAT,Philadelphia Waterdogs,PHI,G,Goalie,99,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003246,Nathan Kapp,Nathan,Kapp,WHP,Maryland Whipsnakes,MDW,FO,Faceoff,3,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003048,TJ Malone,TJ,Malone,WHP,Maryland Whipsnakes,MDW,A,Attack,7,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-001009,Colin Heacock,Colin,Heacock,WHP,Maryland Whipsnakes,MDW,M,Midfield,10,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003165,Aidan Carroll,Aidan,Carroll,WHP,Maryland Whipsnakes,MDW,M,Midfield,12,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-000359,Tim Muller,Tim,Muller,WHP,Maryland Whipsnakes,MDW,D,Defense,14,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003255,Joe Juengerkes,Joe,Juengerkes,WHP,Maryland Whipsnakes,MDW,SSDM,Short Stick Defensive Midfield,15,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003176,Emmet Carroll,Emmet,Carroll,WHP,Maryland Whipsnakes,MDW,G,Goalie,19,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003277,Joey Spallina,Joey,Spallina,WHP,Maryland Whipsnakes,MDW,A,Attack,22,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-000355,Matthew Dunn,Matthew,Dunn,WHP,Maryland Whipsnakes,MDW,D,Defense,33,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003283,Blake Eiland,Blake,Eiland,WHP,Maryland Whipsnakes,MDW,SSDM,Short Stick Defensive Midfield,34,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003282,Billy Dwan,Billy,Dwan,WHP,Maryland Whipsnakes,MDW,D,Defense,35,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003077,Ajax Zappitello,Ajax,Zappitello,WHP,Maryland Whipsnakes,MDW,D,Defense,36,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-000414,Rob Pannell,Rob,Pannell,WHP,Maryland Whipsnakes,MDW,A,Attack,40,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003081,Matt Brandau,Matt,Brandau,WHP,Maryland Whipsnakes,MDW,M,Midfield,41,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003125,Matt Knote,Matt,Knote,WHP,Maryland Whipsnakes,MDW,G,Goalie,43,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003128,Jack Posey,Jack,Posey,WHP,Maryland Whipsnakes,MDW,D,Defense,43,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003100,Adam Poitras,Adam,Poitras,WHP,Maryland Whipsnakes,MDW,M,Midfield,51,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003180,Christian Mazur,Christian,Mazur,WHP,Maryland Whipsnakes,MDW,SSDM,Short Stick Defensive Midfield,85,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-003104,Michael Boehm,Michael,Boehm,WHP,Maryland Whipsnakes,MDW,A,Attack,91,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T16:21:55.237594+00:00
-000408,Matt DeLuca,Matt,DeLuca,WAT,Philadelphia Waterdogs,PHI,G,Goalie,1,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003232,Casey Wilson,Casey,Wilson,WAT,Philadelphia Waterdogs,PHI,M,Midfield,2,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003181,Jimmy Freehill,Jimmy,Freehill,WAT,Philadelphia Waterdogs,PHI,D,Defense,5,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-000240,Kieran McArdle,Kieran,McArdle,WAT,Philadelphia Waterdogs,PHI,A,Attack,6,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003281,Kyle Lewis,Kyle,Lewis,WAT,Philadelphia Waterdogs,PHI,M,Midfield,7,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003288,Josh Yago,Josh,Yago,WAT,Philadelphia Waterdogs,PHI,M,Midfield,10,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003096,Marcus Hudgins,Marcus,Hudgins,WAT,Philadelphia Waterdogs,PHI,D,Defense,11,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003159,CJ Kirst,CJ,Kirst,WAT,Philadelphia Waterdogs,PHI,A,Attack,15,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003273,Matt Collison,Matt,Collison,WAT,Philadelphia Waterdogs,PHI,M,Midfield,16,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003266,Silas Richmond,Silas,Richmond,WAT,Philadelphia Waterdogs,PHI,A,Attack,18,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-001810,Michael Sowers,Michael,Sowers,WAT,Philadelphia Waterdogs,PHI,A,Attack,22,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-001733,Charlie Hayes,Charlie,Hayes,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,23,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003089,Kenny Brower,Kenny,Brower,WAT,Philadelphia Waterdogs,PHI,D,Defense,29,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003269,Brendan Staub,Brendan,Staub,WAT,Philadelphia Waterdogs,PHI,LSM,Long Stick Midfield,32,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-001707,Matt Whitcher,Matt,Whitcher,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,33,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003119,Alec Stathakis,Alec,Stathakis,WAT,Philadelphia Waterdogs,PHI,FO,Faceoff,73,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-000409,Zach Currier,Zach,Currier,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,77,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003008,Gavin Adler,Gavin,Adler,WAT,Philadelphia Waterdogs,PHI,D,Defense,97,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003264,Sean Byrne,Sean,Byrne,WAT,Philadelphia Waterdogs,PHI,G,Goalie,99,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003076,Connor Shellenberger,Connor,Shellenberger,ATL,New York Atlas,NYA,A,Attack,1,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003164,Matt Traynor,Matt,Traynor,ATL,New York Atlas,NYA,M,Midfield,2,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-001843,Cole Williams,Cole,Williams,ATL,New York Atlas,NYA,M,Midfield,4,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003099,Tyler Carpenter,Tyler,Carpenter,ATL,New York Atlas,NYA,LSM,Long Stick Midfield,5,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003289,Alex Ross,Alex,Ross,ATL,New York Atlas,NYA,D,Defense,6,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-000254,Trevor Baptiste,Trevor,Baptiste,ATL,New York Atlas,NYA,FO,Faceoff,9,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003010,Xander Dickson,Xander,Dickson,ATL,New York Atlas,NYA,A,Attack,10,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003084,Jake Stevens,Jake,Stevens,ATL,New York Atlas,NYA,M,Midfield,14,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-001397,Michael Rexrode,Michael,Rexrode,ATL,New York Atlas,NYA,D,Defense,22,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-000410,Eli Gobrecht,Eli,Gobrecht,ATL,New York Atlas,NYA,SSDM,Short Stick Defensive Midfield,25,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-000395,Bryan Costabile,Bryan,Costabile,ATL,New York Atlas,NYA,M,Midfield,26,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003186,Hugh Kelleher,Hugh,Kelleher,ATL,New York Atlas,NYA,M,Midfield,27,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-002042,Jon Robbins,Jon,Robbins,ATL,New York Atlas,NYA,LSM,Long Stick Midfield,41,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003009,Brett Makar,Brett,Makar,ATL,New York Atlas,NYA,D,Defense,43,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003079,Liam Entenmann,Liam,Entenmann,ATL,New York Atlas,NYA,G,Goalie,44,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003172,Max Krevsky,Max,Krevsky,ATL,New York Atlas,NYA,SSDM,Short Stick Defensive Midfield,48,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003108,Will Mark,Will,Mark,ATL,New York Atlas,NYA,G,Goalie,88,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-001819,Danny Logan,Danny,Logan,ATL,New York Atlas,NYA,SSDM,Short Stick Defensive Midfield,91,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-002006,Reid Bowering,Reid,Bowering,ATL,New York Atlas,NYA,A,Attack,98,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T16:21:55.237594+00:00
-003160,Andrew McAdorey,Andrew,McAdorey,RED,California Redwoods,CAL,M,Midfield,2,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-001001,Dylan Molloy,Dylan,Molloy,RED,California Redwoods,CAL,A,Attack,4,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-001812,TD Ierlan,TD,Ierlan,RED,California Redwoods,CAL,FO,Faceoff,6,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003296,Cullen Brown,Cullen,Brown,RED,California Redwoods,CAL,D,Defense,9,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003024,Brian Tevlin,Brian,Tevlin,RED,California Redwoods,CAL,SSDM,Short Stick Defensive Midfield,12,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003161,Sam English,Sam,English,RED,California Redwoods,CAL,M,Midfield,15,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003298,Finn Thomson,Finn,Thomson,RED,California Redwoods,CAL,A,Attack,17,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003109,Chris Conlin,Chris,Conlin,RED,California Redwoods,CAL,D,Defense,20,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003287,Dante Bowen,Dante,Bowen,RED,California Redwoods,CAL,SSDM,Short Stick Defensive Midfield,24,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003291,Ryan Croddick,Ryan,Croddick,RED,California Redwoods,CAL,G,Goalie,26,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-001813,Jared Conners,Jared,Conners,RED,California Redwoods,CAL,LSM,Long Stick Midfield,28,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003029,Chris Fake,Chris,Fake,RED,California Redwoods,CAL,D,Defense,31,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003211,Josh Balcarcel,Josh,Balcarcel,RED,California Redwoods,CAL,M,Midfield,34,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-000418,Dillon Ward,Dillon,Ward,RED,California Redwoods,CAL,G,Goalie,37,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003105,Cole Kastner,Cole,Kastner,RED,California Redwoods,CAL,D,Defense,39,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-000373,Ryder Garnsey,Ryder,Garnsey,RED,California Redwoods,CAL,M,Midfield,50,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003059,BJ Farrare,BJ,Farrare,RED,California Redwoods,CAL,LSM,Long Stick Midfield,70,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003156,Aidan Danenza,Aidan,Danenza,RED,California Redwoods,CAL,M,Midfield,88,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003168,Chris Kavanagh,Chris,Kavanagh,RED,California Redwoods,CAL,A,Attack,96,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003085,Graham Bundy,Graham,Bundy,OUT,Denver Outlaws,DEN,M,Midfield,,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003270,Evan Plunkett,Evan,Plunkett,OUT,Denver Outlaws,DEN,M,Midfield,4,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-001839,Nick Grill,Nick,Grill,OUT,Denver Outlaws,DEN,LSM,Long Stick Midfield,8,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003075,Brennan O'Neill,Brennan,O'Neill,OUT,Denver Outlaws,DEN,A,Attack,10,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003106,Dalton Young,Dalton,Young,OUT,Denver Outlaws,DEN,M,Midfield,11,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-002015,Logan Wisnauskas,Logan,Wisnauskas,OUT,Denver Outlaws,DEN,A,Attack,12,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-002022,Zach Geddes,Zach,Geddes,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,13,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003182,Kevin Parnham,Kevin,Parnham,OUT,Denver Outlaws,DEN,D,Defense,16,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-001828,Justin Anderson,Justin,Anderson,OUT,Denver Outlaws,DEN,M,Midfield,21,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-002039,Owen McElroy,Owen,McElroy,OUT,Denver Outlaws,DEN,G,Goalie,24,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003169,Logan McNaney,Logan,McNaney,OUT,Denver Outlaws,DEN,G,Goalie,30,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003167,Jake Taylor,Jake,Taylor,OUT,Denver Outlaws,DEN,A,Attack,31,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-001820,Ryan Terefenko,Ryan,Terefenko,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,34,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-002074,Alexander Smith,Alexander,Smith,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,39,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003183,Jack Gray,Jack,Gray,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,44,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003290,John Dunphey,John,Dunphey,OUT,Denver Outlaws,DEN,M,Midfield,48,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003098,Luke Wierman,Luke,Wierman,OUT,Denver Outlaws,DEN,FO,Faceoff,52,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-001415,Greg Weyl,Greg,Weyl,OUT,Denver Outlaws,DEN,LSM,Long Stick Midfield,57,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
-003083,Jake Piseno,Jake,Piseno,OUT,Denver Outlaws,DEN,LSM,Long Stick Midfield,88,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T16:21:55.237594+00:00
+000408,Matt DeLuca,Matt,DeLuca,WAT,Philadelphia Waterdogs,PHI,G,Goalie,1,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003232,Casey Wilson,Casey,Wilson,WAT,Philadelphia Waterdogs,PHI,M,Midfield,2,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003181,Jimmy Freehill,Jimmy,Freehill,WAT,Philadelphia Waterdogs,PHI,D,Defense,5,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+000240,Kieran McArdle,Kieran,McArdle,WAT,Philadelphia Waterdogs,PHI,A,Attack,6,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+001816,Dox Aitken,Dox,Aitken,WAT,Philadelphia Waterdogs,PHI,M,Midfield,6,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003281,Kyle Lewis,Kyle,Lewis,WAT,Philadelphia Waterdogs,PHI,M,Midfield,7,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003288,Josh Yago,Josh,Yago,WAT,Philadelphia Waterdogs,PHI,M,Midfield,10,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003096,Marcus Hudgins,Marcus,Hudgins,WAT,Philadelphia Waterdogs,PHI,D,Defense,11,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003159,CJ Kirst,CJ,Kirst,WAT,Philadelphia Waterdogs,PHI,A,Attack,15,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003273,Matt Collison,Matt,Collison,WAT,Philadelphia Waterdogs,PHI,M,Midfield,16,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003266,Silas Richmond,Silas,Richmond,WAT,Philadelphia Waterdogs,PHI,A,Attack,18,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+001810,Michael Sowers,Michael,Sowers,WAT,Philadelphia Waterdogs,PHI,A,Attack,22,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+001733,Charlie Hayes,Charlie,Hayes,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,23,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003089,Kenny Brower,Kenny,Brower,WAT,Philadelphia Waterdogs,PHI,D,Defense,29,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003269,Brendan Staub,Brendan,Staub,WAT,Philadelphia Waterdogs,PHI,LSM,Long Stick Midfield,32,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+001707,Matt Whitcher,Matt,Whitcher,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,33,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+000339,Connor Kelly,Connor,Kelly,WAT,Philadelphia Waterdogs,PHI,M,Midfield,40,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003119,Alec Stathakis,Alec,Stathakis,WAT,Philadelphia Waterdogs,PHI,FO,Faceoff,73,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+000409,Zach Currier,Zach,Currier,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,77,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003008,Gavin Adler,Gavin,Adler,WAT,Philadelphia Waterdogs,PHI,D,Defense,97,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003264,Sean Byrne,Sean,Byrne,WAT,Philadelphia Waterdogs,PHI,G,Goalie,99,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003246,Nathan Kapp,Nathan,Kapp,WHP,Maryland Whipsnakes,MDW,FO,Faceoff,3,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003048,TJ Malone,TJ,Malone,WHP,Maryland Whipsnakes,MDW,A,Attack,7,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+001009,Colin Heacock,Colin,Heacock,WHP,Maryland Whipsnakes,MDW,M,Midfield,10,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003165,Aidan Carroll,Aidan,Carroll,WHP,Maryland Whipsnakes,MDW,M,Midfield,12,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+000359,Tim Muller,Tim,Muller,WHP,Maryland Whipsnakes,MDW,D,Defense,14,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003255,Joe Juengerkes,Joe,Juengerkes,WHP,Maryland Whipsnakes,MDW,SSDM,Short Stick Defensive Midfield,15,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003176,Emmet Carroll,Emmet,Carroll,WHP,Maryland Whipsnakes,MDW,G,Goalie,19,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003277,Joey Spallina,Joey,Spallina,WHP,Maryland Whipsnakes,MDW,A,Attack,22,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+000355,Matthew Dunn,Matthew,Dunn,WHP,Maryland Whipsnakes,MDW,D,Defense,33,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003283,Blake Eiland,Blake,Eiland,WHP,Maryland Whipsnakes,MDW,SSDM,Short Stick Defensive Midfield,34,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003282,Billy Dwan,Billy,Dwan,WHP,Maryland Whipsnakes,MDW,D,Defense,35,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003077,Ajax Zappitello,Ajax,Zappitello,WHP,Maryland Whipsnakes,MDW,D,Defense,36,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+000414,Rob Pannell,Rob,Pannell,WHP,Maryland Whipsnakes,MDW,A,Attack,40,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003081,Matt Brandau,Matt,Brandau,WHP,Maryland Whipsnakes,MDW,M,Midfield,41,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003125,Matt Knote,Matt,Knote,WHP,Maryland Whipsnakes,MDW,G,Goalie,43,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003128,Jack Posey,Jack,Posey,WHP,Maryland Whipsnakes,MDW,D,Defense,43,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003100,Adam Poitras,Adam,Poitras,WHP,Maryland Whipsnakes,MDW,M,Midfield,51,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003180,Christian Mazur,Christian,Mazur,WHP,Maryland Whipsnakes,MDW,SSDM,Short Stick Defensive Midfield,85,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+003104,Michael Boehm,Michael,Boehm,WHP,Maryland Whipsnakes,MDW,A,Attack,91,active,True,2026_game_46,2026-ev-46,13,WAT,WHP,2026,13,2026-08-15T21:13:30.429018+00:00
+000408,Matt DeLuca,Matt,DeLuca,WAT,Philadelphia Waterdogs,PHI,G,Goalie,1,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003232,Casey Wilson,Casey,Wilson,WAT,Philadelphia Waterdogs,PHI,M,Midfield,2,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003181,Jimmy Freehill,Jimmy,Freehill,WAT,Philadelphia Waterdogs,PHI,D,Defense,5,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+000240,Kieran McArdle,Kieran,McArdle,WAT,Philadelphia Waterdogs,PHI,A,Attack,6,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003281,Kyle Lewis,Kyle,Lewis,WAT,Philadelphia Waterdogs,PHI,M,Midfield,7,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003288,Josh Yago,Josh,Yago,WAT,Philadelphia Waterdogs,PHI,M,Midfield,10,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003096,Marcus Hudgins,Marcus,Hudgins,WAT,Philadelphia Waterdogs,PHI,D,Defense,11,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003159,CJ Kirst,CJ,Kirst,WAT,Philadelphia Waterdogs,PHI,A,Attack,15,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003273,Matt Collison,Matt,Collison,WAT,Philadelphia Waterdogs,PHI,M,Midfield,16,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003266,Silas Richmond,Silas,Richmond,WAT,Philadelphia Waterdogs,PHI,A,Attack,18,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+001810,Michael Sowers,Michael,Sowers,WAT,Philadelphia Waterdogs,PHI,A,Attack,22,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+001733,Charlie Hayes,Charlie,Hayes,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,23,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003089,Kenny Brower,Kenny,Brower,WAT,Philadelphia Waterdogs,PHI,D,Defense,29,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003269,Brendan Staub,Brendan,Staub,WAT,Philadelphia Waterdogs,PHI,LSM,Long Stick Midfield,32,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+001707,Matt Whitcher,Matt,Whitcher,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,33,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003119,Alec Stathakis,Alec,Stathakis,WAT,Philadelphia Waterdogs,PHI,FO,Faceoff,73,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+000409,Zach Currier,Zach,Currier,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,77,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003008,Gavin Adler,Gavin,Adler,WAT,Philadelphia Waterdogs,PHI,D,Defense,97,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003264,Sean Byrne,Sean,Byrne,WAT,Philadelphia Waterdogs,PHI,G,Goalie,99,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003076,Connor Shellenberger,Connor,Shellenberger,ATL,New York Atlas,NYA,A,Attack,1,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003164,Matt Traynor,Matt,Traynor,ATL,New York Atlas,NYA,M,Midfield,2,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+001843,Cole Williams,Cole,Williams,ATL,New York Atlas,NYA,M,Midfield,4,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003099,Tyler Carpenter,Tyler,Carpenter,ATL,New York Atlas,NYA,LSM,Long Stick Midfield,5,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003289,Alex Ross,Alex,Ross,ATL,New York Atlas,NYA,D,Defense,6,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+000254,Trevor Baptiste,Trevor,Baptiste,ATL,New York Atlas,NYA,FO,Faceoff,9,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003010,Xander Dickson,Xander,Dickson,ATL,New York Atlas,NYA,A,Attack,10,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003084,Jake Stevens,Jake,Stevens,ATL,New York Atlas,NYA,M,Midfield,14,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+001397,Michael Rexrode,Michael,Rexrode,ATL,New York Atlas,NYA,D,Defense,22,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+000410,Eli Gobrecht,Eli,Gobrecht,ATL,New York Atlas,NYA,SSDM,Short Stick Defensive Midfield,25,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+000395,Bryan Costabile,Bryan,Costabile,ATL,New York Atlas,NYA,M,Midfield,26,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003186,Hugh Kelleher,Hugh,Kelleher,ATL,New York Atlas,NYA,M,Midfield,27,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+002042,Jon Robbins,Jon,Robbins,ATL,New York Atlas,NYA,LSM,Long Stick Midfield,41,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003009,Brett Makar,Brett,Makar,ATL,New York Atlas,NYA,D,Defense,43,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003079,Liam Entenmann,Liam,Entenmann,ATL,New York Atlas,NYA,G,Goalie,44,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003172,Max Krevsky,Max,Krevsky,ATL,New York Atlas,NYA,SSDM,Short Stick Defensive Midfield,48,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003108,Will Mark,Will,Mark,ATL,New York Atlas,NYA,G,Goalie,88,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+001819,Danny Logan,Danny,Logan,ATL,New York Atlas,NYA,SSDM,Short Stick Defensive Midfield,91,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+002006,Reid Bowering,Reid,Bowering,ATL,New York Atlas,NYA,A,Attack,98,active,True,2026_game_47,2026-ev-47,13,WAT,ATL,2026,13,2026-08-15T21:13:30.429018+00:00
+003160,Andrew McAdorey,Andrew,McAdorey,RED,California Redwoods,CAL,M,Midfield,2,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+001001,Dylan Molloy,Dylan,Molloy,RED,California Redwoods,CAL,A,Attack,4,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+001812,TD Ierlan,TD,Ierlan,RED,California Redwoods,CAL,FO,Faceoff,6,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003296,Cullen Brown,Cullen,Brown,RED,California Redwoods,CAL,D,Defense,9,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003024,Brian Tevlin,Brian,Tevlin,RED,California Redwoods,CAL,SSDM,Short Stick Defensive Midfield,12,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003161,Sam English,Sam,English,RED,California Redwoods,CAL,M,Midfield,15,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003298,Finn Thomson,Finn,Thomson,RED,California Redwoods,CAL,A,Attack,17,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003109,Chris Conlin,Chris,Conlin,RED,California Redwoods,CAL,D,Defense,20,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003287,Dante Bowen,Dante,Bowen,RED,California Redwoods,CAL,SSDM,Short Stick Defensive Midfield,24,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003291,Ryan Croddick,Ryan,Croddick,RED,California Redwoods,CAL,G,Goalie,26,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+001813,Jared Conners,Jared,Conners,RED,California Redwoods,CAL,LSM,Long Stick Midfield,28,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003029,Chris Fake,Chris,Fake,RED,California Redwoods,CAL,D,Defense,31,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003211,Josh Balcarcel,Josh,Balcarcel,RED,California Redwoods,CAL,M,Midfield,34,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+000418,Dillon Ward,Dillon,Ward,RED,California Redwoods,CAL,G,Goalie,37,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003105,Cole Kastner,Cole,Kastner,RED,California Redwoods,CAL,D,Defense,39,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+000373,Ryder Garnsey,Ryder,Garnsey,RED,California Redwoods,CAL,M,Midfield,50,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003059,BJ Farrare,BJ,Farrare,RED,California Redwoods,CAL,LSM,Long Stick Midfield,70,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003156,Aidan Danenza,Aidan,Danenza,RED,California Redwoods,CAL,M,Midfield,88,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003168,Chris Kavanagh,Chris,Kavanagh,RED,California Redwoods,CAL,A,Attack,96,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003085,Graham Bundy,Graham,Bundy,OUT,Denver Outlaws,DEN,M,Midfield,,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003270,Evan Plunkett,Evan,Plunkett,OUT,Denver Outlaws,DEN,M,Midfield,4,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+001839,Nick Grill,Nick,Grill,OUT,Denver Outlaws,DEN,LSM,Long Stick Midfield,8,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003075,Brennan O'Neill,Brennan,O'Neill,OUT,Denver Outlaws,DEN,A,Attack,10,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003106,Dalton Young,Dalton,Young,OUT,Denver Outlaws,DEN,M,Midfield,11,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+002015,Logan Wisnauskas,Logan,Wisnauskas,OUT,Denver Outlaws,DEN,A,Attack,12,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+002022,Zach Geddes,Zach,Geddes,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,13,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003182,Kevin Parnham,Kevin,Parnham,OUT,Denver Outlaws,DEN,D,Defense,16,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+001828,Justin Anderson,Justin,Anderson,OUT,Denver Outlaws,DEN,M,Midfield,21,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+002039,Owen McElroy,Owen,McElroy,OUT,Denver Outlaws,DEN,G,Goalie,24,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003169,Logan McNaney,Logan,McNaney,OUT,Denver Outlaws,DEN,G,Goalie,30,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003167,Jake Taylor,Jake,Taylor,OUT,Denver Outlaws,DEN,A,Attack,31,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+001820,Ryan Terefenko,Ryan,Terefenko,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,34,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+002074,Alexander Smith,Alexander,Smith,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,39,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003183,Jack Gray,Jack,Gray,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,44,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003290,John Dunphey,John,Dunphey,OUT,Denver Outlaws,DEN,M,Midfield,48,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003098,Luke Wierman,Luke,Wierman,OUT,Denver Outlaws,DEN,FO,Faceoff,52,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+001415,Greg Weyl,Greg,Weyl,OUT,Denver Outlaws,DEN,LSM,Long Stick Midfield,57,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
+003083,Jake Piseno,Jake,Piseno,OUT,Denver Outlaws,DEN,LSM,Long Stick Midfield,88,active,True,2026_game_48,2026-ev-48,13,RED,OUT,2026,13,2026-08-15T21:13:30.429018+00:00
