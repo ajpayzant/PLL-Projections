@@ -1374,6 +1374,7 @@ game_manifest_rows = []
 team_game_rows = []
 player_game_rows = []
 skipped_game_rows = []
+orphan_stat_rows = []
 
 for season in TARGET_SEASONS:
     for slug in season_to_slugs.get(season, []):
@@ -1421,6 +1422,87 @@ for season in TARGET_SEASONS:
                 "season_segment": season_segment,
             })
             continue
+
+        # PLL can leave an orphan team row on an event. While 2026-ev-47
+        # (WAT vs ATL, 2026-08-15) was being scored live the stats were briefly
+        # entered against WAT vs WHP. The attribution was corrected quickly, but
+        # a fully zeroed WHP row stayed on the event, so team_items had 3 entries
+        # and the guard below dropped the whole game -- including 37 valid player
+        # rows -- leaving the box score silently missing from the warehouse.
+        #
+        # The summary's own homeTeam/awayTeam stayed correct throughout, so treat
+        # it as the authority on who actually played and discard rows belonging to
+        # anyone else. Drops are recorded in qc.orphan_stat_rows.
+        participants = []
+
+        for team_obj in (
+            extract_home_team_obj(summary_data),
+            extract_away_team_obj(summary_data),
+        ):
+            participant_id = extract_team_id_from_obj(team_obj)
+
+            if participant_id is None or participant_id is pd.NA:
+                continue
+
+            participant_id = str(participant_id).strip()
+
+            if participant_id and participant_id.lower() not in ("nan", "<na>", "none"):
+                participants.append(participant_id)
+
+        participants = list(dict.fromkeys(participants))
+
+        if len(participants) == 2 and len(team_items) > 2:
+            team_keep = [x for x in team_items if str(x.get("officialId")) in participants]
+            team_drop = [x for x in team_items if str(x.get("officialId")) not in participants]
+
+            # Only trust the reconciliation when it leaves a clean two-team game.
+            if len(team_keep) == 2:
+                for x in team_drop:
+                    orphan_stat_rows.append({
+                        "season": season,
+                        "slug": slug,
+                        "surface": "team_game_stats",
+                        "dropped_team_id": x.get("officialId"),
+                        "participants": ",".join(participants),
+                        "nonzero_numeric_fields": sum(
+                            1 for v in x.values()
+                            if isinstance(v, (int, float)) and not isinstance(v, bool) and v
+                        ),
+                        "items_before": len(team_items),
+                    })
+
+                print(
+                    f"  {slug}: dropped {len(team_drop)} orphan team row(s) "
+                    f"[{', '.join(str(x.get('officialId')) for x in team_drop)}], "
+                    f"kept {','.join(participants)}"
+                )
+
+                team_items = team_keep
+
+        # Same correction on the player surface. A live mis-attribution can leave
+        # player rows on the wrong matchup too. If *every* row looks foreign the
+        # id vocabularies disagree rather than the data being wrong, so keep all.
+        if len(participants) == 2:
+            player_drop = [x for x in player_items if str(x.get("teamId")) not in participants]
+
+            if player_drop and len(player_drop) < len(player_items):
+                for x in player_drop:
+                    orphan_stat_rows.append({
+                        "season": season,
+                        "slug": slug,
+                        "surface": "player_game_stats",
+                        "dropped_team_id": x.get("teamId"),
+                        "participants": ",".join(participants),
+                        "nonzero_numeric_fields": None,
+                        "items_before": len(player_items),
+                    })
+
+                print(
+                    f"  {slug}: dropped {len(player_drop)} player row(s) for "
+                    f"non-participant team(s)"
+                )
+
+                player_items = [x for x in player_items if str(x.get("teamId")) in participants]
 
         if len(team_items) != 2:
             skipped_game_rows.append({
@@ -1804,6 +1886,7 @@ game_manifest = pd.DataFrame(game_manifest_rows)
 team_game_stats = pd.DataFrame(team_game_rows)
 player_game_stats = pd.DataFrame(player_game_rows)
 skipped_games = pd.DataFrame(skipped_game_rows)
+orphan_stat_rows_df = pd.DataFrame(orphan_stat_rows)
 
 if len(game_manifest) > 0:
     game_manifest = game_manifest.sort_values(["season", "game_number", "game_slug"]).reset_index(drop=True)
@@ -1847,6 +1930,7 @@ print("game_manifest:", game_manifest.shape)
 print("team_game_stats:", team_game_stats.shape)
 print("player_game_stats:", player_game_stats.shape)
 print("skipped_games:", skipped_games.shape)
+print("orphan_stat_rows:", orphan_stat_rows_df.shape)
 
 display(game_manifest.head())
 display(team_game_stats.head())
@@ -1861,6 +1945,7 @@ game_manifest.to_csv(GAME_TABLES_DIR / "game_manifest.csv", index=False)
 team_game_stats.to_csv(GAME_TABLES_DIR / "team_game_stats.csv", index=False)
 player_game_stats.to_csv(GAME_TABLES_DIR / "player_game_stats.csv", index=False)
 skipped_games.to_csv(RUN_CHECK_DIR / "skipped_games.csv", index=False)
+orphan_stat_rows_df.to_csv(RUN_CHECK_DIR / "orphan_stat_rows.csv", index=False)
 
 print("Standardized tables saved.")
 
@@ -3062,6 +3147,7 @@ add_qc_check("game_manifest_rows", "info", len(game_manifest), None, "Number of 
 add_qc_check("team_game_stats_rows", "info", len(team_game_stats), None, "Should usually be 2x game_manifest rows.")
 add_qc_check("player_game_stats_rows", "info", len(player_game_stats), None, "One row per player-game.")
 add_qc_check("skipped_games_rows", "info", len(skipped_games), None, "Games skipped due to missing surfaces or invalid stats.")
+add_qc_check("orphan_stat_rows", "info", len(orphan_stat_rows_df), None, "Stat rows dropped for teams that did not play in the event.")
 add_qc_check("full_schedule_inventory_rows", "info", len(season_schedule_inventory), None, "Full schedule, including future games.")
 add_qc_check("stat_slug_inventory_rows", "info", len(stat_slug_inventory), None, "Completed/stat-available games only.")
 
@@ -4397,6 +4483,7 @@ curated_tables = {
     "quality_summary": get_table_var("quality_summary", required=False),
     "defensive_opponent_build_quality": get_table_var("defensive_opponent_build_quality", required=False),
     "skipped_games": get_table_var("skipped_games", required=False),
+    "orphan_stat_rows": get_table_var("orphan_stat_rows_df", required=False),
 }
 
 
@@ -4522,6 +4609,7 @@ qc_table_names = [
     "quality_summary",
     "defensive_opponent_build_quality",
     "skipped_games",
+    "orphan_stat_rows",
 ]
 
 
