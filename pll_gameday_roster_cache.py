@@ -51,7 +51,9 @@ LATEST_PATH  = GAMEDAY_DIR / "gameday_latest.csv"
 BASE_URL     = "https://api.stats.premierlacrosseleague.com/api/v4/events/gameday-rosters"
 CURRENT_YEAR = 2026
 FIRST_WEEK   = 1
-LAST_WEEK    = 14
+# Official PLL weeks run 1-13 in the regular season (week 7 = All-Star) and 14-16
+# for the playoff bracket: 14 = quarterfinals, 15 = semifinals, 16 = championship.
+LAST_WEEK    = 16
 
 # ── Official-week offset for the All-Star break ────────────────────────────
 # PLL's OFFICIAL week numbering (what the gameday-rosters API is keyed on)

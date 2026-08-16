@@ -54,16 +54,28 @@ try:
     _root = Path(__file__).resolve().parent
     if str(_root) not in sys.path:
         sys.path.insert(0, str(_root))
-    from pages._engine_state import get_engine, team_name, get_data_freshness
+    from pages._engine_state import get_scheduled_games, team_name, get_data_freshness
     import datetime as _dt
 
     _fresh = get_data_freshness()
     if _fresh.get("stale"):
         st.warning(f"⚠️ Data last updated {_fresh['last_updated']} ({_fresh['age_hours']:.0f}h ago). Run **Update PLL Data Warehouse** Action to refresh.")
 
-    _engine = get_engine()
-    _games  = _engine.upcoming_games()
+    # Schedule only — no engine build, so the landing page stays fast.
+    _games  = get_scheduled_games()
     _today  = _dt.date.today()
+
+    def _slot_label(_g) -> str:
+        """Game number, or the playoff round for a bracket game (which may have no
+        teams yet)."""
+        if _g.get("is_postseason"):
+            return str(_g.get("round_label") or "Playoff")
+        return f'Game {_g.get("game_number") or "?"}'
+
+    def _matchup(_g) -> str:
+        _h = team_name(_g.get("home_team_id", "")) if _g.get("home_team_id") else "TBD"
+        _a = team_name(_g.get("away_team_id", "")) if _g.get("away_team_id") else "TBD"
+        return f"{_a} @ {_h}"
 
     # Find this week's games (within next 7 days) and next upcoming
     _this_week = []
@@ -86,14 +98,12 @@ try:
         st.markdown("**This week**")
         _cols = st.columns(min(len(_this_week), 4))
         for _i, (_g, _gd, _days) in enumerate(_this_week[:4]):
-            _ht = team_name(_g.get("home_team_id", ""))
-            _at = team_name(_g.get("away_team_id", ""))
             _lbl = "Today" if _days == 0 else (f"In {_days}d" if _days > 0 else f"{abs(_days)}d ago")
             with _cols[_i]:
                 st.markdown(
                     f'<div class="pll-card" style="text-align:center;">'
-                    f'<div class="pll-card-label">Game {_g.get("game_number","?")} · {_lbl}</div>'
-                    f'<div class="pll-card-value" style="font-size:1.1rem;">{_at} @ {_ht}</div>'
+                    f'<div class="pll-card-label">{_slot_label(_g)} · {_lbl}</div>'
+                    f'<div class="pll-card-value" style="font-size:1.1rem;">{_matchup(_g)}</div>'
                     f'<div class="pll-card-sub">{str(_gd)}</div>'
                     f'</div>',
                     unsafe_allow_html=True,
@@ -103,13 +113,11 @@ try:
         st.markdown("**Coming up**")
         _fcols = st.columns(min(len(_future), 4))
         for _i, (_g, _gd, _days) in enumerate(_future[:4]):
-            _ht = team_name(_g.get("home_team_id", ""))
-            _at = team_name(_g.get("away_team_id", ""))
             with _fcols[_i]:
                 st.markdown(
                     f'<div class="pll-card" style="text-align:center;opacity:.75;">'
-                    f'<div class="pll-card-label">Game {_g.get("game_number","?")} · In {_days}d</div>'
-                    f'<div class="pll-card-value" style="font-size:1.1rem;">{_at} @ {_ht}</div>'
+                    f'<div class="pll-card-label">{_slot_label(_g)} · In {_days}d</div>'
+                    f'<div class="pll-card-value" style="font-size:1.1rem;">{_matchup(_g)}</div>'
                     f'<div class="pll-card-sub">{str(_gd)}</div>'
                     f'</div>',
                     unsafe_allow_html=True,
@@ -117,6 +125,11 @@ try:
 
     if _this_week or _future:
         st.markdown("*Go to **Projections** in the sidebar to run a projection for any game.*")
+        if any(_g.get("teams_tbd") for _g, _, _ in _this_week + _future):
+            st.markdown(
+                "*Playoff matchups show as TBD until the bracket is seeded — use the "
+                "**Custom matchup** builder on the Projections page to project them now.*"
+            )
         st.markdown("---")
 
 except Exception:

@@ -67,6 +67,10 @@ MART_TABLES = [
     "team_game_possession_quality",
     "team_game_opponent_context",
     "team_defense_season_stats",
+    # Postseason-inclusive twin of the above; the engine reads it when projecting a
+    # playoff game. Optional — absent until build_warehouse.py has run since the
+    # postseason ingest landed.
+    "team_defense_season_stats_all",
     "team_defense_career_stats",
 ]
 

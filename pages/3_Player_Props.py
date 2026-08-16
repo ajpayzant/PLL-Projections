@@ -147,7 +147,9 @@ with st.sidebar:
     # -- This week's other games (quick switch) ----------------------------
     import datetime as _dt
     _today = _dt.date.today()
-    _all_games = engine.upcoming_games()
+    # Skip not-yet-seeded playoff games: there is no matchup to switch to. Those
+    # are built by hand on the Projections page.
+    _all_games = [_g for _g in engine.upcoming_games() if not _g.get("teams_tbd")]
     _week_games = []
     for _g in _all_games:
         try:

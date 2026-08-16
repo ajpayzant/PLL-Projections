@@ -179,18 +179,114 @@ def _roster_fingerprint() -> str:
 # -- Engine cache ----------------------------------------------------------
 # `roster_token` is part of the cache key: when it changes (rosters updated on
 # disk), Streamlit builds a fresh engine instead of returning the stale one.
+# `include_postseason` is the second key: ratings are built once at fit() time, so
+# the two training scopes (regular-only vs regular+playoffs) are two engines. Only
+# the one a selected game needs gets built, and each is built at most once.
 @st.cache_resource(show_spinner="Loading projection engine…")
-def _build_engine(roster_token: str) -> ProjectionEngine:
-    engine = ProjectionEngine(db_path=DB_PATH)
+def _build_engine(roster_token: str, include_postseason: bool = False) -> ProjectionEngine:
+    engine = ProjectionEngine(db_path=DB_PATH, include_postseason=include_postseason)
     engine.load()
-    # run_backtest=False keeps startup fast (~2-3s).
-    # The calibrator is fitted lazily when the Model Performance page is visited.
+    # run_backtest=False skips the (slow) backtest; fit() itself still builds all
+    # ratings. The calibrator is fitted lazily when Model Performance is visited.
     engine.fit(run_backtest=False)
     return engine
 
 
-def get_engine() -> ProjectionEngine:
-    return _build_engine(_roster_fingerprint())
+def game_needs_postseason(game: Optional[Dict]) -> bool:
+    """True when this game should be projected with playoff games in the training
+    set. Per the agreed scope: regular-season games train on regular-season data
+    only (so their numbers never move), playoff games train on both."""
+    if not game:
+        return False
+    if game.get("is_postseason") is not None:
+        return bool(game.get("is_postseason"))
+    return str(game.get("competition_type", "")).strip().lower() in {"post", "postseason", "playoffs"}
+
+
+def get_engine(include_postseason: Optional[bool] = None) -> ProjectionEngine:
+    """Engine for the current context. With include_postseason left as None the
+    scope is read off the selected game, so every page picks up the playoff-trained
+    engine automatically when a playoff game is selected."""
+    if include_postseason is None:
+        include_postseason = game_needs_postseason(st.session_state.get("selected_game"))
+    return _build_engine(_roster_fingerprint(), bool(include_postseason))
+
+
+def get_engine_for_game(game: Optional[Dict]) -> ProjectionEngine:
+    return get_engine(game_needs_postseason(game))
+
+
+# -- Schedule (no engine required) -----------------------------------------
+# The game selector only needs the schedule, and the schedule is identical for
+# both training scopes. Reading it directly avoids fitting an engine just to
+# populate a dropdown — which would otherwise mean building the regular-season
+# engine even when the user is only ever going to project a playoff game.
+@st.cache_data(show_spinner=False)
+def _load_scheduled_games(db_token: str) -> List[Dict]:
+    from projection_engine_v3 import DataLoader, schedule_rows_to_games
+    return schedule_rows_to_games(
+        DataLoader(db_path=DB_PATH).load_schedule(include_completed=False)
+    )
+
+
+def get_scheduled_games() -> List[Dict]:
+    """Upcoming (non-final) games for the latest season, including not-yet-seeded
+    playoff games (those carry teams_tbd=True)."""
+    try:
+        stat = Path(DB_PATH).stat()
+        token = f"{stat.st_mtime_ns}:{stat.st_size}"
+    except Exception:
+        token = "missing"
+    try:
+        return _load_scheduled_games(token)
+    except Exception:
+        return []
+
+
+def make_game(
+    home_team_id: str,
+    away_team_id: str,
+    game_date: Optional[str] = None,
+    is_postseason: bool = False,
+    round_label: str = "",
+    venue: str = "",
+    location: str = "",
+    game_number: str = "",
+) -> Dict:
+    """Build a game dict for an arbitrary matchup, in the same shape the schedule
+    produces. This is how a playoff game gets projected before the bracket is
+    seeded: the published postseason rows have no teams, so the user names them."""
+    return {
+        "home_team_id": str(home_team_id or ""),
+        "away_team_id": str(away_team_id or ""),
+        "home_team_name": team_name(str(home_team_id or "")),
+        "away_team_name": team_name(str(away_team_id or "")),
+        "game_date": str(game_date or ""),
+        "game_number": str(game_number or ""),
+        "competition_type": "post" if is_postseason else "regular",
+        "is_postseason": bool(is_postseason),
+        "round_label": str(round_label or ""),
+        "venue": str(venue or ""),
+        "location": str(location or ""),
+        "official_week": None,
+        "teams_tbd": not (home_team_id and away_team_id),
+        "custom_matchup": True,
+    }
+
+
+def game_label(g: Dict) -> str:
+    """One-line label for a game. Playoff games lead with the round (a not-yet-seeded
+    quarterfinal has no game number worth showing and possibly no teams)."""
+    if not g:
+        return "—"
+    date_txt = str(g.get("game_date", "") or "")[:10]
+    home = team_name(str(g.get("home_team_id", "") or "")) if g.get("home_team_id") else "TBD"
+    away = team_name(str(g.get("away_team_id", "") or "")) if g.get("away_team_id") else "TBD"
+    if game_needs_postseason(g):
+        rnd = str(g.get("round_label") or "").strip() or "Playoff"
+        return f"{rnd} · {away} @ {home} · {date_txt}"
+    gnum = g.get("game_number") or "?"
+    return f"Game {gnum} · {away} @ {home} · {date_txt}"
 
 
 def refresh_rosters() -> None:
@@ -219,7 +315,7 @@ def refresh_rosters() -> None:
     game = st.session_state.get("selected_game") or {}
     if game.get("home_team_id") and game.get("away_team_id"):
         try:
-            run_projection_for_game(_build_engine(_roster_fingerprint()), game)
+            run_projection_for_game(get_engine_for_game(game), game)
             return
         except Exception:
             pass
@@ -513,6 +609,11 @@ def run_projection_for_game(engine, game: Dict) -> Optional[ProjectionResult]:
     away_id = str(game.get("away_team_id", ""))
     if not home_id or not away_id:
         return None
+    # Ignore the caller's engine if its training scope doesn't match this game:
+    # a playoff game must be projected by the playoff-trained engine and a
+    # regular-season game by the regular-only one. Both are cached, so this is a
+    # dict lookup unless the needed variant hasn't been built yet.
+    engine = get_engine_for_game(game)
     team_rating_overrides = {}
     for tid in [home_id, away_id]:
         ov = get_team_rating_overrides(tid)
@@ -578,6 +679,10 @@ def get_selected_game_or_default(engine: Optional[ProjectionEngine] = None) -> O
 
     engine = engine or get_engine()
     games = engine.upcoming_games()
+    # Only games with a known matchup can be defaulted to. Once the regular season
+    # is over, the schedule is all not-yet-seeded playoff games, so this is empty and
+    # the caller must offer a manual matchup builder instead.
+    games = [g for g in games if g.get("home_team_id") and g.get("away_team_id")]
     if not games:
         return None
 
@@ -627,6 +732,9 @@ def run_selected_projection(
     away_id = str(game.get("away_team_id", "") or "")
     if not home_id or not away_id:
         return None
+
+    # Match the training scope to the game — see run_projection_for_game.
+    engine = get_engine_for_game(game)
 
     game_date_raw = str(game.get("game_date", "") or "")
     game_date = game_date_raw[:10] if game_date_raw else None
@@ -848,6 +956,10 @@ def sorted_upcoming(games: List[Dict]) -> List[Dict]:
 
 
 def default_game_index(games: List[Dict]) -> int:
+    """Index of the next game worth defaulting to. Playoff games whose teams are
+    still TBD are skipped: they cannot be projected until the bracket is seeded (or
+    the user picks the matchup by hand), so defaulting to one would leave the page
+    with nothing to show."""
     import datetime as dt
     today = dt.date.today()
     current_year = today.year
@@ -856,6 +968,8 @@ def default_game_index(games: List[Dict]) -> int:
         season = int(g.get("game_number_season") or
                      _extract_season_from_game(g) or 0)
         if season != current_year:
+            continue
+        if g.get("teams_tbd") or not (g.get("home_team_id") and g.get("away_team_id")):
             continue
         gdate_raw = str(g.get("game_date", ""))[:10]
         try:

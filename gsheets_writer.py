@@ -872,13 +872,39 @@ def sync_actuals(tab_name: str, db_path: str, sh=None) -> Dict[str, int]:
         matchup, rest = tab_name.split("_G", 1)
         gn_str, date_str = rest.split("_", 1)
         away_name, home_name = matchup.split("@", 1)
-        game_number = int(gn_str)
         season = int(date_str[:4])
     except Exception as e:
         raise ValueError(f"Cannot parse tab name '{tab_name}': {e}")
+    try:
+        game_number = int(gn_str)
+    except ValueError:
+        game_number = None      # playoff/custom tab saved before the bracket existed
 
     con = duckdb.connect(db_path, read_only=True)
     try:
+        # Resolve the warehouse game_number from the matchup + date rather than
+        # trusting the number in the tab name. The tab number comes from the
+        # SCHEDULE, while the stat tables number only games that produced stats —
+        # the two drift apart as soon as a game is skipped, and again for playoff
+        # games (numbered after the last regular-season game in each sequence
+        # independently). Matching on teams + date cannot drift.
+        resolved = con.execute("""
+            SELECT game_number
+            FROM clean.game_manifest
+            WHERE season = ?
+              AND home_team_name = ?
+              AND away_team_name = ?
+              AND ABS(DATE_DIFF('day', CAST(game_date_utc AS DATE), CAST(? AS DATE))) <= 1
+        """, [season, home_name.strip(), away_name.strip(), date_str[:10]]).fetchall()
+        if len(resolved) == 1:
+            game_number = int(resolved[0][0])
+        elif game_number is None:
+            raise ValueError(
+                f"No actuals found for '{tab_name}': {away_name} @ {home_name} on "
+                f"{date_str[:10]} is not in the warehouse yet, and the tab name "
+                "carries no usable game number."
+            )
+
         # A game's stat rows only exist once it has been played and ingested, so
         # querying the stats tables directly by (season, game_number) both
         # identifies the game and doubles as the "has it happened?" check —

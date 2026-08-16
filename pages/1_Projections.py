@@ -17,13 +17,14 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from _engine_state import (
-    SHARED_CSS, TEAM_RATING_DEFS,
+    SHARED_CSS, TEAM_RATING_DEFS, TEAM_NAMES,
     card, fmt_prob, fmt_goals,
-    get_engine, init_session,
+    get_engine, get_engine_for_game, init_session,
     team_color, team_name,
     build_overrides, build_active_players, build_starter_goalies,
     get_team_rating_overrides, set_team_rating_override,
     sorted_upcoming, default_game_index,
+    get_scheduled_games, make_game, game_label,
     render_update_projection_btn,
     session_to_json, session_from_json,
     _AUTOSAVE_PATH, get_data_freshness,
@@ -35,11 +36,14 @@ st.set_page_config(page_title="Projections · PLL", page_icon="🥍", layout="wi
 init_session()
 st.markdown(SHARED_CSS, unsafe_allow_html=True)
 
-engine   = get_engine()
 # If a roster file changed since last render (e.g. an unattended gameday scrape
 # landed), drop the cached projection so it re-runs against fresh rosters.
 maybe_refresh_on_roster_change()
-raw_games = engine.upcoming_games()
+
+# The schedule is read WITHOUT building an engine: which engine we need depends on
+# whether the selected game is a playoff game, and building the wrong one costs a
+# full rating fit. The engine is resolved once the game is known (below).
+raw_games = get_scheduled_games()
 
 # -- Attach season to each game dict (for sorting) -------------------------
 def _season_from_game(g: dict) -> int:
@@ -56,13 +60,20 @@ upcoming = sorted_upcoming(raw_games)
 
 st.title("📊 Game Projections")
 
-if not upcoming:
-    st.warning("No upcoming games found. The data warehouse may need to be refreshed "
-               "(run the GitHub Action: Update PLL Data Warehouse).")
-    st.stop()
-
 today = dt.date.today()
 current_year = today.year
+
+# Playoff bracket rows are published with homeTeam/awayTeam null until seeding is
+# decided, so they cannot be picked from a list — the matchup has to be named by
+# hand. Kept separate from the selectable games and offered as date/round presets
+# in the custom-matchup builder.
+tbd_upcoming = [g for g in upcoming if g.get("teams_tbd")]
+upcoming = [g for g in upcoming if not g.get("teams_tbd")]
+
+if not upcoming and not tbd_upcoming:
+    st.warning("No upcoming games found. The data warehouse may need to be refreshed "
+               "(run the GitHub Action: Update PLL Data Warehouse). You can still "
+               "project any matchup with the **Custom matchup** builder in the sidebar.")
 
 # -- Sidebar ---------------------------------------------------------------
 with st.sidebar:
@@ -87,9 +98,13 @@ with st.sidebar:
     # -- Game selector -----------------------------------------------------
     st.markdown("### Select Game")
 
-    # Group by season for display
-    seasons_in_list = sorted(set(g["game_number_season"] for g in upcoming), reverse=True)
-    current_season = max(seasons_in_list) if seasons_in_list else current_year
+    # Group by season for display. Seasons come from both lists so the filter still
+    # works when the only games left are not-yet-seeded playoff games.
+    seasons_in_list = sorted(
+        {g["game_number_season"] for g in upcoming + tbd_upcoming},
+        reverse=True,
+    ) or [current_year]
+    current_season = max(seasons_in_list)
 
     season_filter = st.selectbox(
         "Season",
@@ -99,53 +114,149 @@ with st.sidebar:
         key="season_filter",
     )
     season_games = [g for g in upcoming if g["game_number_season"] == season_filter]
+    season_tbd   = [g for g in tbd_upcoming if g["game_number_season"] == season_filter]
 
-    if not season_games:
-        st.warning("No upcoming games for that season.")
-        st.stop()
-
-    # Build display labels: "Game XX · Away @ Home · Date"
-    def _game_label(g: dict) -> str:
-        ht   = team_name(g.get("home_team_id",""))
-        at   = team_name(g.get("away_team_id",""))
-        gnum = g.get("game_number","?")
-        gdate = str(g.get("game_date",""))[:10]
-        return f"Game {gnum} · {at} @ {ht} · {gdate}"
-
-    game_labels = [_game_label(g) for g in season_games]
-
-    # Persist selected game across page navigations
-    persisted = st.session_state.get("selected_game")
-    default_idx = 0
-    if isinstance(persisted, dict):
-        for i, g in enumerate(season_games):
-            if (g.get("home_team_id") == persisted.get("home_team_id") and
-                    g.get("away_team_id") == persisted.get("away_team_id")):
-                default_idx = i
-                break
+    # Two ways to pick a matchup:
+    #   Scheduled  — a published game with both teams known (the normal case)
+    #   Custom     — any two teams on any date. This is the ONLY way to project a
+    #                playoff game before the bracket is seeded, and it also covers
+    #                hypotheticals.
+    CUSTOM_MODE = "Custom matchup"
+    modes = (["Scheduled game"] if season_games else []) + [CUSTOM_MODE]
+    if len(modes) == 1:
+        mode = modes[0]
+        if not season_games:
+            st.info(
+                "No scheduled games with a known matchup — the regular season is "
+                "over. Build the playoff matchup below."
+            )
     else:
-        # find next upcoming
-        for i, g in enumerate(season_games):
-            try:
-                if dt.date.fromisoformat(str(g.get("game_date",""))[:10]) >= today:
+        mode = st.radio(
+            "Matchup", modes, index=0, key="game_mode_p1", horizontal=True,
+            help="Custom lets you project any two teams on any date — use it for "
+                 "playoff games, which are published with TBD teams until seeded.",
+        )
+
+    if mode != CUSTOM_MODE:
+        game_labels = [game_label(g) for g in season_games]
+
+        # Persist selected game across page navigations
+        persisted = st.session_state.get("selected_game")
+        default_idx = 0
+        if isinstance(persisted, dict):
+            for i, g in enumerate(season_games):
+                if (g.get("home_team_id") == persisted.get("home_team_id") and
+                        g.get("away_team_id") == persisted.get("away_team_id")):
                     default_idx = i
                     break
-            except Exception:
-                pass
+        else:
+            # find next upcoming
+            for i, g in enumerate(season_games):
+                try:
+                    if dt.date.fromisoformat(str(g.get("game_date",""))[:10]) >= today:
+                        default_idx = i
+                        break
+                except Exception:
+                    pass
 
-    game_idx = st.selectbox(
-        "Game",
-        options=range(len(season_games)),
-        format_func=lambda i: game_labels[i],
-        index=default_idx,
-        key="game_idx_p1",
-    )
-    game = season_games[game_idx]
+        game_idx = st.selectbox(
+            "Game",
+            options=range(len(season_games)),
+            format_func=lambda i: game_labels[i],
+            index=default_idx,
+            key="game_idx_p1",
+        )
+        game = season_games[game_idx]
+    else:
+        # -- Custom / playoff matchup builder ------------------------------
+        persisted = st.session_state.get("selected_game")
+        if not isinstance(persisted, dict):
+            persisted = {}
 
-    # Clear result when game changes
+        # Presets: the published playoff slots (round label, date, venue). Picking
+        # one fills in the date and tags the game as postseason, so the projection
+        # trains on regular season + playoffs.
+        slot_labels = ["— none (pick a date) —"] + [
+            f"{(g.get('round_label') or 'Playoff')} · {str(g.get('game_date',''))[:10]}"
+            for g in season_tbd
+        ]
+        slot_idx = st.selectbox(
+            "Playoff slot",
+            options=range(len(slot_labels)),
+            format_func=lambda i: slot_labels[i],
+            index=1 if season_tbd else 0,
+            key="playoff_slot_p1",
+            help="Published postseason games. Selecting one sets the date, round and "
+                 "venue; you still choose which teams meet.",
+        )
+        slot = season_tbd[slot_idx - 1] if slot_idx > 0 else None
+
+        team_ids = sorted(TEAM_NAMES.keys(), key=lambda t: TEAM_NAMES[t])
+
+        def _team_idx(tid: str, fallback: int) -> int:
+            return team_ids.index(tid) if tid in team_ids else fallback
+
+        away_sel = st.selectbox(
+            "Away team", options=team_ids,
+            format_func=lambda t: f"{TEAM_NAMES[t]} ({t})",
+            index=_team_idx(str(persisted.get("away_team_id", "")), 0),
+            key="custom_away_p1",
+        )
+        home_ids = [t for t in team_ids if t != away_sel]
+        home_sel = st.selectbox(
+            "Home team", options=home_ids,
+            format_func=lambda t: f"{TEAM_NAMES[t]} ({t})",
+            index=_team_idx(str(persisted.get("home_team_id", "")), 0) if
+                  str(persisted.get("home_team_id", "")) in home_ids else 0,
+            key="custom_home_p1",
+        )
+        st.markdown(
+            '<span class="note-text">The model has no home-field term, so "home" '
+            'only decides which side is which — neutral playoff sites need no '
+            'adjustment.</span>',
+            unsafe_allow_html=True,
+        )
+
+        if slot is not None:
+            default_date = str(slot.get("game_date", ""))[:10]
+        else:
+            default_date = str(persisted.get("game_date", ""))[:10]
+        try:
+            date_value = dt.date.fromisoformat(default_date)
+        except Exception:
+            date_value = today
+
+        custom_date = st.date_input(
+            "Game date", value=date_value, key="custom_date_p1",
+            help="Drives which roster snapshot is used and how ratings are aged.",
+        )
+
+        is_post = st.checkbox(
+            "Playoff game (train on regular season + playoffs)",
+            value=bool(slot.get("is_postseason")) if slot is not None
+                  else bool(persisted.get("is_postseason")),
+            key="custom_is_post_p1",
+            help="On: ratings, the team model and opponent-defense context also use "
+                 "completed postseason games. Off: regular season only, identical to "
+                 "a normal in-season projection.",
+        )
+
+        game = make_game(
+            home_team_id=home_sel,
+            away_team_id=away_sel,
+            game_date=custom_date.isoformat(),
+            is_postseason=is_post,
+            round_label=(slot.get("round_label") if slot is not None else ""),
+            venue=(slot.get("venue") if slot is not None else ""),
+            location=(slot.get("location") if slot is not None else ""),
+            game_number=(slot.get("game_number") if slot is not None else ""),
+        )
+        game["game_number_season"] = _season_from_game(game) or season_filter
+
+    # Clear result when the matchup, date or training scope changes.
     prev = st.session_state.get("selected_game") or {}
-    if (game.get("home_team_id") != prev.get("home_team_id") or
-            game.get("away_team_id") != prev.get("away_team_id")):
+    if any(game.get(k) != prev.get(k) for k in
+           ("home_team_id", "away_team_id", "game_date", "competition_type")):
         st.session_state.last_result = None
     st.session_state.selected_game = game
 
@@ -153,6 +264,18 @@ with st.sidebar:
     away_id = str(game.get("away_team_id",""))
     home_nm = team_name(home_id)
     away_nm = team_name(away_id)
+
+    # Now that the game is known, resolve the engine whose training scope matches
+    # it. Playoff games get the regular+postseason engine; everything else keeps
+    # the regular-only engine, so in-season numbers are unchanged.
+    engine = get_engine_for_game(game)
+
+    if game.get("is_postseason"):
+        st.markdown(
+            '<span class="note-text">🏆 Playoff context: ratings include completed '
+            'postseason games.</span>',
+            unsafe_allow_html=True,
+        )
 
     st.markdown("---")
 
@@ -423,6 +546,16 @@ gm = _PricingEngine(hold_pct=get_global_hold(), hold_by_stat=get_hold_by_stat())
 )
 
 # -- Game header -----------------------------------------------------------
+# A playoff game leads with its round; it may have no meaningful game number, and
+# the venue is the one piece of context a neutral-site game adds.
+if game.get("is_postseason"):
+    _sub_bits = [str(game.get("round_label") or "Playoff")]
+else:
+    _sub_bits = [f'Game {game.get("game_number") or "?"}']
+_sub_bits.append(str(game.get("game_date", ""))[:10])
+for _extra in (game.get("venue"), game.get("location")):
+    if _extra:
+        _sub_bits.append(str(_extra))
 st.markdown(
     f'<h2 style="text-align:center;margin-bottom:2px;">'
     f'<span style="color:{team_color(away_id)}">{away_nm}</span>'
@@ -430,7 +563,7 @@ st.markdown(
     f'<span style="color:{team_color(home_id)}">{home_nm}</span>'
     f'</h2>'
     f'<p style="text-align:center;color:#94a3b8;margin-top:0;">'
-    f'Game {game.get("game_number","?")} · {str(game.get("game_date",""))[:10]}'
+    f'{" · ".join(_sub_bits)}'
     f'</p>',
     unsafe_allow_html=True,
 )

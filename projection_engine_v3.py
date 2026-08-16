@@ -56,6 +56,87 @@ logging.basicConfig(
 logger = logging.getLogger("pll.v3")
 
 # ---------------------------------------------------------------------------
+# Season segments
+# ---------------------------------------------------------------------------
+# The warehouse tags every game with competition_type, the API's seasonSegment.
+# The pipeline ingests "regular" and "post" only (see scripts/build_warehouse.py);
+# champseries and allstar are excluded there and never reach these tables.
+#
+# Training scope is context-dependent: a regular-season projection trains on
+# regular-season games only, so its numbers are identical to what they were before
+# the playoff bracket was ingested. A playoff projection trains on both.
+POSTSEASON_COMPETITION_TYPES: Tuple[str, ...] = ("post",)
+POSTSEASON_SQL_LIST: str = ", ".join(f"'{s}'" for s in POSTSEASON_COMPETITION_TYPES)
+
+
+def is_postseason_type(value) -> bool:
+    """True for a competition_type / seasonSegment naming the playoff bracket.
+    Missing values are treated as regular season (pre-postseason warehouses left
+    the column off entirely)."""
+    if value is None:
+        return False
+    try:
+        if isinstance(value, float) and math.isnan(value):
+            return False
+    except Exception:
+        pass
+    return str(value).strip().lower() in POSTSEASON_COMPETITION_TYPES
+
+
+def _sched_str(value) -> str:
+    """Schedule cell -> str, with pandas nulls collapsed to "". Load-bearing for
+    playoff rows: they arrive with homeTeam/awayTeam null until the bracket is
+    seeded, and a bare str(pd.NA) would yield the literal "<NA>"."""
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    text = str(value).strip()
+    return "" if text.lower() in {"nan", "none", "<na>", "nat"} else text
+
+
+def schedule_rows_to_games(schedule: pd.DataFrame) -> List[Dict]:
+    """Normalize clean.game_schedule_all rows into the game dicts the UI passes
+    around. Module-level (not a ProjectionEngine method) so the app can build a
+    game selector straight off the schedule without first fitting an engine —
+    which matters once the only remaining games are playoff games, where fitting
+    the regular-season-only engine would be wasted work.
+
+    teams_tbd flags a game that cannot be projected as-scheduled; the caller has to
+    supply the matchup.
+    """
+    if schedule is None or len(schedule) == 0:
+        return []
+
+    games: List[Dict] = []
+    for _, r in schedule.iterrows():
+        comp = _sched_str(r.get("competition_type")) or "regular"
+        home_id, away_id = _sched_str(r.get("home_team_id")), _sched_str(r.get("away_team_id"))
+        official_week = pd.to_numeric(r.get("official_week"), errors="coerce")
+        games.append({
+            "home_team_id": home_id,
+            "away_team_id": away_id,
+            "home_team_name": _sched_str(r.get("home_team_name")),
+            "away_team_name": _sched_str(r.get("away_team_name")),
+            "game_date": _sched_str(r.get("game_date_guess")),
+            "game_number": _sched_str(r.get("game_number")),
+            "competition_type": comp,
+            "is_postseason": is_postseason_type(comp),
+            # Round label ("Quarterfinal", "Championship", ...) is the only
+            # human-readable identity a not-yet-seeded playoff game has.
+            "round_label": _sched_str(r.get("round_label")),
+            "venue": _sched_str(r.get("venue")),
+            "location": _sched_str(r.get("location")),
+            "official_week": None if pd.isna(official_week) else int(official_week),
+            "teams_tbd": not (home_id and away_id),
+        })
+    return games
+
+
+# ---------------------------------------------------------------------------
 # League-level constants (used as priors, not hard overrides)
 # ---------------------------------------------------------------------------
 LG_GOALS: float = 11.25
@@ -1605,11 +1686,41 @@ class DataLoader:
     def _conn(self) -> duckdb.DuckDBPyConnection:
         return duckdb.connect(str(self.db_path), read_only=True)
 
-    def load_team_games(self) -> pd.DataFrame:
+    def _competition_filter(self, con, table: str, include_postseason: bool) -> str:
+        """WHERE clause that keeps regular-season rows only, unless the caller wants
+        the postseason too.
+
+        clean.team_game_stats / clean.player_game_stats carry both segments tagged
+        with competition_type. Regular-season projections must see regular-season
+        games only so their numbers (and the stored backtest baselines) do not move;
+        playoff projections train on both.
+
+        Warehouses built before the postseason ingest have no competition_type
+        column — those tables are already regular-only, so no filter is needed.
+        """
+        if include_postseason:
+            return ""
+        try:
+            cols = {
+                str(r[0]).lower()
+                for r in con.execute(f"DESCRIBE {table}").fetchall()
+            }
+        except Exception:
+            return ""
+        if "competition_type" not in cols:
+            return ""
+        return (
+            " WHERE LOWER(COALESCE(CAST(competition_type AS VARCHAR),'regular')) "
+            f"NOT IN ({POSTSEASON_SQL_LIST})"
+        )
+
+    def load_team_games(self, include_postseason: bool = False) -> pd.DataFrame:
         con = self._conn()
         try:
+            where = self._competition_filter(con, "clean.team_game_stats", include_postseason)
             df = con.execute(
-                "SELECT * FROM clean.team_game_stats ORDER BY season, game_number, team_id"
+                f"SELECT * FROM clean.team_game_stats{where}"
+                " ORDER BY season, game_number, team_id"
             ).df()
             # Add clean faceoff denominator and shots_faced
             df["fo_denom"] = (df["faceoffs_won"].fillna(0) + df["faceoffs_lost"].fillna(0)).clip(lower=1)
@@ -1624,11 +1735,13 @@ class DataLoader:
         finally:
             con.close()
 
-    def load_player_games(self) -> pd.DataFrame:
+    def load_player_games(self, include_postseason: bool = False) -> pd.DataFrame:
         con = self._conn()
         try:
+            where = self._competition_filter(con, "clean.player_game_stats", include_postseason)
             df = con.execute(
-                "SELECT * FROM clean.player_game_stats ORDER BY season, game_number, team_id, player_id"
+                f"SELECT * FROM clean.player_game_stats{where}"
+                " ORDER BY season, game_number, team_id, player_id"
             ).df()
             df["position_norm"] = df["position"].fillna("M").apply(_norm_pos)
             df["fo_denom_p"] = (df["faceoffs_won"].fillna(0) + df["faceoffs_lost"].fillna(0)).clip(lower=1)
@@ -1655,16 +1768,27 @@ class DataLoader:
         finally:
             con.close()
 
-    def load_team_defense(self) -> pd.DataFrame:
-        """Load per-season defensive stats per team for opponent context adjustment."""
+    def load_team_defense(self, include_postseason: bool = False) -> pd.DataFrame:
+        """Load per-season defensive stats per team for opponent context adjustment.
+
+        The regular-only mart and its postseason-inclusive twin are separate tables
+        (the mart is a season aggregate, so it cannot be filtered after the fact).
+        """
+        tables = ["marts.team_defense_season_stats"]
+        if include_postseason:
+            tables = ["marts.team_defense_season_stats_all"] + tables
+
         con = self._conn()
         try:
-            df = con.execute(
-                "SELECT * FROM marts.team_defense_season_stats ORDER BY season, team_id"
-            ).df()
-            logger.info("Loaded %d team-defense rows", len(df))
-            return df
-        except Exception:
+            for table in tables:
+                try:
+                    df = con.execute(
+                        f"SELECT * FROM {table} ORDER BY season, team_id"
+                    ).df()
+                except Exception:
+                    continue
+                logger.info("Loaded %d team-defense rows from %s", len(df), table)
+                return df
             logger.warning("team_defense_season_stats not available; skipping opp defense context")
             return pd.DataFrame()
         finally:
@@ -4057,6 +4181,8 @@ class Backtester:
         self.raw_rows: List[Dict] = []
 
     def run(self, val_seasons: Optional[List[int]] = None) -> BacktestResult:
+        # Regular season only (loader default), so backtest numbers stay comparable
+        # to every baseline recorded before the playoff bracket was ingested.
         tg = self.loader.load_team_games()
         current_season = int(tg["season"].max())
         if val_seasons is None:
@@ -4183,7 +4309,15 @@ class ProjectionEngine:
     """Main orchestrator."""
 
     def __init__(self, db_path: Optional[str] = None, hold_pct: float = 0.045,
-                 hold_by_stat: Optional[Dict[str, float]] = None):
+                 hold_by_stat: Optional[Dict[str, float]] = None,
+                 include_postseason: bool = False):
+        """include_postseason=False trains on regular-season games only — the
+        default, and what every regular-season projection and backtest uses.
+        Set it True to project a PLAYOFF game: ratings, the team model and the
+        opponent-defense mart then also see completed postseason games.
+        Two engines are cheaper than one switchable engine because ratings are
+        built once at fit() time; the app caches one per value."""
+        self.include_postseason = bool(include_postseason)
         self.loader = DataLoader(db_path=db_path)
         self.team_games: pd.DataFrame = pd.DataFrame()
         self.player_games: pd.DataFrame = pd.DataFrame()
@@ -4239,12 +4373,15 @@ class ProjectionEngine:
         return 1.0
 
     def load(self) -> None:
-        logger.info("Loading warehouse data...")
-        self.team_games = self.loader.load_team_games()
-        self.player_games = self.loader.load_player_games()
+        logger.info(
+            "Loading warehouse data (postseason %s)...",
+            "included" if self.include_postseason else "excluded",
+        )
+        self.team_games = self.loader.load_team_games(self.include_postseason)
+        self.player_games = self.loader.load_player_games(self.include_postseason)
         self.schedule = self.loader.load_schedule(include_completed=False)
         self.current_rosters, self.current_rosters_status = self.loader.load_current_rosters()
-        self.team_defense = self.loader.load_team_defense()
+        self.team_defense = self.loader.load_team_defense(self.include_postseason)
         self._loaded = True
         logger.info("Loaded: %d team-game rows | %d player-game rows | %d upcoming games",
                     len(self.team_games), len(self.player_games), len(self.schedule))
@@ -4339,9 +4476,13 @@ class ProjectionEngine:
             overrides.setdefault(pid, {})["active"] = is_active
 
         if not home_team_id or not away_team_id:
-            upcoming = self.upcoming_games()
+            # Skip not-yet-seeded playoff games: they have no teams to fall back on.
+            upcoming = [g for g in self.upcoming_games() if not g.get("teams_tbd")]
             if not upcoming:
-                raise ValueError("No upcoming games and no team IDs provided.")
+                raise ValueError(
+                    "No upcoming games with known teams — pass home_team_id and "
+                    "away_team_id explicitly (playoff matchups are TBD until seeded)."
+                )
             g = upcoming[0]
             home_team_id = home_team_id or g["home_team_id"]
             away_team_id = away_team_id or g["away_team_id"]
@@ -4571,19 +4712,7 @@ class ProjectionEngine:
         )
 
     def upcoming_games(self) -> List[Dict]:
-        if self.schedule.empty:
-            return []
-        return [
-            {
-                "home_team_id": str(r.get("home_team_id", "")),
-                "away_team_id": str(r.get("away_team_id", "")),
-                "home_team_name": str(r.get("home_team_name", "")),
-                "away_team_name": str(r.get("away_team_name", "")),
-                "game_date": str(r.get("game_date_guess", "")),
-                "game_number": str(r.get("game_number", "")),
-            }
-            for _, r in self.schedule.iterrows()
-        ]
+        return schedule_rows_to_games(self.schedule)
 
     def export(self, result: ProjectionResult, path: Optional[str] = None) -> str:
         if path is None:

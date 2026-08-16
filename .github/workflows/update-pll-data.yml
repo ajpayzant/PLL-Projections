@@ -21,6 +21,11 @@ jobs:
       PLL_BEARER_TOKEN: ${{ secrets.PLL_BEARER_TOKEN }}
       PLL_TARGET_SEASONS: '2022,2023,2024,2025,2026'
       PLL_COMPETITION_TYPE: regular
+      # Playoff bracket segments to ingest alongside the regular season. They are
+      # tagged with competition_type and land only in the clean.* tables, so
+      # regular-season marts and projections are unaffected; the engine trains on
+      # them only when projecting a playoff game. "champseries"/"allstar" stay out.
+      PLL_POSTSEASON_TYPES: post
 
     steps:
       - name: Checkout repository

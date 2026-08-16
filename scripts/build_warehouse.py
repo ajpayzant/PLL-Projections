@@ -126,6 +126,58 @@ print("Run check dir:", RUN_CHECK_DIR)
 TARGET_SEASONS = env_int_list("PLL_TARGET_SEASONS", [2022, 2023, 2024, 2025, 2026])
 COMPETITION_TYPE = os.getenv("PLL_COMPETITION_TYPE", "regular").strip().lower()
 
+# Every event carries a seasonSegment. Observed values across 2022-2026:
+#   regular | post | champseries | allstar
+# The seasonSegment QUERY PARAM is ignored by the API — all three probe URLs in
+# fetch_event_list_for_year return identical item counts — so every segment
+# arrives in the payload and the filtering has to happen on our side.
+#
+# We collect "regular" + "post" (the playoff bracket: quarterfinals, semifinals,
+# championship). "champseries" (the February 6v6 Championship Series) and
+# "allstar" stay excluded: different format and rosters, and the All-Star Game
+# sits MID-season, so ingesting it would renumber every regular-season game
+# after it and invalidate stored game_number keys.
+POSTSEASON_COMPETITION_TYPES = {
+    s.strip().lower()
+    for s in os.getenv("PLL_POSTSEASON_TYPES", "post").split(",")
+    if s.strip()
+}
+INCLUDED_COMPETITION_TYPES = {COMPETITION_TYPE} | POSTSEASON_COMPETITION_TYPES
+
+
+def is_included_segment(segment) -> bool:
+    """True for the segments we ingest. A missing segment is NOT included: it
+    cannot be identified as regular vs all-star, and every event observed so far
+    reports one."""
+    if segment is None or (isinstance(segment, float) and pd.isna(segment)):
+        return False
+    return str(segment).strip().lower() in INCLUDED_COMPETITION_TYPES
+
+
+def is_postseason_segment(segment) -> bool:
+    if segment is None or (isinstance(segment, float) and pd.isna(segment)):
+        return False
+    return str(segment).strip().lower() in POSTSEASON_COMPETITION_TYPES
+
+
+def segment_order_rank(segment) -> int:
+    """Sort key that numbers regular-season games before postseason games.
+    Guarantees that adding the playoff bracket never renumbers an existing
+    regular-season game_number (which stat tables and saved Sheets tabs key on)."""
+    return 1 if is_postseason_segment(segment) else 0
+
+
+# (season, seasonSegment) -> event count, tallied over every event the API returns
+# BEFORE the include filter. Block 10 turns this into a QC row so a brand-new
+# segment value shows up as a warning instead of being silently dropped.
+OBSERVED_SEGMENT_COUNTS = {}
+
+
+def record_observed_segment(year, segment):
+    key = (int(year), "<missing>" if segment is None else str(segment).strip().lower())
+    OBSERVED_SEGMENT_COUNTS[key] = OBSERVED_SEGMENT_COUNTS.get(key, 0) + 1
+
+
 EXPECTED_REGULAR_GAMES = {
     2022: 40,
     2023: 40,
@@ -470,7 +522,7 @@ def validate_event_payload(payload, season):
         not pd.isna(year_val)
         and int(year_val) == int(season)
         and event_id
-        and season_segment == COMPETITION_TYPE
+        and is_included_segment(season_segment)
     )
 
     return {
@@ -717,7 +769,12 @@ def fetch_event_list_for_year(year, season_segment=COMPETITION_TYPE):
 
     return best_payload, pd.DataFrame(probe_rows)
 
-def parse_event_list_payload(payload, year, season_segment=COMPETITION_TYPE):
+def parse_event_list_payload(payload, year, season_segment=None):
+    """Parse the event-list payload into a schedule frame.
+
+    season_segment is accepted for call-site compatibility but ignored: the
+    included segments come from INCLUDED_COMPETITION_TYPES (regular + post).
+    """
     items = safe_get(payload, "data", "items", default=[]) if payload else []
     rows = []
 
@@ -735,7 +792,9 @@ def parse_event_list_payload(payload, year, season_segment=COMPETITION_TYPE):
             except Exception:
                 pass
 
-        if item_segment is not None and item_segment != season_segment:
+        record_observed_segment(year, item_segment)
+
+        if not is_included_segment(item_segment):
             continue
 
         slug = item.get("slugname") or item.get("slug") or item.get("eventSlug")
@@ -780,6 +839,13 @@ def parse_event_list_payload(payload, year, season_segment=COMPETITION_TYPE):
             "event_status": event_status,
             "event_status_num": event_status_num,
             "event_status_label": "final" if event_status_num == 3 else ("scheduled" if event_status_num == 0 else "unknown"),
+            # Playoff bracket context. The postseason rows arrive with
+            # homeTeam/awayTeam = null until the seeding is decided, so the round
+            # label is the only human-readable identity a playoff game has.
+            "round_label": item.get("description"),
+            "official_week": to_num_scalar(item.get("week")),
+            "venue": item.get("venue"),
+            "location": item.get("location"),
             "source": "event_list_endpoint",
             "discovery_source": "event_list_endpoint",
         })
@@ -790,7 +856,13 @@ def parse_event_list_payload(payload, year, season_segment=COMPETITION_TYPE):
         return out
 
     out = out.drop_duplicates(subset=["season", "slug"]).copy()
-    out = out.sort_values(["game_date_guess", "event_numeric_id", "slug"], na_position="last").reset_index(drop=True)
+    # Regular season first, postseason after — see segment_order_rank().
+    out["_segment_rank"] = out["competition_type"].map(segment_order_rank)
+    out = out.sort_values(
+        ["_segment_rank", "game_date_guess", "event_numeric_id", "slug"],
+        na_position="last",
+    ).reset_index(drop=True)
+    out = out.drop(columns=["_segment_rank"])
     out["game_number"] = np.arange(1, len(out) + 1)
     out["game_number_guess"] = out["game_number"]
     out["valid"] = True
@@ -1008,7 +1080,7 @@ def build_discovery_inventories():
         payload, probe_df = fetch_event_list_for_year(season, COMPETITION_TYPE)
         event_list_probe_frames.append(probe_df)
 
-        parsed_schedule = parse_event_list_payload(payload, season, COMPETITION_TYPE)
+        parsed_schedule = parse_event_list_payload(payload, season)
 
         if len(parsed_schedule) > 0:
             schedule_frames.append(parsed_schedule)
@@ -1130,10 +1202,16 @@ def build_discovery_inventories():
         keep="first"
     ).copy()
 
+    # Regular season numbered before postseason, so the playoff bracket appends
+    # rather than shifting existing game_numbers.
+    valid_discovered["_segment_rank"] = valid_discovered["competition_type"].map(segment_order_rank)
+
     valid_discovered = valid_discovered.sort_values(
-        ["season", "game_date_guess", "game_number", "slug"],
+        ["season", "_segment_rank", "game_date_guess", "game_number", "slug"],
         na_position="last"
     ).reset_index(drop=True)
+
+    valid_discovered = valid_discovered.drop(columns=["_segment_rank"])
 
     # Fill game_number by season if missing.
     valid_discovered["game_number"] = pd.to_numeric(valid_discovered["game_number"], errors="coerce")
@@ -1196,10 +1274,14 @@ def build_discovery_inventories():
                 stat_season = pd.DataFrame(columns=discovered_season.columns)
 
         if len(stat_season) > 0:
+            stat_season["_segment_rank"] = stat_season["competition_type"].map(segment_order_rank)
+
             stat_season = stat_season.sort_values(
-                ["game_date_guess", "game_number", "slug"],
+                ["_segment_rank", "game_date_guess", "game_number", "slug"],
                 na_position="last"
             ).copy()
+
+            stat_season = stat_season.drop(columns=["_segment_rank"])
 
             stat_season["game_number"] = np.arange(1, len(stat_season) + 1)
 
@@ -1414,11 +1496,11 @@ for season in TARGET_SEASONS:
 
         season_segment = summary_data.get("seasonSegment")
 
-        if season_segment != COMPETITION_TYPE:
+        if not is_included_segment(season_segment):
             skipped_game_rows.append({
                 "season": season,
                 "slug": slug,
-                "reason": "non_regular_season_segment",
+                "reason": "excluded_season_segment",
                 "season_segment": season_segment,
             })
             continue
@@ -2450,6 +2532,43 @@ print("PLAYER_SUM_COLS:", PLAYER_SUM_COLS)
 print("TEAM_SUM_COLS:", TEAM_SUM_COLS)
 
 # ============================================================
+# BLOCK 6.5 — REGULAR-SEASON / POSTSEASON SPLIT
+# ============================================================
+#
+# From here down, game_manifest / team_game_stats / player_game_stats hold
+# REGULAR-SEASON games only — exactly what they held before the postseason was
+# ingested. Every mart, split and quality check that follows is therefore
+# unchanged, so regular-season projections and the existing backtest baselines
+# stay identical.
+#
+# The full frames (regular + postseason) are kept as *_all, and Block 11 exports
+# THOSE as clean.game_manifest / clean.team_game_stats / clean.player_game_stats.
+# The projection engine reads the clean tables and filters on competition_type:
+# regular-only for a regular-season game, regular + postseason for a playoff game.
+
+game_manifest_all = game_manifest.copy()
+team_game_stats_all = team_game_stats.copy()
+player_game_stats_all = player_game_stats.copy()
+
+
+def regular_season_only(df, label):
+    """Drop postseason rows, reporting the split. Returns df unchanged if the
+    frame carries no competition_type column (older/fallback shapes)."""
+    if df is None or len(df) == 0 or "competition_type" not in getattr(df, "columns", []):
+        print(f"  {label}: no competition_type column — left as-is")
+        return df
+
+    is_post = df["competition_type"].map(is_postseason_segment).astype(bool)
+    print(f"  {label}: {int((~is_post).sum())} regular-season rows, {int(is_post.sum())} postseason rows")
+    return df[~is_post].reset_index(drop=True)
+
+
+print("Splitting regular season from postseason:")
+game_manifest = regular_season_only(game_manifest, "game_manifest")
+team_game_stats = regular_season_only(team_game_stats, "team_game_stats")
+player_game_stats = regular_season_only(player_game_stats, "player_game_stats")
+
+# ============================================================
 # BLOCK 7 — CURATED TABLES, SEASON TOTALS, CAREER TOTALS, SPLITS
 # ============================================================
 
@@ -3092,6 +3211,11 @@ def build_clean_schedule_table(schedule_inventory):
         "slug",
         "event_id",
         "event_numeric_id",
+        "competition_type",
+        "round_label",
+        "official_week",
+        "venue",
+        "location",
         "game_date_guess",
         "away_team_id_raw",
         "away_team_name_raw",
@@ -3143,6 +3267,54 @@ def add_qc_check(check_name, status, actual=None, expected=None, notes=None):
         "notes": notes,
     })
 
+# ------------------------------------------------------------
+# Season-segment inventory.
+# game_manifest / team_game_stats / player_game_stats are REGULAR-SEASON ONLY at
+# this point (see BLOCK 6.5), so every count check below is regular-only by
+# construction. These rows make the segment split — and any segment value we have
+# not seen before — visible instead of silently dropped.
+# ------------------------------------------------------------
+_known_segments = INCLUDED_COMPETITION_TYPES | {"champseries", "allstar"}
+_unknown_segments = sorted(
+    {seg for (_season, seg) in OBSERVED_SEGMENT_COUNTS if seg not in _known_segments}
+)
+
+add_qc_check(
+    "unknown_season_segments",
+    "pass" if not _unknown_segments else "warning",
+    ", ".join(_unknown_segments) if _unknown_segments else 0,
+    0,
+    "seasonSegment values the pipeline has no rule for. Decide include/exclude in "
+    "INCLUDED_COMPETITION_TYPES before trusting the schedule.",
+)
+
+for (_season, _seg), _n in sorted(OBSERVED_SEGMENT_COUNTS.items()):
+    if _seg in INCLUDED_COMPETITION_TYPES:
+        _note = "Ingested."
+    elif _seg in _known_segments:
+        _note = "Excluded by design (different format / mid-season event)."
+    else:
+        _note = "UNKNOWN segment — excluded by default."
+    add_qc_check(f"season_segment_events_{_season}_{_seg}", "info", _n, None, _note)
+
+if len(game_manifest_all) > 0 and "competition_type" in game_manifest_all.columns:
+    _post_manifest = game_manifest_all[
+        game_manifest_all["competition_type"].map(is_postseason_segment)
+    ]
+    add_qc_check(
+        "postseason_games_with_stats",
+        "info",
+        int(_post_manifest["game_id"].nunique()),
+        None,
+        "Completed postseason games available for playoff-context projections.",
+    )
+    if len(_post_manifest) > 0:
+        for _s, _n in sorted(_post_manifest.groupby("season")["game_id"].nunique().items()):
+            add_qc_check(
+                f"postseason_games_with_stats_{int(_s)}", "info", int(_n), None,
+                "Completed postseason games in this season."
+            )
+
 add_qc_check("game_manifest_rows", "info", len(game_manifest), None, "Number of completed/stat-available regular-season games parsed.")
 add_qc_check("team_game_stats_rows", "info", len(team_game_stats), None, "Should usually be 2x game_manifest rows.")
 add_qc_check("player_game_stats_rows", "info", len(player_game_stats), None, "One row per player-game.")
@@ -3188,6 +3360,20 @@ if len(season_schedule_inventory) > 0:
             None,
             "Full schedule count, including scheduled/future games."
         )
+
+    if "competition_type" in season_schedule_inventory.columns:
+        post_sched = season_schedule_inventory[
+            season_schedule_inventory["competition_type"].map(is_postseason_segment)
+        ]
+        for season, grp in post_sched.groupby("season"):
+            add_qc_check(
+                f"postseason_schedule_count_{int(season)}",
+                "info",
+                int(grp["slug"].nunique()),
+                None,
+                "Playoff bracket games on the schedule, including future ones "
+                "(teams are null until seeding is decided).",
+            )
 
 # Team rows per game.
 if len(team_game_stats) > 0:
@@ -3576,6 +3762,15 @@ team_defense_season_stats = build_team_defense_agg(
 team_defense_career_stats = build_team_defense_agg(
     team_game_opponent_context,
     ["team_id", "team_name"]
+)
+
+# Postseason-inclusive twin of team_defense_season_stats. The engine reads this
+# one (goals_allowed_per_game feeds the opponent-defense multiplier) when it is
+# projecting a playoff game; regular-season projections keep using the
+# regular-only table above, so their numbers do not move.
+team_defense_season_stats_all = build_team_defense_agg(
+    build_team_game_opponent_context(team_game_stats_all),
+    ["season", "team_id", "team_name"]
 )
 
 # -----------------------------
@@ -4412,10 +4607,12 @@ def get_table_var(var_name, required=False):
 curated_tables = {
     # ------------------------------------------------------------
     # Clean/base game-level data
+    # Exported from the *_all frames: regular season + postseason, tagged with
+    # competition_type. Consumers filter on it (see BLOCK 6.5).
     # ------------------------------------------------------------
-    "game_manifest": get_table_var("game_manifest", required=True),
-    "team_game_stats": get_table_var("team_game_stats", required=True),
-    "player_game_stats": get_table_var("player_game_stats", required=True),
+    "game_manifest": get_table_var("game_manifest_all", required=True),
+    "team_game_stats": get_table_var("team_game_stats_all", required=True),
+    "player_game_stats": get_table_var("player_game_stats_all", required=True),
 
     # ------------------------------------------------------------
     # Reference/directories
@@ -4455,6 +4652,7 @@ curated_tables = {
     # ------------------------------------------------------------
     "team_game_opponent_context": get_table_var("team_game_opponent_context", required=True),
     "team_defense_season_stats": get_table_var("team_defense_season_stats", required=True),
+    "team_defense_season_stats_all": get_table_var("team_defense_season_stats_all", required=False),
     "team_defense_career_stats": get_table_var("team_defense_career_stats", required=True),
 
     # ------------------------------------------------------------
