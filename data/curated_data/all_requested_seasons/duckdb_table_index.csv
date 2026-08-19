@@ -19,6 +19,7 @@ marts,player_vs_opponent_stats
 marts,team_career_stats
 marts,team_defense_career_stats
 marts,team_defense_season_stats
+marts,team_defense_season_stats_all
 marts,team_game_opponent_context
 marts,team_game_possession_quality
 marts,team_last10_stats

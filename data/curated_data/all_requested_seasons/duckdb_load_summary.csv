@@ -27,6 +27,7 @@ marts,team_style_profiles,True
 marts,team_game_possession_quality,True
 marts,team_game_opponent_context,True
 marts,team_defense_season_stats,True
+marts,team_defense_season_stats_all,True
 marts,team_defense_career_stats,True
 qc,season_schedule_inventory,True
 qc,stat_slug_inventory,True
