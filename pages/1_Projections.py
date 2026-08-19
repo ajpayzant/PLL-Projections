@@ -24,7 +24,7 @@ from _engine_state import (
     build_overrides, build_active_players, build_starter_goalies,
     get_team_rating_overrides, set_team_rating_override,
     sorted_upcoming, default_game_index,
-    get_scheduled_games, make_game, game_label,
+    get_scheduled_games, make_game, game_label, game_is_postseason,
     render_update_projection_btn,
     session_to_json, session_from_json,
     _AUTOSAVE_PATH, get_data_freshness,
@@ -231,15 +231,10 @@ with st.sidebar:
             help="Drives which roster snapshot is used and how ratings are aged.",
         )
 
-        is_post = st.checkbox(
-            "Playoff game (train on regular season + playoffs)",
-            value=bool(slot.get("is_postseason")) if slot is not None
-                  else bool(persisted.get("is_postseason")),
-            key="custom_is_post_p1",
-            help="On: ratings, the team model and opponent-defense context also use "
-                 "completed postseason games. Off: regular season only, identical to "
-                 "a normal in-season projection.",
-        )
+        # Picking a published playoff slot makes this a playoff game; without one it
+        # is an undated hypothetical. This only sets what the game IS — the training
+        # scope is chosen below and applies to either mode.
+        is_post = slot is not None
 
         game = make_game(
             home_team_id=home_sel,
@@ -253,10 +248,35 @@ with st.sidebar:
         )
         game["game_number_season"] = _season_from_game(game) or season_filter
 
+    # -- Training scope --------------------------------------------------
+    # Applies to both modes, so any matchup can be projected either way. The
+    # default follows the game type: regular-season games train on regular-season
+    # data only (their numbers must never move), playoff games train on both.
+    #
+    # The widget key varies with the game type so that switching between a regular
+    # and a playoff game re-derives the correct default, while an explicit override
+    # sticks as long as you stay within one type.
+    is_post_game = game_is_postseason(game)
+    SCOPES = ("Regular season only", "Regular season + playoffs")
+    scope = st.radio(
+        "Training data",
+        SCOPES,
+        index=1 if is_post_game else 0,
+        key=f"train_scope_p1_{'post' if is_post_game else 'reg'}",
+        horizontal=True,
+        help="Which completed games train the model. 'Regular season + playoffs' also "
+             "uses completed postseason games for ratings, the team model and "
+             "opponent-defense context. Playoff games default to it; regular-season "
+             "games default to regular-only so their projections stay unchanged.",
+    )
+    # Copy rather than mutate: scheduled games come from a cached list.
+    game = {**game, "train_postseason": scope == SCOPES[1]}
+
     # Clear result when the matchup, date or training scope changes.
     prev = st.session_state.get("selected_game") or {}
     if any(game.get(k) != prev.get(k) for k in
-           ("home_team_id", "away_team_id", "game_date", "competition_type")):
+           ("home_team_id", "away_team_id", "game_date", "competition_type",
+            "train_postseason")):
         st.session_state.last_result = None
     st.session_state.selected_game = game
 

@@ -4787,6 +4787,7 @@ mart_table_names = [
     # Defensive / opponent marts
     "team_game_opponent_context",
     "team_defense_season_stats",
+    "team_defense_season_stats_all",
     "team_defense_career_stats",
 ]
 

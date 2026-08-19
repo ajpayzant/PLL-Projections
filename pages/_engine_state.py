@@ -192,15 +192,29 @@ def _build_engine(roster_token: str, include_postseason: bool = False) -> Projec
     return engine
 
 
-def game_needs_postseason(game: Optional[Dict]) -> bool:
-    """True when this game should be projected with playoff games in the training
-    set. Per the agreed scope: regular-season games train on regular-season data
-    only (so their numbers never move), playoff games train on both."""
+def game_is_postseason(game: Optional[Dict]) -> bool:
+    """True when the game itself is a playoff game. This is a fact about the
+    schedule, used for labelling — not the training scope."""
     if not game:
         return False
     if game.get("is_postseason") is not None:
         return bool(game.get("is_postseason"))
     return str(game.get("competition_type", "")).strip().lower() in {"post", "postseason", "playoffs"}
+
+
+def game_needs_postseason(game: Optional[Dict]) -> bool:
+    """Training scope for this game: whether completed playoff games join the
+    training set.
+
+    Defaults to the game's own type — regular-season games train on regular-season
+    data only (so their numbers never move), playoff games train on both — but an
+    explicit `train_postseason` chosen in the UI wins, so either scope can be
+    applied to any matchup."""
+    if not game:
+        return False
+    if game.get("train_postseason") is not None:
+        return bool(game.get("train_postseason"))
+    return game_is_postseason(game)
 
 
 def get_engine(include_postseason: Optional[bool] = None) -> ProjectionEngine:
@@ -282,7 +296,7 @@ def game_label(g: Dict) -> str:
     date_txt = str(g.get("game_date", "") or "")[:10]
     home = team_name(str(g.get("home_team_id", "") or "")) if g.get("home_team_id") else "TBD"
     away = team_name(str(g.get("away_team_id", "") or "")) if g.get("away_team_id") else "TBD"
-    if game_needs_postseason(g):
+    if game_is_postseason(g):
         rnd = str(g.get("round_label") or "").strip() or "Playoff"
         return f"{rnd} · {away} @ {home} · {date_txt}"
     gnum = g.get("game_number") or "?"
