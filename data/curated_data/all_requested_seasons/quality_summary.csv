@@ -1,0 +1,66 @@
+check_name,status,actual,expected,notes
+unknown_season_segments,warning,preseason,0.0,seasonSegment values the pipeline has no rule for. Decide include/exclude in INCLUDED_COMPETITION_TYPES before trusting the schedule.
+season_segment_events_2022_allstar,info,2,,Excluded by design (different format / mid-season event).
+season_segment_events_2022_post,info,6,,Ingested.
+season_segment_events_2022_preseason,info,4,,UNKNOWN segment — excluded by default.
+season_segment_events_2022_regular,info,40,,Ingested.
+season_segment_events_2023_allstar,info,2,,Excluded by design (different format / mid-season event).
+season_segment_events_2023_post,info,6,,Ingested.
+season_segment_events_2023_regular,info,40,,Ingested.
+season_segment_events_2024_allstar,info,2,,Excluded by design (different format / mid-season event).
+season_segment_events_2024_post,info,5,,Ingested.
+season_segment_events_2024_regular,info,40,,Ingested.
+season_segment_events_2025_allstar,info,2,,Excluded by design (different format / mid-season event).
+season_segment_events_2025_post,info,5,,Ingested.
+season_segment_events_2025_regular,info,40,,Ingested.
+season_segment_events_2026_allstar,info,1,,Excluded by design (different format / mid-season event).
+season_segment_events_2026_post,info,5,,Ingested.
+season_segment_events_2026_regular,info,48,,Ingested.
+postseason_games_with_stats,info,22,,Completed postseason games available for playoff-context projections.
+postseason_games_with_stats_2022,info,6,,Completed postseason games in this season.
+postseason_games_with_stats_2023,info,6,,Completed postseason games in this season.
+postseason_games_with_stats_2024,info,5,,Completed postseason games in this season.
+postseason_games_with_stats_2025,info,5,,Completed postseason games in this season.
+game_manifest_rows,info,208,,Number of completed/stat-available regular-season games parsed.
+team_game_stats_rows,info,416,,Should usually be 2x game_manifest rows.
+player_game_stats_rows,info,7534,,One row per player-game.
+skipped_games_rows,info,0,,Games skipped due to missing surfaces or invalid stats.
+orphan_stat_rows,info,2,,Stat rows dropped for teams that did not play in the event.
+full_schedule_inventory_rows,info,235,,"Full schedule, including future games."
+stat_slug_inventory_rows,info,230,,Completed/stat-available games only.
+expected_stat_game_count_2022,pass,40,40.0,Completed regular season expected count.
+expected_stat_game_count_2023,pass,40,40.0,Completed regular season expected count.
+expected_stat_game_count_2024,pass,40,40.0,Completed regular season expected count.
+expected_stat_game_count_2025,pass,40,40.0,Completed regular season expected count.
+expected_stat_game_count_2026,info,48,,Ongoing season; only completed games are expected.
+full_schedule_game_count_2022,info,46,,"Full schedule count, including scheduled/future games."
+full_schedule_game_count_2023,info,46,,"Full schedule count, including scheduled/future games."
+full_schedule_game_count_2024,info,45,,"Full schedule count, including scheduled/future games."
+full_schedule_game_count_2025,info,45,,"Full schedule count, including scheduled/future games."
+full_schedule_game_count_2026,info,53,,"Full schedule count, including scheduled/future games."
+postseason_schedule_count_2022,info,6,,"Playoff bracket games on the schedule, including future ones (teams are null until seeding is decided)."
+postseason_schedule_count_2023,info,6,,"Playoff bracket games on the schedule, including future ones (teams are null until seeding is decided)."
+postseason_schedule_count_2024,info,5,,"Playoff bracket games on the schedule, including future ones (teams are null until seeding is decided)."
+postseason_schedule_count_2025,info,5,,"Playoff bracket games on the schedule, including future ones (teams are null until seeding is decided)."
+postseason_schedule_count_2026,info,5,,"Playoff bracket games on the schedule, including future ones (teams are null until seeding is decided)."
+exactly_two_team_rows_per_game,pass,0,0.0,Each completed game should have exactly two team-game rows.
+duplicate_team_game_keys,pass,0,0.0,Duplicate game_id/team_id rows.
+duplicate_player_game_keys,pass,0,0.0,Duplicate game_id/player_id/team_id rows.
+team_scores_formula,pass,0,0.0,scores should equal one_point_goals + 2 * two_point_goals.
+player_scoring_points_formula,pass,0,0.0,scoring_points should equal one_point_goals + 2 * two_point_goals.
+player_total_points_formula,pass,0,0.0,points should equal scoring_points + assists.
+team_scores_match_game_manifest,warning,4,0.0,Team stats score should match home/away score in game manifest.
+official_total_possessions_populated_2022,warning,0,,Raw totalPossessions is only reliable in seasons where non-zero values exist.
+official_total_possessions_populated_2023,warning,0,,Raw totalPossessions is only reliable in seasons where non-zero values exist.
+official_total_possessions_populated_2024,warning,0,,Raw totalPossessions is only reliable in seasons where non-zero values exist.
+official_total_possessions_populated_2025,warning,0,,Raw totalPossessions is only reliable in seasons where non-zero values exist.
+official_total_possessions_populated_2026,info,42,,Raw totalPossessions is only reliable in seasons where non-zero values exist.
+context_rows_match_team_game_rows,pass,416,416.0,Opponent context should have one row per team-game.
+season_defense_rows,info,40,,One row per season/team with completed stat games.
+career_defense_rows,info,8,,One row per team across all completed stat games.
+missing_opponent_join_rows,pass,0,0.0,Every team-game row should find opponent row from same game.
+duplicate_team_game_context_keys,pass,0,0.0,No duplicate game_id/team_id rows in opponent context.
+exactly_two_context_rows_per_game,pass,0,0.0,Each completed/stat-available game should have two context rows.
+scores_allowed_matches_opponent_scores,pass,0,0.0,scores_allowed should equal opponent team scores.
+goals_allowed_matches_opponent_goals,pass,0,0.0,goals_allowed should equal opponent team goals.
+season_coverage_created,info,5,,Number of seasons with defensive/opponent data.

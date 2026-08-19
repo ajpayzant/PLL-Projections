@@ -1,0 +1,6 @@
+season,games,team_rows,time_in_possession_available_team_rows,time_in_possession_raw_nonzero,missing_possession_team_rows,total_possessions_nonzero,total_possessions_sum
+2022,46,92,92,92,0,0,0
+2023,46,92,86,86,6,0,0
+2024,45,90,90,90,0,0,0
+2025,45,90,90,90,0,0,0
+2026,48,96,96,96,0,42,1804
