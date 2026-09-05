@@ -1,77 +1,77 @@
 player_id,player_name,first_name,last_name,team_id,team_name,team_code,position,position_group,jersey_number,status,is_active,game_id,game_slug,game_number,home_team_id,away_team_id,year,week,scraped_at
-000216,Marcus Holman,Marcus,Holman,CAN,Boston Cannons,BOS,A,Attack,1,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-002038,Colin Kirst,Colin,Kirst,CAN,Boston Cannons,BOS,G,Goalie,5,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003271,Hunter Smith,Hunter,Smith,CAN,Boston Cannons,BOS,LSM,Long Stick Midfield,6,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003286,Will Donovan,Will,Donovan,CAN,Boston Cannons,BOS,D,Defense,7,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003267,Mikey Weisshaar,Mikey,Weisshaar,CAN,Boston Cannons,BOS,M,Midfield,8,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003285,Jack Regnery,Jack,Regnery,CAN,Boston Cannons,BOS,A,Attack,13,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-001671,Zach Goodrich,Zach,Goodrich,CAN,Boston Cannons,BOS,SSDM,Short Stick Defensive Midfield,14,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003013,Matt Campbell,Matt,Campbell,CAN,Boston Cannons,BOS,M,Midfield,20,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003184,Ben Ramsey,Ben,Ramsey,CAN,Boston Cannons,BOS,SSDM,Short Stick Defensive Midfield,24,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003275,Andrew McMeekin,Andrew,McMeekin,CAN,Boston Cannons,BOS,FO,Faceoff,26,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003195,Brian Kelly,Brian,Kelly,CAN,Boston Cannons,BOS,A,Attack,30,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-001815,Connor Kirst,Connor,Kirst,CAN,Boston Cannons,BOS,M,Midfield,34,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003041,Ethan Rall,Ethan,Rall,CAN,Boston Cannons,BOS,LSM,Long Stick Midfield,35,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-001817,Jack Kielty,Jack,Kielty,CAN,Boston Cannons,BOS,D,Defense,40,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-001826,Jeff Trainor,Jeff,Trainor,CAN,Boston Cannons,BOS,SSDM,Short Stick Defensive Midfield,43,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003157,Graydon Hogg,Graydon,Hogg,CAN,Boston Cannons,BOS,M,Midfield,45,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003023,Owen Grant,Owen,Grant,CAN,Boston Cannons,BOS,D,Defense,81,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003145,JC Higginbotham,JC,Higginbotham,CAN,Boston Cannons,BOS,G,Goalie,88,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003162,Coulter Mackesy,Coulter,Mackesy,CAN,Boston Cannons,BOS,A,Attack,91,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003246,Nathan Kapp,Nathan,Kapp,WHP,Maryland Whipsnakes,MDW,FO,Faceoff,3,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003048,TJ Malone,TJ,Malone,WHP,Maryland Whipsnakes,MDW,A,Attack,7,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-001009,Colin Heacock,Colin,Heacock,WHP,Maryland Whipsnakes,MDW,M,Midfield,10,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003173,Jack McDonald,Jack,McDonald,WHP,Maryland Whipsnakes,MDW,LSM,Long Stick Midfield,11,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003165,Aidan Carroll,Aidan,Carroll,WHP,Maryland Whipsnakes,MDW,M,Midfield,12,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-000359,Tim Muller,Tim,Muller,WHP,Maryland Whipsnakes,MDW,D,Defense,14,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003176,Emmet Carroll,Emmet,Carroll,WHP,Maryland Whipsnakes,MDW,G,Goalie,19,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003277,Joey Spallina,Joey,Spallina,WHP,Maryland Whipsnakes,MDW,A,Attack,22,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-000355,Matthew Dunn,Matthew,Dunn,WHP,Maryland Whipsnakes,MDW,D,Defense,33,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003283,Blake Eiland,Blake,Eiland,WHP,Maryland Whipsnakes,MDW,SSDM,Short Stick Defensive Midfield,34,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003282,Billy Dwan,Billy,Dwan,WHP,Maryland Whipsnakes,MDW,D,Defense,35,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003077,Ajax Zappitello,Ajax,Zappitello,WHP,Maryland Whipsnakes,MDW,D,Defense,36,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-000414,Rob Pannell,Rob,Pannell,WHP,Maryland Whipsnakes,MDW,A,Attack,40,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003081,Matt Brandau,Matt,Brandau,WHP,Maryland Whipsnakes,MDW,M,Midfield,41,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003125,Matt Knote,Matt,Knote,WHP,Maryland Whipsnakes,MDW,G,Goalie,43,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003128,Jack Posey,Jack,Posey,WHP,Maryland Whipsnakes,MDW,D,Defense,43,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003100,Adam Poitras,Adam,Poitras,WHP,Maryland Whipsnakes,MDW,M,Midfield,51,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003180,Christian Mazur,Christian,Mazur,WHP,Maryland Whipsnakes,MDW,SSDM,Short Stick Defensive Midfield,85,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003104,Michael Boehm,Michael,Boehm,WHP,Maryland Whipsnakes,MDW,A,Attack,91,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T15:42:00.786039+00:00
-003160,Andrew McAdorey,Andrew,McAdorey,RED,California Redwoods,CAL,M,Midfield,2,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-001001,Dylan Molloy,Dylan,Molloy,RED,California Redwoods,CAL,A,Attack,4,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-001812,TD Ierlan,TD,Ierlan,RED,California Redwoods,CAL,FO,Faceoff,6,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003296,Cullen Brown,Cullen,Brown,RED,California Redwoods,CAL,D,Defense,9,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003024,Brian Tevlin,Brian,Tevlin,RED,California Redwoods,CAL,SSDM,Short Stick Defensive Midfield,12,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003161,Sam English,Sam,English,RED,California Redwoods,CAL,M,Midfield,15,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003298,Finn Thomson,Finn,Thomson,RED,California Redwoods,CAL,A,Attack,17,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003109,Chris Conlin,Chris,Conlin,RED,California Redwoods,CAL,D,Defense,20,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003287,Dante Bowen,Dante,Bowen,RED,California Redwoods,CAL,SSDM,Short Stick Defensive Midfield,24,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003291,Ryan Croddick,Ryan,Croddick,RED,California Redwoods,CAL,G,Goalie,26,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-001813,Jared Conners,Jared,Conners,RED,California Redwoods,CAL,LSM,Long Stick Midfield,28,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003029,Chris Fake,Chris,Fake,RED,California Redwoods,CAL,D,Defense,31,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003211,Josh Balcarcel,Josh,Balcarcel,RED,California Redwoods,CAL,M,Midfield,34,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-000418,Dillon Ward,Dillon,Ward,RED,California Redwoods,CAL,G,Goalie,37,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003105,Cole Kastner,Cole,Kastner,RED,California Redwoods,CAL,D,Defense,39,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-000373,Ryder Garnsey,Ryder,Garnsey,RED,California Redwoods,CAL,M,Midfield,50,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003059,BJ Farrare,BJ,Farrare,RED,California Redwoods,CAL,LSM,Long Stick Midfield,70,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003156,Aidan Danenza,Aidan,Danenza,RED,California Redwoods,CAL,M,Midfield,88,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003168,Chris Kavanagh,Chris,Kavanagh,RED,California Redwoods,CAL,A,Attack,96,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003085,Graham Bundy,Graham,Bundy,OUT,Denver Outlaws,DEN,M,Midfield,,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-001811,JT Giles-Harris,JT,Giles-Harris,OUT,Denver Outlaws,DEN,D,Defense,1,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003075,Brennan O'Neill,Brennan,O'Neill,OUT,Denver Outlaws,DEN,A,Attack,10,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-001827,Jared Bernhardt,Jared,Bernhardt,OUT,Denver Outlaws,DEN,A,Attack,10,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003106,Dalton Young,Dalton,Young,OUT,Denver Outlaws,DEN,M,Midfield,11,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-002015,Logan Wisnauskas,Logan,Wisnauskas,OUT,Denver Outlaws,DEN,A,Attack,12,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-002022,Zach Geddes,Zach,Geddes,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,13,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-001828,Justin Anderson,Justin,Anderson,OUT,Denver Outlaws,DEN,M,Midfield,21,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-002039,Owen McElroy,Owen,McElroy,OUT,Denver Outlaws,DEN,G,Goalie,24,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003169,Logan McNaney,Logan,McNaney,OUT,Denver Outlaws,DEN,G,Goalie,30,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003167,Jake Taylor,Jake,Taylor,OUT,Denver Outlaws,DEN,A,Attack,31,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-001820,Ryan Terefenko,Ryan,Terefenko,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,34,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-000302,Michael Manley,Michael,Manley,OUT,Denver Outlaws,DEN,D,Defense,37,starter,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003183,Jack Gray,Jack,Gray,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,44,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003080,Pat Kavanagh,Pat,Kavanagh,OUT,Denver Outlaws,DEN,A,Attack,51,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003098,Luke Wierman,Luke,Wierman,OUT,Denver Outlaws,DEN,FO,Faceoff,52,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-001415,Greg Weyl,Greg,Weyl,OUT,Denver Outlaws,DEN,LSM,Long Stick Midfield,57,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-001406,Ben Randall,Ben,Randall,OUT,Denver Outlaws,DEN,D,Defense,77,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
-003083,Jake Piseno,Jake,Piseno,OUT,Denver Outlaws,DEN,LSM,Long Stick Midfield,88,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T15:42:00.786039+00:00
+000216,Marcus Holman,Marcus,Holman,CAN,Boston Cannons,BOS,A,Attack,1,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+002038,Colin Kirst,Colin,Kirst,CAN,Boston Cannons,BOS,G,Goalie,5,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003271,Hunter Smith,Hunter,Smith,CAN,Boston Cannons,BOS,LSM,Long Stick Midfield,6,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003286,Will Donovan,Will,Donovan,CAN,Boston Cannons,BOS,D,Defense,7,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003267,Mikey Weisshaar,Mikey,Weisshaar,CAN,Boston Cannons,BOS,M,Midfield,8,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003285,Jack Regnery,Jack,Regnery,CAN,Boston Cannons,BOS,A,Attack,13,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+001671,Zach Goodrich,Zach,Goodrich,CAN,Boston Cannons,BOS,SSDM,Short Stick Defensive Midfield,14,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003013,Matt Campbell,Matt,Campbell,CAN,Boston Cannons,BOS,M,Midfield,20,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003184,Ben Ramsey,Ben,Ramsey,CAN,Boston Cannons,BOS,SSDM,Short Stick Defensive Midfield,24,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003275,Andrew McMeekin,Andrew,McMeekin,CAN,Boston Cannons,BOS,FO,Faceoff,26,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003195,Brian Kelly,Brian,Kelly,CAN,Boston Cannons,BOS,A,Attack,30,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+001815,Connor Kirst,Connor,Kirst,CAN,Boston Cannons,BOS,M,Midfield,34,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003041,Ethan Rall,Ethan,Rall,CAN,Boston Cannons,BOS,LSM,Long Stick Midfield,35,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+001817,Jack Kielty,Jack,Kielty,CAN,Boston Cannons,BOS,D,Defense,40,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+001826,Jeff Trainor,Jeff,Trainor,CAN,Boston Cannons,BOS,SSDM,Short Stick Defensive Midfield,43,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003157,Graydon Hogg,Graydon,Hogg,CAN,Boston Cannons,BOS,M,Midfield,45,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003023,Owen Grant,Owen,Grant,CAN,Boston Cannons,BOS,D,Defense,81,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003145,JC Higginbotham,JC,Higginbotham,CAN,Boston Cannons,BOS,G,Goalie,88,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003162,Coulter Mackesy,Coulter,Mackesy,CAN,Boston Cannons,BOS,A,Attack,91,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003246,Nathan Kapp,Nathan,Kapp,WHP,Maryland Whipsnakes,MDW,FO,Faceoff,3,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003048,TJ Malone,TJ,Malone,WHP,Maryland Whipsnakes,MDW,A,Attack,7,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+001009,Colin Heacock,Colin,Heacock,WHP,Maryland Whipsnakes,MDW,M,Midfield,10,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003173,Jack McDonald,Jack,McDonald,WHP,Maryland Whipsnakes,MDW,LSM,Long Stick Midfield,11,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003165,Aidan Carroll,Aidan,Carroll,WHP,Maryland Whipsnakes,MDW,M,Midfield,12,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+000359,Tim Muller,Tim,Muller,WHP,Maryland Whipsnakes,MDW,D,Defense,14,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003176,Emmet Carroll,Emmet,Carroll,WHP,Maryland Whipsnakes,MDW,G,Goalie,19,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003277,Joey Spallina,Joey,Spallina,WHP,Maryland Whipsnakes,MDW,A,Attack,22,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+000355,Matthew Dunn,Matthew,Dunn,WHP,Maryland Whipsnakes,MDW,D,Defense,33,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003283,Blake Eiland,Blake,Eiland,WHP,Maryland Whipsnakes,MDW,SSDM,Short Stick Defensive Midfield,34,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003282,Billy Dwan,Billy,Dwan,WHP,Maryland Whipsnakes,MDW,D,Defense,35,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003077,Ajax Zappitello,Ajax,Zappitello,WHP,Maryland Whipsnakes,MDW,D,Defense,36,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+000414,Rob Pannell,Rob,Pannell,WHP,Maryland Whipsnakes,MDW,A,Attack,40,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003081,Matt Brandau,Matt,Brandau,WHP,Maryland Whipsnakes,MDW,M,Midfield,41,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003125,Matt Knote,Matt,Knote,WHP,Maryland Whipsnakes,MDW,G,Goalie,43,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003128,Jack Posey,Jack,Posey,WHP,Maryland Whipsnakes,MDW,D,Defense,43,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003100,Adam Poitras,Adam,Poitras,WHP,Maryland Whipsnakes,MDW,M,Midfield,51,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003180,Christian Mazur,Christian,Mazur,WHP,Maryland Whipsnakes,MDW,SSDM,Short Stick Defensive Midfield,85,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003104,Michael Boehm,Michael,Boehm,WHP,Maryland Whipsnakes,MDW,A,Attack,91,active,True,2026_game_50,2026-quarterfinals-2,14,CAN,WHP,2026,14,2026-09-05T17:55:44.555820+00:00
+003160,Andrew McAdorey,Andrew,McAdorey,RED,California Redwoods,CAL,M,Midfield,2,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+001001,Dylan Molloy,Dylan,Molloy,RED,California Redwoods,CAL,A,Attack,4,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+001812,TD Ierlan,TD,Ierlan,RED,California Redwoods,CAL,FO,Faceoff,6,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003296,Cullen Brown,Cullen,Brown,RED,California Redwoods,CAL,D,Defense,9,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003024,Brian Tevlin,Brian,Tevlin,RED,California Redwoods,CAL,SSDM,Short Stick Defensive Midfield,12,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003161,Sam English,Sam,English,RED,California Redwoods,CAL,M,Midfield,15,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003298,Finn Thomson,Finn,Thomson,RED,California Redwoods,CAL,A,Attack,17,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003109,Chris Conlin,Chris,Conlin,RED,California Redwoods,CAL,D,Defense,20,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003287,Dante Bowen,Dante,Bowen,RED,California Redwoods,CAL,SSDM,Short Stick Defensive Midfield,24,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003291,Ryan Croddick,Ryan,Croddick,RED,California Redwoods,CAL,G,Goalie,26,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+001813,Jared Conners,Jared,Conners,RED,California Redwoods,CAL,LSM,Long Stick Midfield,28,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003029,Chris Fake,Chris,Fake,RED,California Redwoods,CAL,D,Defense,31,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003211,Josh Balcarcel,Josh,Balcarcel,RED,California Redwoods,CAL,M,Midfield,34,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+000418,Dillon Ward,Dillon,Ward,RED,California Redwoods,CAL,G,Goalie,37,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003105,Cole Kastner,Cole,Kastner,RED,California Redwoods,CAL,D,Defense,39,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+000373,Ryder Garnsey,Ryder,Garnsey,RED,California Redwoods,CAL,M,Midfield,50,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003059,BJ Farrare,BJ,Farrare,RED,California Redwoods,CAL,LSM,Long Stick Midfield,70,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003156,Aidan Danenza,Aidan,Danenza,RED,California Redwoods,CAL,M,Midfield,88,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003168,Chris Kavanagh,Chris,Kavanagh,RED,California Redwoods,CAL,A,Attack,96,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003085,Graham Bundy,Graham,Bundy,OUT,Denver Outlaws,DEN,M,Midfield,,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+001811,JT Giles-Harris,JT,Giles-Harris,OUT,Denver Outlaws,DEN,D,Defense,1,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003075,Brennan O'Neill,Brennan,O'Neill,OUT,Denver Outlaws,DEN,A,Attack,10,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+001827,Jared Bernhardt,Jared,Bernhardt,OUT,Denver Outlaws,DEN,A,Attack,10,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003106,Dalton Young,Dalton,Young,OUT,Denver Outlaws,DEN,M,Midfield,11,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+002015,Logan Wisnauskas,Logan,Wisnauskas,OUT,Denver Outlaws,DEN,A,Attack,12,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+002022,Zach Geddes,Zach,Geddes,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,13,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+001828,Justin Anderson,Justin,Anderson,OUT,Denver Outlaws,DEN,M,Midfield,21,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+002039,Owen McElroy,Owen,McElroy,OUT,Denver Outlaws,DEN,G,Goalie,24,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003169,Logan McNaney,Logan,McNaney,OUT,Denver Outlaws,DEN,G,Goalie,30,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003167,Jake Taylor,Jake,Taylor,OUT,Denver Outlaws,DEN,A,Attack,31,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+001820,Ryan Terefenko,Ryan,Terefenko,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,34,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+000302,Michael Manley,Michael,Manley,OUT,Denver Outlaws,DEN,D,Defense,37,starter,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003183,Jack Gray,Jack,Gray,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,44,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003080,Pat Kavanagh,Pat,Kavanagh,OUT,Denver Outlaws,DEN,A,Attack,51,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003098,Luke Wierman,Luke,Wierman,OUT,Denver Outlaws,DEN,FO,Faceoff,52,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+001415,Greg Weyl,Greg,Weyl,OUT,Denver Outlaws,DEN,LSM,Long Stick Midfield,57,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+001406,Ben Randall,Ben,Randall,OUT,Denver Outlaws,DEN,D,Defense,77,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
+003083,Jake Piseno,Jake,Piseno,OUT,Denver Outlaws,DEN,LSM,Long Stick Midfield,88,active,True,2026_game_49,2026-quarterfinals-1,14,RED,OUT,2026,14,2026-09-05T17:55:44.555820+00:00
