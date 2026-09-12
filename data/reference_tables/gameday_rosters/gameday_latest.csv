@@ -1,77 +1,77 @@
 player_id,player_name,first_name,last_name,team_id,team_name,team_code,position,position_group,jersey_number,status,is_active,game_id,game_slug,game_number,home_team_id,away_team_id,year,week,scraped_at
-000262,Connor Fields,Connor,Fields,ARC,Utah Archers,UTA,A,Attack,5,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003248,Ryan Stines,Ryan,Stines,ARC,Utah Archers,UTA,A,Attack,6,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-001814,Mac O'Keefe,Mac,O'Keefe,ARC,Utah Archers,UTA,A,Attack,7,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003174,Sam King,Sam,King,ARC,Utah Archers,UTA,M,Midfield,9,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-000221,Ryan Ambler,Ryan,Ambler,ARC,Utah Archers,UTA,M,Midfield,13,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003177,Mitchell Dunham,Mitchell,Dunham,ARC,Utah Archers,UTA,D,Defense,17,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-001773,Nick Washuta,Nick,Washuta,ARC,Utah Archers,UTA,G,Goalie,18,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003007,Cam Wyers,Cam,Wyers,ARC,Utah Archers,UTA,D,Defense,20,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003278,Aidan Maguire,Aidan,Maguire,ARC,Utah Archers,UTA,SSDM,Short Stick Defensive Midfield,23,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-000225,Tom Schreiber,Tom,Schreiber,ARC,Utah Archers,UTA,M,Midfield,26,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-001661,Warren Jeffrey,Warren,Jeffrey,ARC,Utah Archers,UTA,D,Defense,27,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003005,Connor Maher,Connor,Maher,ARC,Utah Archers,UTA,SSDM,Short Stick Defensive Midfield,31,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-001821,Tre Leclaire,Tre,Leclaire,ARC,Utah Archers,UTA,M,Midfield,44,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-002026,Brett Dobson,Brett,Dobson,ARC,Utah Archers,UTA,G,Goalie,45,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003163,Brendan Lavelle,Brendan,Lavelle,ARC,Utah Archers,UTA,D,Defense,46,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003006,Piper Bond,Piper,Bond,ARC,Utah Archers,UTA,SSDM,Short Stick Defensive Midfield,54,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003082,Mason Woodward,Mason,Woodward,ARC,Utah Archers,UTA,D,Defense,77,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003087,Beau Pederson,Beau,Pederson,ARC,Utah Archers,UTA,SSDM,Short Stick Defensive Midfield,89,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003004,Mike Sisselberger,Mike,Sisselberger,ARC,Utah Archers,UTA,FO,Faceoff,99,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003085,Graham Bundy,Graham,Bundy,OUT,Denver Outlaws,DEN,M,Midfield,,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-001811,JT Giles-Harris,JT,Giles-Harris,OUT,Denver Outlaws,DEN,D,Defense,1,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-001827,Jared Bernhardt,Jared,Bernhardt,OUT,Denver Outlaws,DEN,A,Attack,10,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003075,Brennan O'Neill,Brennan,O'Neill,OUT,Denver Outlaws,DEN,A,Attack,10,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003106,Dalton Young,Dalton,Young,OUT,Denver Outlaws,DEN,M,Midfield,11,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-002015,Logan Wisnauskas,Logan,Wisnauskas,OUT,Denver Outlaws,DEN,A,Attack,12,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-002022,Zach Geddes,Zach,Geddes,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,13,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-001828,Justin Anderson,Justin,Anderson,OUT,Denver Outlaws,DEN,M,Midfield,21,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-002039,Owen McElroy,Owen,McElroy,OUT,Denver Outlaws,DEN,G,Goalie,24,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003169,Logan McNaney,Logan,McNaney,OUT,Denver Outlaws,DEN,G,Goalie,30,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003167,Jake Taylor,Jake,Taylor,OUT,Denver Outlaws,DEN,A,Attack,31,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-001820,Ryan Terefenko,Ryan,Terefenko,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,34,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-000302,Michael Manley,Michael,Manley,OUT,Denver Outlaws,DEN,D,Defense,37,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003183,Jack Gray,Jack,Gray,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,44,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003080,Pat Kavanagh,Pat,Kavanagh,OUT,Denver Outlaws,DEN,A,Attack,51,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003098,Luke Wierman,Luke,Wierman,OUT,Denver Outlaws,DEN,FO,Faceoff,52,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-001415,Greg Weyl,Greg,Weyl,OUT,Denver Outlaws,DEN,LSM,Long Stick Midfield,57,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-001406,Ben Randall,Ben,Randall,OUT,Denver Outlaws,DEN,D,Defense,77,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-003083,Jake Piseno,Jake,Piseno,OUT,Denver Outlaws,DEN,LSM,Long Stick Midfield,88,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-11T22:53:19.654152+00:00
-000408,Matt DeLuca,Matt,DeLuca,WAT,Philadelphia Waterdogs,PHI,G,Goalie,1,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003232,Casey Wilson,Casey,Wilson,WAT,Philadelphia Waterdogs,PHI,M,Midfield,2,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003181,Jimmy Freehill,Jimmy,Freehill,WAT,Philadelphia Waterdogs,PHI,D,Defense,5,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-000240,Kieran McArdle,Kieran,McArdle,WAT,Philadelphia Waterdogs,PHI,A,Attack,6,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003281,Kyle Lewis,Kyle,Lewis,WAT,Philadelphia Waterdogs,PHI,M,Midfield,7,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003288,Josh Yago,Josh,Yago,WAT,Philadelphia Waterdogs,PHI,M,Midfield,10,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003096,Marcus Hudgins,Marcus,Hudgins,WAT,Philadelphia Waterdogs,PHI,D,Defense,11,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003159,CJ Kirst,CJ,Kirst,WAT,Philadelphia Waterdogs,PHI,A,Attack,15,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003273,Matt Collison,Matt,Collison,WAT,Philadelphia Waterdogs,PHI,M,Midfield,16,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003266,Silas Richmond,Silas,Richmond,WAT,Philadelphia Waterdogs,PHI,A,Attack,18,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-001810,Michael Sowers,Michael,Sowers,WAT,Philadelphia Waterdogs,PHI,A,Attack,22,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-001733,Charlie Hayes,Charlie,Hayes,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,23,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003089,Kenny Brower,Kenny,Brower,WAT,Philadelphia Waterdogs,PHI,D,Defense,29,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003269,Brendan Staub,Brendan,Staub,WAT,Philadelphia Waterdogs,PHI,LSM,Long Stick Midfield,32,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-001707,Matt Whitcher,Matt,Whitcher,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,33,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003119,Alec Stathakis,Alec,Stathakis,WAT,Philadelphia Waterdogs,PHI,FO,Faceoff,73,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-000409,Zach Currier,Zach,Currier,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,77,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003008,Gavin Adler,Gavin,Adler,WAT,Philadelphia Waterdogs,PHI,D,Defense,97,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003264,Sean Byrne,Sean,Byrne,WAT,Philadelphia Waterdogs,PHI,G,Goalie,99,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-000216,Marcus Holman,Marcus,Holman,CAN,Boston Cannons,BOS,A,Attack,1,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-002038,Colin Kirst,Colin,Kirst,CAN,Boston Cannons,BOS,G,Goalie,5,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003271,Hunter Smith,Hunter,Smith,CAN,Boston Cannons,BOS,LSM,Long Stick Midfield,6,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003286,Will Donovan,Will,Donovan,CAN,Boston Cannons,BOS,D,Defense,7,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003267,Mikey Weisshaar,Mikey,Weisshaar,CAN,Boston Cannons,BOS,M,Midfield,8,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003285,Jack Regnery,Jack,Regnery,CAN,Boston Cannons,BOS,A,Attack,13,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-001671,Zach Goodrich,Zach,Goodrich,CAN,Boston Cannons,BOS,SSDM,Short Stick Defensive Midfield,14,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003013,Matt Campbell,Matt,Campbell,CAN,Boston Cannons,BOS,M,Midfield,20,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003184,Ben Ramsey,Ben,Ramsey,CAN,Boston Cannons,BOS,SSDM,Short Stick Defensive Midfield,24,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003275,Andrew McMeekin,Andrew,McMeekin,CAN,Boston Cannons,BOS,FO,Faceoff,26,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003195,Brian Kelly,Brian,Kelly,CAN,Boston Cannons,BOS,A,Attack,30,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-001815,Connor Kirst,Connor,Kirst,CAN,Boston Cannons,BOS,M,Midfield,34,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003041,Ethan Rall,Ethan,Rall,CAN,Boston Cannons,BOS,LSM,Long Stick Midfield,35,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-001817,Jack Kielty,Jack,Kielty,CAN,Boston Cannons,BOS,D,Defense,40,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-001826,Jeff Trainor,Jeff,Trainor,CAN,Boston Cannons,BOS,SSDM,Short Stick Defensive Midfield,43,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003157,Graydon Hogg,Graydon,Hogg,CAN,Boston Cannons,BOS,M,Midfield,45,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003023,Owen Grant,Owen,Grant,CAN,Boston Cannons,BOS,D,Defense,81,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003145,JC Higginbotham,JC,Higginbotham,CAN,Boston Cannons,BOS,G,Goalie,88,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
-003162,Coulter Mackesy,Coulter,Mackesy,CAN,Boston Cannons,BOS,A,Attack,91,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-11T22:53:19.654152+00:00
+000262,Connor Fields,Connor,Fields,ARC,Utah Archers,UTA,A,Attack,5,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003248,Ryan Stines,Ryan,Stines,ARC,Utah Archers,UTA,A,Attack,6,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+001814,Mac O'Keefe,Mac,O'Keefe,ARC,Utah Archers,UTA,A,Attack,7,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003174,Sam King,Sam,King,ARC,Utah Archers,UTA,M,Midfield,9,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+000221,Ryan Ambler,Ryan,Ambler,ARC,Utah Archers,UTA,M,Midfield,13,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003177,Mitchell Dunham,Mitchell,Dunham,ARC,Utah Archers,UTA,D,Defense,17,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+001773,Nick Washuta,Nick,Washuta,ARC,Utah Archers,UTA,G,Goalie,18,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003007,Cam Wyers,Cam,Wyers,ARC,Utah Archers,UTA,D,Defense,20,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003278,Aidan Maguire,Aidan,Maguire,ARC,Utah Archers,UTA,SSDM,Short Stick Defensive Midfield,23,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+000225,Tom Schreiber,Tom,Schreiber,ARC,Utah Archers,UTA,M,Midfield,26,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+001661,Warren Jeffrey,Warren,Jeffrey,ARC,Utah Archers,UTA,D,Defense,27,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003005,Connor Maher,Connor,Maher,ARC,Utah Archers,UTA,SSDM,Short Stick Defensive Midfield,31,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+001821,Tre Leclaire,Tre,Leclaire,ARC,Utah Archers,UTA,M,Midfield,44,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+002026,Brett Dobson,Brett,Dobson,ARC,Utah Archers,UTA,G,Goalie,45,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003163,Brendan Lavelle,Brendan,Lavelle,ARC,Utah Archers,UTA,D,Defense,46,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003006,Piper Bond,Piper,Bond,ARC,Utah Archers,UTA,SSDM,Short Stick Defensive Midfield,54,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003082,Mason Woodward,Mason,Woodward,ARC,Utah Archers,UTA,D,Defense,77,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003087,Beau Pederson,Beau,Pederson,ARC,Utah Archers,UTA,SSDM,Short Stick Defensive Midfield,89,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003004,Mike Sisselberger,Mike,Sisselberger,ARC,Utah Archers,UTA,FO,Faceoff,99,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003085,Graham Bundy,Graham,Bundy,OUT,Denver Outlaws,DEN,M,Midfield,,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+001811,JT Giles-Harris,JT,Giles-Harris,OUT,Denver Outlaws,DEN,D,Defense,1,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+001827,Jared Bernhardt,Jared,Bernhardt,OUT,Denver Outlaws,DEN,A,Attack,10,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003075,Brennan O'Neill,Brennan,O'Neill,OUT,Denver Outlaws,DEN,A,Attack,10,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003106,Dalton Young,Dalton,Young,OUT,Denver Outlaws,DEN,M,Midfield,11,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+002015,Logan Wisnauskas,Logan,Wisnauskas,OUT,Denver Outlaws,DEN,A,Attack,12,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+002022,Zach Geddes,Zach,Geddes,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,13,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+001828,Justin Anderson,Justin,Anderson,OUT,Denver Outlaws,DEN,M,Midfield,21,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+002039,Owen McElroy,Owen,McElroy,OUT,Denver Outlaws,DEN,G,Goalie,24,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003169,Logan McNaney,Logan,McNaney,OUT,Denver Outlaws,DEN,G,Goalie,30,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003167,Jake Taylor,Jake,Taylor,OUT,Denver Outlaws,DEN,A,Attack,31,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+001820,Ryan Terefenko,Ryan,Terefenko,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,34,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+000302,Michael Manley,Michael,Manley,OUT,Denver Outlaws,DEN,D,Defense,37,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003183,Jack Gray,Jack,Gray,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,44,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003080,Pat Kavanagh,Pat,Kavanagh,OUT,Denver Outlaws,DEN,A,Attack,51,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003098,Luke Wierman,Luke,Wierman,OUT,Denver Outlaws,DEN,FO,Faceoff,52,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+001415,Greg Weyl,Greg,Weyl,OUT,Denver Outlaws,DEN,LSM,Long Stick Midfield,57,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+001406,Ben Randall,Ben,Randall,OUT,Denver Outlaws,DEN,D,Defense,77,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+003083,Jake Piseno,Jake,Piseno,OUT,Denver Outlaws,DEN,LSM,Long Stick Midfield,88,active,True,2026_game_51,2026-semifinal-1,15,ARC,OUT,2026,15,2026-09-12T15:55:21.619406+00:00
+000408,Matt DeLuca,Matt,DeLuca,WAT,Philadelphia Waterdogs,PHI,G,Goalie,1,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003232,Casey Wilson,Casey,Wilson,WAT,Philadelphia Waterdogs,PHI,M,Midfield,2,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003181,Jimmy Freehill,Jimmy,Freehill,WAT,Philadelphia Waterdogs,PHI,D,Defense,5,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+000240,Kieran McArdle,Kieran,McArdle,WAT,Philadelphia Waterdogs,PHI,A,Attack,6,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003281,Kyle Lewis,Kyle,Lewis,WAT,Philadelphia Waterdogs,PHI,M,Midfield,7,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003288,Josh Yago,Josh,Yago,WAT,Philadelphia Waterdogs,PHI,M,Midfield,10,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003096,Marcus Hudgins,Marcus,Hudgins,WAT,Philadelphia Waterdogs,PHI,D,Defense,11,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003159,CJ Kirst,CJ,Kirst,WAT,Philadelphia Waterdogs,PHI,A,Attack,15,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003273,Matt Collison,Matt,Collison,WAT,Philadelphia Waterdogs,PHI,M,Midfield,16,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003266,Silas Richmond,Silas,Richmond,WAT,Philadelphia Waterdogs,PHI,A,Attack,18,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+001810,Michael Sowers,Michael,Sowers,WAT,Philadelphia Waterdogs,PHI,A,Attack,22,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+001733,Charlie Hayes,Charlie,Hayes,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,23,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003089,Kenny Brower,Kenny,Brower,WAT,Philadelphia Waterdogs,PHI,D,Defense,29,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003269,Brendan Staub,Brendan,Staub,WAT,Philadelphia Waterdogs,PHI,LSM,Long Stick Midfield,32,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+001707,Matt Whitcher,Matt,Whitcher,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,33,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003119,Alec Stathakis,Alec,Stathakis,WAT,Philadelphia Waterdogs,PHI,FO,Faceoff,73,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+000409,Zach Currier,Zach,Currier,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,77,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003008,Gavin Adler,Gavin,Adler,WAT,Philadelphia Waterdogs,PHI,D,Defense,97,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003264,Sean Byrne,Sean,Byrne,WAT,Philadelphia Waterdogs,PHI,G,Goalie,99,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+000216,Marcus Holman,Marcus,Holman,CAN,Boston Cannons,BOS,A,Attack,1,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+002038,Colin Kirst,Colin,Kirst,CAN,Boston Cannons,BOS,G,Goalie,5,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003271,Hunter Smith,Hunter,Smith,CAN,Boston Cannons,BOS,LSM,Long Stick Midfield,6,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003286,Will Donovan,Will,Donovan,CAN,Boston Cannons,BOS,D,Defense,7,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003267,Mikey Weisshaar,Mikey,Weisshaar,CAN,Boston Cannons,BOS,M,Midfield,8,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003285,Jack Regnery,Jack,Regnery,CAN,Boston Cannons,BOS,A,Attack,13,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+001671,Zach Goodrich,Zach,Goodrich,CAN,Boston Cannons,BOS,SSDM,Short Stick Defensive Midfield,14,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003013,Matt Campbell,Matt,Campbell,CAN,Boston Cannons,BOS,M,Midfield,20,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003184,Ben Ramsey,Ben,Ramsey,CAN,Boston Cannons,BOS,SSDM,Short Stick Defensive Midfield,24,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003275,Andrew McMeekin,Andrew,McMeekin,CAN,Boston Cannons,BOS,FO,Faceoff,26,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003195,Brian Kelly,Brian,Kelly,CAN,Boston Cannons,BOS,A,Attack,30,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+001815,Connor Kirst,Connor,Kirst,CAN,Boston Cannons,BOS,M,Midfield,34,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003041,Ethan Rall,Ethan,Rall,CAN,Boston Cannons,BOS,LSM,Long Stick Midfield,35,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+001817,Jack Kielty,Jack,Kielty,CAN,Boston Cannons,BOS,D,Defense,40,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+001826,Jeff Trainor,Jeff,Trainor,CAN,Boston Cannons,BOS,SSDM,Short Stick Defensive Midfield,43,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003157,Graydon Hogg,Graydon,Hogg,CAN,Boston Cannons,BOS,M,Midfield,45,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003023,Owen Grant,Owen,Grant,CAN,Boston Cannons,BOS,D,Defense,81,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003145,JC Higginbotham,JC,Higginbotham,CAN,Boston Cannons,BOS,G,Goalie,88,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
+003162,Coulter Mackesy,Coulter,Mackesy,CAN,Boston Cannons,BOS,A,Attack,91,active,True,2026_game_52,2026-semifinal-2,15,WAT,CAN,2026,15,2026-09-12T15:55:21.619406+00:00
