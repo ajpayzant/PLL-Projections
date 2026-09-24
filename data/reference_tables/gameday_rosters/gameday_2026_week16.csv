@@ -1,39 +1,39 @@
 player_id,player_name,first_name,last_name,team_id,team_name,team_code,position,position_group,jersey_number,status,is_active,game_id,game_slug,game_number,home_team_id,away_team_id,year,week,scraped_at
-000408,Matt DeLuca,Matt,DeLuca,WAT,Philadelphia Waterdogs,PHI,G,Goalie,1,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003232,Casey Wilson,Casey,Wilson,WAT,Philadelphia Waterdogs,PHI,M,Midfield,2,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003181,Jimmy Freehill,Jimmy,Freehill,WAT,Philadelphia Waterdogs,PHI,D,Defense,5,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-000240,Kieran McArdle,Kieran,McArdle,WAT,Philadelphia Waterdogs,PHI,A,Attack,6,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003281,Kyle Lewis,Kyle,Lewis,WAT,Philadelphia Waterdogs,PHI,M,Midfield,7,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003288,Josh Yago,Josh,Yago,WAT,Philadelphia Waterdogs,PHI,M,Midfield,10,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003096,Marcus Hudgins,Marcus,Hudgins,WAT,Philadelphia Waterdogs,PHI,D,Defense,11,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003159,CJ Kirst,CJ,Kirst,WAT,Philadelphia Waterdogs,PHI,A,Attack,15,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003273,Matt Collison,Matt,Collison,WAT,Philadelphia Waterdogs,PHI,M,Midfield,16,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003266,Silas Richmond,Silas,Richmond,WAT,Philadelphia Waterdogs,PHI,A,Attack,18,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-001810,Michael Sowers,Michael,Sowers,WAT,Philadelphia Waterdogs,PHI,A,Attack,22,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-001733,Charlie Hayes,Charlie,Hayes,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,23,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003089,Kenny Brower,Kenny,Brower,WAT,Philadelphia Waterdogs,PHI,D,Defense,29,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003269,Brendan Staub,Brendan,Staub,WAT,Philadelphia Waterdogs,PHI,LSM,Long Stick Midfield,32,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-001707,Matt Whitcher,Matt,Whitcher,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,33,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003119,Alec Stathakis,Alec,Stathakis,WAT,Philadelphia Waterdogs,PHI,FO,Faceoff,73,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-000409,Zach Currier,Zach,Currier,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,77,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003008,Gavin Adler,Gavin,Adler,WAT,Philadelphia Waterdogs,PHI,D,Defense,97,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003264,Sean Byrne,Sean,Byrne,WAT,Philadelphia Waterdogs,PHI,G,Goalie,99,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003085,Graham Bundy,Graham,Bundy,OUT,Denver Outlaws,DEN,M,Midfield,,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-001811,JT Giles-Harris,JT,Giles-Harris,OUT,Denver Outlaws,DEN,D,Defense,1,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-001827,Jared Bernhardt,Jared,Bernhardt,OUT,Denver Outlaws,DEN,A,Attack,10,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003075,Brennan O'Neill,Brennan,O'Neill,OUT,Denver Outlaws,DEN,A,Attack,10,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003106,Dalton Young,Dalton,Young,OUT,Denver Outlaws,DEN,M,Midfield,11,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-002015,Logan Wisnauskas,Logan,Wisnauskas,OUT,Denver Outlaws,DEN,A,Attack,12,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-002022,Zach Geddes,Zach,Geddes,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,13,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-001828,Justin Anderson,Justin,Anderson,OUT,Denver Outlaws,DEN,M,Midfield,21,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-002039,Owen McElroy,Owen,McElroy,OUT,Denver Outlaws,DEN,G,Goalie,24,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003169,Logan McNaney,Logan,McNaney,OUT,Denver Outlaws,DEN,G,Goalie,30,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003167,Jake Taylor,Jake,Taylor,OUT,Denver Outlaws,DEN,A,Attack,31,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-001820,Ryan Terefenko,Ryan,Terefenko,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,34,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-000302,Michael Manley,Michael,Manley,OUT,Denver Outlaws,DEN,D,Defense,37,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003183,Jack Gray,Jack,Gray,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,44,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003080,Pat Kavanagh,Pat,Kavanagh,OUT,Denver Outlaws,DEN,A,Attack,51,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003098,Luke Wierman,Luke,Wierman,OUT,Denver Outlaws,DEN,FO,Faceoff,52,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-001415,Greg Weyl,Greg,Weyl,OUT,Denver Outlaws,DEN,LSM,Long Stick Midfield,57,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-001406,Ben Randall,Ben,Randall,OUT,Denver Outlaws,DEN,D,Defense,77,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
-003083,Jake Piseno,Jake,Piseno,OUT,Denver Outlaws,DEN,LSM,Long Stick Midfield,88,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T17:36:58.964354+00:00
+000408,Matt DeLuca,Matt,DeLuca,WAT,Philadelphia Waterdogs,PHI,G,Goalie,1,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003232,Casey Wilson,Casey,Wilson,WAT,Philadelphia Waterdogs,PHI,M,Midfield,2,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003181,Jimmy Freehill,Jimmy,Freehill,WAT,Philadelphia Waterdogs,PHI,D,Defense,5,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+000240,Kieran McArdle,Kieran,McArdle,WAT,Philadelphia Waterdogs,PHI,A,Attack,6,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003281,Kyle Lewis,Kyle,Lewis,WAT,Philadelphia Waterdogs,PHI,M,Midfield,7,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003288,Josh Yago,Josh,Yago,WAT,Philadelphia Waterdogs,PHI,M,Midfield,10,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003096,Marcus Hudgins,Marcus,Hudgins,WAT,Philadelphia Waterdogs,PHI,D,Defense,11,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003159,CJ Kirst,CJ,Kirst,WAT,Philadelphia Waterdogs,PHI,A,Attack,15,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003273,Matt Collison,Matt,Collison,WAT,Philadelphia Waterdogs,PHI,M,Midfield,16,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003266,Silas Richmond,Silas,Richmond,WAT,Philadelphia Waterdogs,PHI,A,Attack,18,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+001810,Michael Sowers,Michael,Sowers,WAT,Philadelphia Waterdogs,PHI,A,Attack,22,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+001733,Charlie Hayes,Charlie,Hayes,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,23,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003089,Kenny Brower,Kenny,Brower,WAT,Philadelphia Waterdogs,PHI,D,Defense,29,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003269,Brendan Staub,Brendan,Staub,WAT,Philadelphia Waterdogs,PHI,LSM,Long Stick Midfield,32,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+001707,Matt Whitcher,Matt,Whitcher,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,33,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003119,Alec Stathakis,Alec,Stathakis,WAT,Philadelphia Waterdogs,PHI,FO,Faceoff,73,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+000409,Zach Currier,Zach,Currier,WAT,Philadelphia Waterdogs,PHI,SSDM,Short Stick Defensive Midfield,77,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003008,Gavin Adler,Gavin,Adler,WAT,Philadelphia Waterdogs,PHI,D,Defense,97,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003264,Sean Byrne,Sean,Byrne,WAT,Philadelphia Waterdogs,PHI,G,Goalie,99,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003085,Graham Bundy,Graham,Bundy,OUT,Denver Outlaws,DEN,M,Midfield,,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+001811,JT Giles-Harris,JT,Giles-Harris,OUT,Denver Outlaws,DEN,D,Defense,1,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+001827,Jared Bernhardt,Jared,Bernhardt,OUT,Denver Outlaws,DEN,A,Attack,10,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003075,Brennan O'Neill,Brennan,O'Neill,OUT,Denver Outlaws,DEN,A,Attack,10,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003106,Dalton Young,Dalton,Young,OUT,Denver Outlaws,DEN,M,Midfield,11,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+002015,Logan Wisnauskas,Logan,Wisnauskas,OUT,Denver Outlaws,DEN,A,Attack,12,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+002022,Zach Geddes,Zach,Geddes,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,13,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+001828,Justin Anderson,Justin,Anderson,OUT,Denver Outlaws,DEN,M,Midfield,21,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+002039,Owen McElroy,Owen,McElroy,OUT,Denver Outlaws,DEN,G,Goalie,24,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003169,Logan McNaney,Logan,McNaney,OUT,Denver Outlaws,DEN,G,Goalie,30,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003167,Jake Taylor,Jake,Taylor,OUT,Denver Outlaws,DEN,A,Attack,31,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+001820,Ryan Terefenko,Ryan,Terefenko,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,34,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+000302,Michael Manley,Michael,Manley,OUT,Denver Outlaws,DEN,D,Defense,37,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003183,Jack Gray,Jack,Gray,OUT,Denver Outlaws,DEN,SSDM,Short Stick Defensive Midfield,44,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003080,Pat Kavanagh,Pat,Kavanagh,OUT,Denver Outlaws,DEN,A,Attack,51,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003098,Luke Wierman,Luke,Wierman,OUT,Denver Outlaws,DEN,FO,Faceoff,52,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+001415,Greg Weyl,Greg,Weyl,OUT,Denver Outlaws,DEN,LSM,Long Stick Midfield,57,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+001406,Ben Randall,Ben,Randall,OUT,Denver Outlaws,DEN,D,Defense,77,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
+003083,Jake Piseno,Jake,Piseno,OUT,Denver Outlaws,DEN,LSM,Long Stick Midfield,88,active,True,2026_game_54,2026-championship-game,16,WAT,OUT,2026,16,2026-09-24T19:31:25.181892+00:00
